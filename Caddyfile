@@ -13,34 +13,47 @@
 # sets these on HTML responses; Caddy sets them on everything it proxies.
 
 :81 {
-	header {
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		# HSTS is honored by browsers only over HTTPS; harmless on HTTP dev.
-		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
-	}
+        # Defense-in-depth: cap request body size to prevent memory exhaustion
+        # from oversized payloads (02 section 5: backpressure, 06 section 7: DoS).
+        request_body {
+                max_length 10MB
+        }
 
-	@transform_port_query {
-		query XTransformPort=*
-	}
+        # Structured access logging for observability (02 section 8: logs for
+        # discrete events; 06 section 11: alert on anomalies).
+        log {
+                output stdout
+                format json
+        }
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+        header {
+                X-Content-Type-Options "nosniff"
+                X-Frame-Options "DENY"
+                Referrer-Policy "strict-origin-when-cross-origin"
+                Permissions-Policy "camera=(), microphone=(), geolocation=()"
+                # HSTS is honored by browsers only over HTTPS; harmless on HTTP dev.
+                Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        }
 
-	handle {
-		reverse_proxy localhost:3000 {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+        @transform_port_query {
+                query XTransformPort=*
+        }
+
+        handle @transform_port_query {
+                reverse_proxy localhost:{query.XTransformPort} {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
+
+        handle {
+                reverse_proxy localhost:3000 {
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
 }

@@ -22,7 +22,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
   const latestYear = React.useMemo(() => {
     if (adminYears.length === 0) return null;
     const sorted = [...adminYears].sort(
-      (a, b) => (b.sortOrder ?? 0) - (a.sortOrder ?? 0)
+      (a, b) => (b.sortOrder ?? 0) - (a.sortOrder ?? 0),
     );
     return sorted[0];
   }, [adminYears]);
@@ -30,14 +30,19 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
   // Pick the 4 key roles to highlight. Use exact match to avoid VP matching President.
   const keyRoles = React.useMemo(() => {
     if (!latestYear) return [];
-    const rolePriority = ["President", "Vice President", "Secretary", "Treasurer"];
+    const rolePriority = [
+      "President",
+      "Vice President",
+      "Secretary",
+      "Treasurer",
+    ];
     const seen = new Set<string>();
     const result: typeof latestYear.officers = [];
     for (const role of rolePriority) {
       const officer = latestYear.officers.find(
         (o) =>
           !seen.has(o.id) &&
-          o.role?.toLowerCase().trim() === role.toLowerCase()
+          o.role?.toLowerCase().trim() === role.toLowerCase(),
       );
       if (officer) {
         result.push(officer);
@@ -65,7 +70,11 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
   };
   const item = {
     hidden: { opacity: 0, y: 12 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const } },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
+    },
   };
 
   return (
@@ -97,11 +106,15 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
           </h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             Leadership for academic year{" "}
-            <span className="font-semibold text-foreground">{latestYear.year}</span>
+            <span className="font-semibold text-foreground">
+              {latestYear.year}
+            </span>
             {latestYear.theme && (
               <>
-                {" - "}
-                <span className="italic text-foreground/80">&ldquo;{latestYear.theme}&rdquo;</span>
+                {" "}
+                <span className="italic text-foreground/80">
+                  &ldquo;{latestYear.theme}&rdquo;
+                </span>
               </>
             )}
           </p>
@@ -131,7 +144,9 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
             .map((p) => p[0])
             .join("")
             .toUpperCase();
-          const isPresident = officer.role?.toLowerCase().includes("president") && !officer.role?.toLowerCase().includes("vice");
+          const isPresident =
+            officer.role?.toLowerCase().includes("president") &&
+            !officer.role?.toLowerCase().includes("vice");
           return (
             <motion.button
               key={officer.id}
@@ -143,7 +158,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
                 "transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-1 hover:ring-gold-300/40",
                 isPresident
                   ? "border-gold-300/60 ring-1 ring-gold-300/30"
-                  : "border-border hover:border-gold-300/60"
+                  : "border-border hover:border-gold-300/60",
               )}
             >
               {isPresident && (
@@ -160,7 +175,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
                   "flex h-16 w-16 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card",
                   isPresident
                     ? "bg-gradient-to-br from-gold-400 to-gold-600 ring-gold-300"
-                    : "bg-gradient-to-br from-navy-700 to-navy-900 ring-gold-400/30"
+                    : "bg-gradient-to-br from-navy-700 to-navy-900 ring-gold-400/30",
                 )}
               >
                 {officer.image ? (
@@ -173,7 +188,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
                   <span
                     className={cn(
                       "font-display text-xl font-bold",
-                      isPresident ? "text-navy-950" : "text-gold-400"
+                      isPresident ? "text-navy-950" : "text-gold-400",
                     )}
                   >
                     {initials}

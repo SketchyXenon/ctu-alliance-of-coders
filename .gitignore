@@ -71,7 +71,6 @@ workspace-93a9dfdd-5d87-4120-8ced-80f38a50b4d0
 *.pid
 tool-results
 node_modules
-examples
 download
 docs
 .zscripts

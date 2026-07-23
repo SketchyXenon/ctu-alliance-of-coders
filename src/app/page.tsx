@@ -42,27 +42,43 @@ import type {
 // footprint manageable in the sandbox.
 const HeroSection = dynamic(
   () => import("@/components/sections/hero-section").then((m) => m.HeroSection),
-  { ssr: false }
+  { ssr: false },
 );
 const AnnouncementsSection = dynamic(
-  () => import("@/components/sections/announcements-section").then((m) => m.AnnouncementsSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/announcements-section").then(
+      (m) => m.AnnouncementsSection,
+    ),
+  { ssr: false },
 );
 const OfficersSection = dynamic(
-  () => import("@/components/sections/officers-section").then((m) => m.OfficersSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/officers-section").then(
+      (m) => m.OfficersSection,
+    ),
+  { ssr: false },
 );
 const ContactSection = dynamic(
-  () => import("@/components/sections/contact-section").then((m) => m.ContactSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/contact-section").then(
+      (m) => m.ContactSection,
+    ),
+  { ssr: false },
 );
 const PolicyPageSection = dynamic(
-  () => import("@/components/sections/policy-page").then((m) => m.PolicyPageSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/policy-page").then(
+      (m) => m.PolicyPageSection,
+    ),
+  { ssr: false },
+);
+const FaqSection = dynamic(
+  () => import("@/components/sections/faq-section").then((m) => m.FaqSection),
+  { ssr: false },
 );
 const AdminPanel = dynamic(
   () => import("@/components/sections/admin-panel").then((m) => m.AdminPanel),
-  { ssr: false }
+  { ssr: false },
 );
 
 type ConfirmConfig = {
@@ -100,16 +116,28 @@ export default function Home() {
     let cancelled = false;
     async function load() {
       setSyncStatus({ ready: false, saving: false, error: null });
-      const { data, error } = await api.get<{ data: SiteData }>("/api/site-data");
+      const { data, error } = await api.get<{ data: SiteData }>(
+        "/api/site-data",
+      );
       if (cancelled) return;
       if (error || !data) {
-        setSyncStatus({ ready: true, saving: false, error: error?.message ?? "Failed to load site data", lastSavedAt: null });
+        setSyncStatus({
+          ready: true,
+          saving: false,
+          error: error?.message ?? "Failed to load site data",
+          lastSavedAt: null,
+        });
         setInitialized(true);
         return;
       }
       setAnnouncements(data.data.announcements);
       setAdminYears(data.data.adminYears);
-      setSyncStatus({ ready: true, saving: false, error: null, lastSavedAt: Date.now() });
+      setSyncStatus({
+        ready: true,
+        saving: false,
+        error: null,
+        lastSavedAt: Date.now(),
+      });
       setInitialized(true);
     }
     void load();
@@ -122,15 +150,22 @@ export default function Home() {
   React.useEffect(() => {
     let cancelled = false;
     async function check() {
-      const { data } = await api.get<{ user: { id: string; email: string; name: string | null; role: string } | null }>(
-        "/api/auth/session"
-      );
+      const { data } = await api.get<{
+        user: {
+          id: string;
+          email: string;
+          name: string | null;
+          role: string;
+        } | null;
+      }>("/api/auth/session");
       if (cancelled) return;
       if (data?.user && data.user.role === "admin") {
         setIsAdmin(true);
         setAdminEmail(data.user.email);
         // Load admin-only inbox.
-        const inbox = await api.get<{ items: ContactMessage[] }>("/api/contact");
+        const inbox = await api.get<{ items: ContactMessage[] }>(
+          "/api/contact",
+        );
         if (!cancelled && inbox.data) {
           setPendingMessages(inbox.data.items);
         }
@@ -149,12 +184,15 @@ export default function Home() {
   }, [setTheme, theme]);
 
   // ---- Navigation handler -----------------------------------------------
-  const handleNav = React.useCallback((section: SectionKey) => {
-    setActiveNav(section);
-    if (typeof window !== "undefined") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [setActiveNav]);
+  const handleNav = React.useCallback(
+    (section: SectionKey) => {
+      setActiveNav(section);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [setActiveNav],
+  );
 
   // ---- Keyboard shortcuts (1-5 nav, T theme) -----------------------------
   useKeyboardShortcuts(handleNav, toggleTheme, () => setHelpOpen((o) => !o));
@@ -184,7 +222,9 @@ export default function Home() {
   }
 
   // ---- Announcement CRUD -------------------------------------------------
-  async function addAnnouncement(ann: Omit<Announcement, "date"> & { date?: string }) {
+  async function addAnnouncement(
+    ann: Omit<Announcement, "date"> & { date?: string },
+  ) {
     setSyncStatus({ saving: true, error: null });
     const payload = {
       title: ann.title,
@@ -193,8 +233,15 @@ export default function Home() {
       image: ann.image,
       pinned: ann.pinned,
     };
-    const { data, error } = await api.post<{ item: Announcement }>("/api/announcements", payload);
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    const { data, error } = await api.post<{ item: Announcement }>(
+      "/api/announcements",
+      payload,
+    );
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error || !data) return;
     setAnnouncements([data.item, ...usePageStore.getState().announcements]);
   }
@@ -203,28 +250,47 @@ export default function Home() {
     setSyncStatus({ saving: true, error: null });
     const { data, error } = await api.patch<{ item: Announcement }>(
       `/api/announcements/${ann.id}`,
-      { title: ann.title, body: ann.body, type: ann.type, image: ann.image, pinned: ann.pinned }
+      {
+        title: ann.title,
+        body: ann.body,
+        type: ann.type,
+        image: ann.image,
+        pinned: ann.pinned,
+      },
     );
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error || !data) return;
     setAnnouncements(
-      usePageStore.getState().announcements.map((a) => (a.id === ann.id ? data.item : a))
+      usePageStore
+        .getState()
+        .announcements.map((a) => (a.id === ann.id ? data.item : a)),
     );
   }
 
   async function deleteAnnouncement(id: string): Promise<boolean> {
     const ok = await promptConfirm({
       title: "Delete announcement",
-      message: "Are you sure you want to permanently delete this announcement? This cannot be undone.",
+      message:
+        "Are you sure you want to permanently delete this announcement? This cannot be undone.",
       confirmLabel: "Delete",
       destructive: true,
     });
     if (!ok) return false;
     setSyncStatus({ saving: true, error: null });
     const { error } = await api.delete(`/api/announcements/${id}`);
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error) return false;
-    setAnnouncements(usePageStore.getState().announcements.filter((a) => a.id !== id));
+    setAnnouncements(
+      usePageStore.getState().announcements.filter((a) => a.id !== id),
+    );
     return true;
   }
 
@@ -237,20 +303,29 @@ export default function Home() {
     category: string;
     message: string;
   }) {
-    const { data, error } = await api.post<{ item: ContactMessage }>("/api/contact", message);
+    const { data, error } = await api.post<{ item: ContactMessage }>(
+      "/api/contact",
+      message,
+    );
     if (error || !data) {
       throw new Error(error?.message ?? "Failed to send message.");
     }
     // If admin is viewing, surface in inbox immediately.
     if (isAdmin) {
-      setPendingMessages([data.item, ...usePageStore.getState().pendingMessages]);
+      setPendingMessages([
+        data.item,
+        ...usePageStore.getState().pendingMessages,
+      ]);
     }
   }
 
   // ---- Hero stats --------------------------------------------------------
   const heroStats: HeroStats[] = React.useMemo(() => {
     const currentYear = adminYears[adminYears.length - 1];
-    const totalOfficerRecords = adminYears.reduce((sum, y) => sum + y.officers.length, 0);
+    const totalOfficerRecords = adminYears.reduce(
+      (sum, y) => sum + y.officers.length,
+      0,
+    );
     return [
       { value: announcements.length, label: "Announcements" },
       { value: currentYear?.officers.length ?? 0, label: "Current Officers" },
@@ -285,6 +360,8 @@ export default function Home() {
         return <OfficersSection adminYears={adminYears} />;
       case "Contact":
         return <ContactSection onSubmit={submitContact} />;
+      case "FAQ":
+        return <FaqSection />;
       case "Admin Panel":
         return <AdminPanel />;
       case "Privacy Policy":
@@ -292,7 +369,11 @@ export default function Home() {
       case "Terms of Use":
       case "Cookie Policy": {
         const policy = getPolicyPage(activeNav);
-        return policy ? <PolicyPageSection policy={policy} /> : <HeroSection stats={heroStats} onNav={handleNav} />;
+        return policy ? (
+          <PolicyPageSection policy={policy} />
+        ) : (
+          <HeroSection stats={heroStats} onNav={handleNav} />
+        );
       }
       default:
         return <HeroSection stats={heroStats} onNav={handleNav} />;
@@ -308,6 +389,7 @@ export default function Home() {
   const showReadingProgress =
     activeNav === "Announcements" ||
     activeNav === "Officers" ||
+    activeNav === "FAQ" ||
     activeNav === "Privacy Policy" ||
     activeNav === "Data Protection" ||
     activeNav === "Terms of Use" ||
@@ -339,16 +421,25 @@ export default function Home() {
         onNavigate={handleNav}
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
-      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && resolveConfirm(false)}>
+      <AlertDialog
+        open={confirm !== null}
+        onOpenChange={(o) => !o && resolveConfirm(false)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
             <AlertDialogDescription>{confirm?.message}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => resolveConfirm(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => resolveConfirm(false)}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              className={confirm?.destructive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              className={
+                confirm?.destructive
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : ""
+              }
               onClick={() => resolveConfirm(true)}
             >
               {confirm?.confirmLabel}

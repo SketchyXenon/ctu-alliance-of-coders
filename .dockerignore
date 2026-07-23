@@ -1,0 +1,50 @@
+# Prevent secrets, dev artifacts, and large dirs from entering Docker build
+# layers. Per 06-security-architecture.md section 8: secrets stay out of source
+# control and images.
+
+node_modules
+.next
+out
+build
+dist
+
+# Secrets and env files (keep .env.example for reference).
+.env
+.env.*
+!.env.example
+
+# Dev database (contains passwordHash rows - C3 fix).
+db/*.db
+db/*.db-journal
+
+# Logs.
+*.log
+dev.log
+server.log
+
+# Test and docs (not needed at runtime).
+tests
+docs
+upload
+download
+agent-ctx
+tool-results
+
+# Version control and IDE.
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Build scripts not needed in the image (start.sh is copied explicitly).
+.zscripts/mini-services-*.sh
+.zscripts/python-runtime-*.sh
+.zscripts/dev.sh
+.zscripts/build.sh
+
+# CI and config not needed at runtime.
+Dockerfile
+.dockerignore
+LICENSE
+README.md

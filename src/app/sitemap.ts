@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
+import { siteConfig } from "@/lib/site-config";
 
-const siteUrl = "https://allianceofcoders.ph";
+const siteUrl = siteConfig.url;
 
 /**
  * sitemap.xml - generated dynamically at /sitemap.xml.
@@ -16,7 +17,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "Cookie Policy",
   ].map((p) => p.toLowerCase().replace(/\s+/g, "-"));
 
-  const routes = ["/", ...policyRoutes.map((p) => `/?section=${p}`)];
+  // FAQ is a content section, not a policy, but still worth indexing.
+  const contentRoutes = ["faq"];
+
+  const routes = [
+    "/",
+    ...policyRoutes.map((p) => `/?section=${p}`),
+    ...contentRoutes.map((c) => `/?section=${c}`),
+  ];
 
   return routes.map((route) => ({
     url: `${siteUrl}${route}`,

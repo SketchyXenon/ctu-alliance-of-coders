@@ -78,10 +78,7 @@ export function SiteNav() {
             "focus-visible:bg-transparent focus-visible:text-foreground",
           )}
         >
-          <GearLogo
-            size={36}
-            spinOnHover
-          />
+          <GearLogo size={36} spinOnHover />
           <span className="flex flex-col items-start leading-tight">
             <span className="font-display text-base font-bold tracking-tight text-foreground">
               Alliance of Coders
@@ -137,7 +134,9 @@ export function SiteNav() {
                   aria-hidden="true"
                   className={cn(
                     "pointer-events-none absolute inset-x-3 bottom-1 h-0.5 origin-left rounded-full bg-gold-500 transition-transform duration-200 ease-out",
-                    isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100",
+                    isActive
+                      ? "scale-x-100"
+                      : "scale-x-0 group-hover:scale-x-100",
                   )}
                 />
               </Button>
@@ -149,7 +148,9 @@ export function SiteNav() {
             size="sm"
             onClick={() => {
               // Dispatch a custom event the page listens for.
-              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "k", metaKey: true }),
+              );
             }}
             className="ml-2 hidden items-center gap-2 text-muted-foreground lg:inline-flex"
             aria-label="Open command palette"
@@ -182,8 +183,15 @@ export function SiteNav() {
           />
         </div>
 
-        {/* Mobile hamburger */}
-        <div className="flex items-center md:hidden">
+        {/* Mobile hamburger + theme toggle */}
+        <div className="flex items-center gap-1 md:hidden">
+          {/* Theme toggle icon in header (05 §4: visible without opening menu) */}
+          <ThemeToggle
+            mounted={mounted}
+            isDark={isDark}
+            onToggle={toggleTheme}
+            iconOnly
+          />
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <Button
@@ -260,15 +268,6 @@ export function SiteNav() {
                   );
                 })}
               </div>
-
-              <div className="border-t border-border p-4">
-                <ThemeToggle
-                  mounted={mounted}
-                  isDark={isDark}
-                  onToggle={toggleTheme}
-                  full
-                />
-              </div>
             </SheetContent>
           </Sheet>
         </div>
@@ -283,12 +282,15 @@ interface ThemeToggleProps {
   onToggle: () => void;
   className?: string;
   full?: boolean;
+  iconOnly?: boolean;
 }
 
 /**
  * ThemeToggle - accessible light/dark switch using next-themes.
  * Renders a stable placeholder until mounted to avoid hydration mismatch
  * (server has no knowledge of the user's resolved theme).
+ * - `full`: wide button with label (used in mobile Sheet, now removed).
+ * - `iconOnly`: compact icon button for the mobile header bar (05 §4).
  */
 function ThemeToggle({
   mounted,
@@ -296,8 +298,21 @@ function ThemeToggle({
   onToggle,
   className,
   full,
+  iconOnly,
 }: ThemeToggleProps) {
   if (!mounted) {
+    if (iconOnly) {
+      return (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("size-9 text-muted-foreground", className)}
+          aria-label="Toggle theme"
+        >
+          <span className="size-4 rounded-full border border-current opacity-30" />
+        </Button>
+      );
+    }
     return (
       <Button
         variant="outline"
@@ -311,6 +326,29 @@ function ThemeToggle({
       >
         <span className="size-4 rounded-full border border-current opacity-30" />
         <span className="text-sm font-medium opacity-60">Theme</span>
+      </Button>
+    );
+  }
+
+  if (iconOnly) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onToggle}
+        aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+        className={cn(
+          "size-9 text-muted-foreground",
+          "transition-colors hover:bg-accent hover:text-foreground",
+          "focus-visible:ring-2 focus-visible:ring-gold-400/40",
+          className,
+        )}
+      >
+        {isDark ? (
+          <Sun className="size-5 text-gold-500" aria-hidden="true" />
+        ) : (
+          <Moon className="size-5 text-navy-700" aria-hidden="true" />
+        )}
       </Button>
     );
   }

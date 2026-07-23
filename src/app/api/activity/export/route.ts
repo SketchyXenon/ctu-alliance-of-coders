@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { csvEscape } from "@/lib/csv";
+import { buildCsv } from "@/lib/csv";
 
 /**
  * GET /api/activity/export - admin only, returns CSV.
+ * Uses buildCsv so every cell is run through csvEscape (defense-in-depth
+ * against formula injection, per 06 A05). No cell is interpolated raw.
  */
 export async function GET() {
   try {
@@ -18,22 +20,22 @@ export async function GET() {
     take: 500,
   });
 
-  const header = "timestamp,action,entity,entity_id,summary\n";
-  const body = logs
-    .map((l) => {
-      const ts = l.createdAt.toISOString();
-      const summary = csvEscape(l.summary);
-      const entityId = l.entityId ?? "";
-      return `${ts},${l.action},${l.entity},${entityId},${summary}`;
-    })
-    .join("\n");
+  const csv = buildCsv(
+    ["timestamp", "action", "entity", "entity_id", "summary"],
+    logs.map((l) => [
+      l.createdAt.toISOString(),
+      l.action,
+      l.entity,
+      l.entityId ?? "",
+      l.summary,
+    ]),
+  );
 
-  const csv = header + body;
   const res = new NextResponse(csv);
   res.headers.set("Content-Type", "text/csv; charset=utf-8");
   res.headers.set(
     "Content-Disposition",
-    `attachment; filename="activity-log-${new Date().toISOString().slice(0, 10)}.csv"`
+    `attachment; filename="activity-log-${new Date().toISOString().slice(0, 10)}.csv"`,
   );
   res.headers.set("Cache-Control", "no-store");
   return res;
