@@ -1,0 +1,114 @@
+// Production schema - PostgreSQL (Supabase).
+// Use with: DATABASE_URL=postgresql://... prisma db push --schema=prisma/schema.prod.prisma
+// Models mirror schema.prisma but use native Postgres types for production scale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Announcement {
+  id        String   @id
+  type      String   @default("general")
+  title     String
+  body      String   @db.Text
+  image     String?
+  pinned    Boolean  @default(false)
+  date      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([type])
+  @@index([pinned])
+  @@index([date(sort: Desc)])
+  @@map("announcements")
+}
+
+model AdminYear {
+  id        String    @id @default(cuid())
+  year      String    @unique
+  theme     String    @default("Set a leadership theme for this year.")
+  sortOrder Int       @default(0) @map("sort_order")
+  officers  Officer[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([sortOrder])
+  @@map("admin_years")
+}
+
+model Officer {
+  id        String   @id @default(cuid())
+  yearId    String   @map("year_id")
+  name      String   @default("Vacant Slot")
+  role      String   @default("Open Position")
+  image     String?
+  sortOrder Int      @default(0) @map("sort_order")
+  year      AdminYear @relation(fields: [yearId], references: [id], onDelete: Cascade)
+
+  @@index([yearId])
+  @@index([sortOrder])
+  @@map("officers")
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  clientId  String   @unique @map("client_id")
+  name      String
+  email     String
+  subject   String
+  category  String   @default("General Inquiry")
+  message   String   @db.Text
+  status    String   @default("new")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
+  @@index([email])
+  @@map("contact_messages")
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  passwordHash String        @map("password_hash")
+  role         String        @default("admin")
+  sessions     AdminSession[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id        String     @id @default(cuid())
+  userId    String     @map("user_id")
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime   @map("expires_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sessions")
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  summary   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt(sort: Desc)])
+  @@index([entity])
+  @@map("activity_logs")
+}

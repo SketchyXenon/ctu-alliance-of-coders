@@ -1,0 +1,596 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-ibm-plex-sans);
+  --font-display: var(--font-space-grotesk);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-navy-50: var(--navy-50);
+  --color-navy-100: var(--navy-100);
+  --color-navy-200: var(--navy-200);
+  --color-navy-300: var(--navy-300);
+  --color-navy-400: var(--navy-400);
+  --color-navy-500: var(--navy-500);
+  --color-navy-600: var(--navy-600);
+  --color-navy-700: var(--navy-700);
+  --color-navy-800: var(--navy-800);
+  --color-navy-900: var(--navy-900);
+  --color-navy-950: var(--navy-950);
+  --color-gold-50: var(--gold-50);
+  --color-gold-100: var(--gold-100);
+  --color-gold-200: var(--gold-200);
+  --color-gold-300: var(--gold-300);
+  --color-gold-400: var(--gold-400);
+  --color-gold-500: var(--gold-500);
+  --color-gold-600: var(--gold-600);
+  --color-gold-700: var(--gold-700);
+  --color-gold-800: var(--gold-800);
+  --color-gold-900: var(--gold-900);
+}
+
+:root {
+  --radius: 0.625rem;
+
+  /* Brand palette - Alliance of Coders: navy + gold */
+  --navy-950: #01081e;
+  --navy-900: #020d30;
+  --navy-800: #04194f;
+  --navy-700: #0a2470;
+  --navy-600: #0f318f;
+  --navy-500: #1a3fa8;
+  --navy-400: #2e57c4;
+  --navy-300: #5b7fd8;
+  --navy-200: #93aee8;
+  --navy-100: #cad6f5;
+  --navy-50: #eef2fc;
+
+  --gold-900: #4a2e00;
+  --gold-800: #7a4d00;
+  --gold-700: #a86a00;
+  --gold-600: #c88200;
+  --gold-500: #d4a017;
+  --gold-400: #e0b840;
+  --gold-300: #eacc72;
+  --gold-200: #f3dfa8;
+  --gold-100: #faf0d4;
+  --gold-50: #fffdf5;
+
+  /* shadcn semantic mapping (light) */
+  --background: #f8f9fc;
+  --foreground: #0d1b3e;
+  --card: #ffffff;
+  --card-foreground: #0d1b3e;
+  --popover: #ffffff;
+  --popover-foreground: #0d1b3e;
+  --primary: #0a2470;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2fc;
+  --secondary-foreground: #0d1b3e;
+  --muted: #f0f3fb;
+  --muted-foreground: #7a8db5;
+  --accent: #faf0d4;
+  --accent-foreground: #4a2e00;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #dde4f5;
+  --input: #dde4f5;
+  --ring: #0f318f;
+  --chart-1: #0a2470;
+  --chart-2: #d4a017;
+  --chart-3: #2e57c4;
+  --chart-4: #e0b840;
+  --chart-5: #5b7fd8;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0d1b3e;
+  --sidebar-primary: #0a2470;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2fc;
+  --sidebar-accent-foreground: #0d1b3e;
+  --sidebar-border: #dde4f5;
+  --sidebar-ring: #0f318f;
+
+  /* Custom semantic tokens */
+  --color-text-secondary: #3a4d78;
+  --color-text-muted: #7a8db5;
+  --color-bg-raised: #f0f3fb;
+  --color-bg-subtle: #e8edfa;
+  --color-border-mid: #b8c6e8;
+  --color-success-bg: #e8f7ee;
+  --color-success-fg: #166534;
+  --color-success-border: #86efac;
+  --color-warning-bg: #fefce8;
+  --color-warning-fg: #854d0e;
+  --color-warning-border: #fde68a;
+  --color-danger-bg: #fef2f2;
+  --color-danger-fg: #991b1b;
+  --color-danger-border: #fca5a5;
+  --color-info-bg: #eff6ff;
+  --color-info-fg: #1e40af;
+  --color-info-border: #93c5fd;
+
+  /* Badge tokens */
+  --badge-award-bg: #fef9c3;
+  --badge-award-fg: #713f12;
+  --badge-award-border: #fde047;
+  --badge-recognition-bg: #ede9fe;
+  --badge-recognition-fg: #4c1d95;
+  --badge-recognition-border: #a78bfa;
+  --badge-report-bg: #e0f2fe;
+  --badge-report-fg: #0c4a6e;
+  --badge-report-border: #7dd3fc;
+  --badge-general-bg: #f0fdf4;
+  --badge-general-fg: #14532d;
+  --badge-general-border: #86efac;
+
+  /* Surfaces */
+  --surface-panel-bg: linear-gradient(180deg, rgba(10, 36, 112, 0.96), rgba(7, 24, 80, 0.98));
+  --surface-panel-fg: #ffffff;
+  --surface-panel-muted: rgba(245, 248, 255, 0.8);
+  --surface-panel-border: rgba(255, 255, 255, 0.14);
+  --surface-banner-bg: linear-gradient(135deg, #0a2470 0%, #0f318f 100%);
+  --surface-banner-fg: #ffffff;
+
+  /* Hero */
+  --hero-overlay-start: rgba(3, 12, 35, 0.82);
+  --hero-overlay-mid: rgba(10, 36, 112, 0.6);
+  --hero-overlay-end: rgba(20, 58, 140, 0.34);
+  --hero-copy: rgba(244, 248, 255, 0.9);
+  --hero-copy-muted: rgba(244, 248, 255, 0.78);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 6px rgba(10, 36, 112, 0.08), 0 1px 2px rgba(10, 36, 112, 0.04);
+  --shadow-md: 0 4px 16px rgba(10, 36, 112, 0.10), 0 2px 4px rgba(10, 36, 112, 0.05);
+  --shadow-lg: 0 8px 32px rgba(10, 36, 112, 0.13), 0 4px 8px rgba(10, 36, 112, 0.06);
+  --shadow-xl: 0 16px 48px rgba(10, 36, 112, 0.16), 0 6px 12px rgba(10, 36, 112, 0.08);
+  --shadow-gold: 0 4px 20px rgba(212, 160, 23, 0.25);
+  --shadow-navy: 0 4px 24px rgba(10, 36, 112, 0.22);
+}
+
+.dark {
+  --background: #08101f;
+  --foreground: #f6f8ff;
+  --card: #0e1728;
+  --card-foreground: #f6f8ff;
+  --popover: #0e1728;
+  --popover-foreground: #f6f8ff;
+  --primary: #eacc72;
+  --primary-foreground: #020d30;
+  --secondary: #131e33;
+  --secondary-foreground: #f6f8ff;
+  --muted: #131e33;
+  --muted-foreground: #9faecc;
+  --accent: #1a3fa8;
+  --accent-foreground: #f6f8ff;
+  --destructive: #f87171;
+  --destructive-foreground: #ffffff;
+  --border: #22324f;
+  --input: #22324f;
+  --ring: #eacc72;
+  --chart-1: #5b7fd8;
+  --chart-2: #eacc72;
+  --chart-3: #93aee8;
+  --chart-4: #f3dfa8;
+  --chart-5: #2e57c4;
+  --sidebar: #0e1728;
+  --sidebar-foreground: #f6f8ff;
+  --sidebar-primary: #eacc72;
+  --sidebar-primary-foreground: #020d30;
+  --sidebar-accent: #131e33;
+  --sidebar-accent-foreground: #f6f8ff;
+  --sidebar-border: #22324f;
+  --sidebar-ring: #eacc72;
+
+  --color-text-secondary: #ced7ef;
+  --color-text-muted: #9faecc;
+  --color-bg-raised: #131e33;
+  --color-bg-subtle: #0b1424;
+  --color-border-mid: #324769;
+  --color-success-bg: rgba(22, 101, 52, 0.18);
+  --color-success-fg: #9ee7b6;
+  --color-success-border: rgba(134, 239, 172, 0.24);
+  --color-warning-bg: rgba(133, 77, 14, 0.18);
+  --color-warning-fg: #fcd68f;
+  --color-warning-border: rgba(253, 230, 138, 0.24);
+  --color-danger-bg: rgba(153, 27, 27, 0.18);
+  --color-danger-fg: #fca5a5;
+  --color-danger-border: rgba(252, 165, 165, 0.24);
+  --color-info-bg: rgba(30, 64, 175, 0.18);
+  --color-info-fg: #a9c6ff;
+  --color-info-border: rgba(147, 197, 253, 0.24);
+
+  --badge-award-bg: rgba(133, 77, 14, 0.18);
+  --badge-award-fg: #f9d58a;
+  --badge-award-border: rgba(253, 224, 71, 0.25);
+  --badge-recognition-bg: rgba(76, 29, 149, 0.2);
+  --badge-recognition-fg: #ddd0ff;
+  --badge-recognition-border: rgba(167, 139, 250, 0.25);
+  --badge-report-bg: rgba(12, 74, 110, 0.2);
+  --badge-report-fg: #bde7ff;
+  --badge-report-border: rgba(125, 211, 252, 0.25);
+  --badge-general-bg: rgba(20, 83, 45, 0.2);
+  --badge-general-fg: #b7f5c8;
+  --badge-general-border: rgba(134, 239, 172, 0.25);
+
+  --surface-panel-bg: linear-gradient(180deg, rgba(8, 16, 31, 0.96), rgba(10, 20, 37, 0.98));
+  --surface-panel-fg: #f6f8ff;
+  --surface-panel-muted: rgba(236, 242, 255, 0.78);
+  --surface-panel-border: rgba(255, 255, 255, 0.10);
+  --surface-banner-bg: linear-gradient(135deg, rgba(10, 36, 112, 0.98) 0%, rgba(15, 49, 143, 0.98) 100%);
+  --surface-banner-fg: #ffffff;
+
+  --hero-overlay-start: rgba(1, 6, 20, 0.88);
+  --hero-overlay-mid: rgba(4, 18, 56, 0.78);
+  --hero-overlay-end: rgba(9, 30, 88, 0.52);
+  --hero-copy: rgba(236, 242, 255, 0.92);
+  --hero-copy-muted: rgba(236, 242, 255, 0.78);
+
+  --shadow-sm: 0 1px 6px rgba(0, 0, 0, 0.32), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.24), 0 2px 6px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 14px 32px rgba(0, 0, 0, 0.3), 0 6px 12px rgba(0, 0, 0, 0.18);
+  --shadow-xl: 0 22px 48px rgba(0, 0, 0, 0.34), 0 8px 20px rgba(0, 0, 0, 0.2);
+  --shadow-gold: 0 4px 20px rgba(212, 160, 23, 0.18);
+  --shadow-navy: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  ::selection {
+    background-color: var(--gold-300);
+    color: var(--navy-900);
+  }
+  /* Consistent focus-visible ring on all interactive elements */
+  :focus-visible {
+    outline: 2px solid var(--gold-500);
+    outline-offset: 2px;
+  }
+  /* Smooth focus transitions */
+  button, a, input, textarea, select {
+    transition: outline-color 0.15s ease, outline-offset 0.15s ease;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-space-grotesk), var(--font-ibm-plex-sans), sans-serif;
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .glass {
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+  }
+  .hero-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-mid) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: var(--color-border-mid);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: var(--muted-foreground);
+  }
+}
+
+/* Announcement badge classes */
+.badge-award {
+  background-color: var(--badge-award-bg);
+  color: var(--badge-award-fg);
+  border-color: var(--badge-award-border);
+}
+.badge-recognition {
+  background-color: var(--badge-recognition-bg);
+  color: var(--badge-recognition-fg);
+  border-color: var(--badge-recognition-border);
+}
+.badge-report {
+  background-color: var(--badge-report-bg);
+  color: var(--badge-report-fg);
+  border-color: var(--badge-report-border);
+}
+.badge-general {
+  background-color: var(--badge-general-bg);
+  color: var(--badge-general-fg);
+  border-color: var(--badge-general-border);
+}
+.badge-pinned {
+  background-color: var(--gold-100);
+  color: var(--gold-800);
+  border-color: var(--gold-300);
+}
+
+/* Accent bars for the announcement modal - saturated type colors that read
+   clearly as a thin top stripe. Light mode uses the badge border colors
+   (stronger than the pale badge backgrounds); dark mode uses brighter variants. */
+.accent-bar-award {
+  background: linear-gradient(90deg, var(--gold-400), var(--gold-500));
+}
+.accent-bar-recognition {
+  background: linear-gradient(90deg, #7c3aed, #8b5cf6);
+}
+.accent-bar-report {
+  background: linear-gradient(90deg, #0284c7, #0ea5e9);
+}
+.accent-bar-general {
+  background: linear-gradient(90deg, #16a34a, #22c55e);
+}
+:root.dark .accent-bar-recognition {
+  background: linear-gradient(90deg, #a78bfa, #c4b5fd);
+}
+:root.dark .accent-bar-report {
+  background: linear-gradient(90deg, #38bdf8, #7dd3fc);
+}
+:root.dark .accent-bar-general {
+  background: linear-gradient(90deg, #4ade80, #86efac);
+}
+.dark .badge-pinned {
+  background-color: rgba(212, 160, 23, 0.18);
+  color: var(--gold-300);
+  border-color: rgba(212, 160, 23, 0.35);
+}
+
+/* Spinning gear logo animation */
+@keyframes gear-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.gear-spin {
+  animation: gear-spin 18s linear infinite;
+}
+
+/* Shimmer for skeleton loading states */
+@keyframes shimmer {
+  100% { transform: translateX(100%); }
+}
+
+/* Subtle pulse for status indicators */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+/* Card lift on hover - reusable depth effect */
+.card-lift {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.card-lift:hover {
+  transform: translateY(-4px);
+}
+
+/* Gold underline grow for nav links */
+.nav-underline {
+  position: relative;
+}
+.nav-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 2px;
+  width: 100%;
+  background: linear-gradient(to right, var(--gold-500), var(--gold-300));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.nav-underline:hover::after,
+.nav-underline[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gear-spin {
+    animation: none;
+  }
+  .status-pulse {
+    animation: none;
+  }
+  .card-lift {
+    transition: none;
+  }
+  .card-lift:hover {
+    transform: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+  /* Stop react-spinners (ClockLoader) hand rotation; keep the static ring. */
+  .page-loader-spinner span[style*="animation"] {
+    animation: none !important;
+  }
+  /* Stop the skeleton shimmer sweep; block remains a static gray shape. */
+  .skeleton::before {
+    animation: none !important;
+  }
+  /* Officer org-chart: no hover lift on tree nodes. */
+  .officer-org-chart button {
+    transition: none !important;
+  }
+  .officer-org-chart button:hover {
+    transform: none;
+  }
+}
+
+/* Reading progress bar - fixed at top, shows scroll progress */
+.reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 4px;
+  z-index: 60;
+  background: linear-gradient(to right, var(--gold-500), var(--gold-300));
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.5), 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: width 0.1s linear;
+  border-bottom-right-radius: 2px;
+}
+
+/* Fade-in-up animation for banners (cookie consent, etc.) */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Line clamp utilities (used by recent activity feed) */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Gradient text shimmer for hero headline accent word */
+@keyframes gradient-shimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--gold-400) 0%,
+    var(--gold-200) 25%,
+    var(--gold-500) 50%,
+    var(--gold-200) 75%,
+    var(--gold-400) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-shimmer 4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    animation: none;
+    background: var(--gold-400);
+    -webkit-text-fill-color: var(--gold-400);
+  }
+}
+
+/* Print styles - hide nav/footer, show clean content */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .policy-page {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+  .policy-page__main,
+  .policy-page__side {
+    border: none !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}
+
+/* Loading slide animation for page loader progress bar */
+@keyframes loadingSlide {
+  0% { left: -50%; }
+  50% { left: 100%; }
+  100% { left: -50%; }
+}
+
+/* Officer org-chart tree (react-organizational-chart) - subtle connectors
+   that match the navy/gold system. The library renders <ul>/<li> with
+   ::before/::after borders for the connector lines. */
+.officer-org-chart ul {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+}
+/* CRITICAL: <li> must be display:flex column for the tree to center.
+   Without this, <li> defaults to display:list-item, takes full width,
+   and the root node sits on the far left instead of centering above
+   its children. */
+.officer-org-chart li {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* Connector lines: use a muted mid-border tint that adapts to light/dark. */
+.officer-org-chart ul::before,
+.officer-org-chart li::before,
+.officer-org-chart li::after {
+  border-color: var(--color-border-mid, var(--border));
+}
+/* Hover the tree node lifts the card; keep the connector color steady. */
+.officer-org-chart button:hover,
+.officer-org-chart button:focus-visible {
+  cursor: pointer;
+}

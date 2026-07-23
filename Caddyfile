@@ -1,0 +1,46 @@
+# Gateway for the sandbox. Listens on :81 and forwards to the Next.js app
+# (localhost:3000) or to a mini-service when ?XTransformPort=<port> is set.
+#
+# SECURITY NOTE (C2): the @transform_port_query block forwards to any
+# localhost port the client requests via ?XTransformPort=<port>. This is
+# required by the sandbox gateway convention but is a theoretical SSRF risk.
+# Mitigations: (1) the app runs in a single-tenant sandbox with no sensitive
+# internal services on other ports; (2) app-level rate limiting on auth and
+# contact endpoints is in src/proxy.ts and the route handlers; (3) in a real
+# multi-tenant deployment, restrict the port range here or put a WAF in front.
+#
+# Security headers are set as defense-in-depth. The app (src/proxy.ts) also
+# sets these on HTML responses; Caddy sets them on everything it proxies.
+
+:81 {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# HSTS is honored by browsers only over HTTPS; harmless on HTTP dev.
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+	}
+
+	@transform_port_query {
+		query XTransformPort=*
+	}
+
+	handle @transform_port_query {
+		reverse_proxy localhost:{query.XTransformPort} {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	handle {
+		reverse_proxy localhost:3000 {
+			header_up Host {host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+}
