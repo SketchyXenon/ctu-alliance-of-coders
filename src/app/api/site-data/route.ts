@@ -2,8 +2,13 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import type { Announcement, AdminYear, SiteData } from "@/lib/types";
 
-// Revalidate every 60 seconds (ISR-style for the public read endpoint).
-export const revalidate = 60;
+// Force dynamic: never prerender this route at build time. The route queries
+// the database, which is unreachable during the Vercel build (Supabase may be
+// sleeping, or the build sandbox has no DB access). CDN-level caching is
+// provided by the Cache-Control header below (s-maxage + stale-while-revalidate),
+// which gives the same caching behavior as ISR without requiring a DB connection
+// at build time. Per 02-system-design.md section 6 (graceful degradation).
+export const dynamic = "force-dynamic";
 
 /** GET /api/site-data - public, returns all announcements + officer years. */
 export async function GET() {
@@ -48,7 +53,7 @@ export async function GET() {
   // Public, cacheable for 60s at the CDN, stale-while-revalidate for 300s.
   res.headers.set(
     "Cache-Control",
-    "public, s-maxage=60, stale-while-revalidate=300"
+    "public, s-maxage=60, stale-while-revalidate=300",
   );
   return res;
 }
