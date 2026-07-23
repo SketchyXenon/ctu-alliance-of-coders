@@ -74,6 +74,7 @@ export type SectionKey =
   | "Announcements"
   | "Officers"
   | "Contact"
+  | "FAQ"
   | "Admin Panel"
   | "Privacy Policy"
   | "Data Protection"
