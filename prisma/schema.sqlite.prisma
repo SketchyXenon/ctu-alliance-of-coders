@@ -1,0 +1,106 @@
+// Alliance of Coders - database schema
+// SQLite-backed. Access patterns: read announcements/officers publicly,
+// write only via authenticated admin session.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Announcement {
+  id        String   @id
+  type      String   @default("general") // award | recognition | report | general
+  title     String
+  body      String
+  image     String?
+  pinned    Boolean  @default(false)
+  date      String   // YYYY-MM-DD, stored as string for stable ordering
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([pinned])
+  @@index([date(sort: Desc)])
+}
+
+model AdminYear {
+  id        String    @id @default(cuid())
+  year      String    @unique // e.g. "2024-2025"
+  theme     String    @default("Set a leadership theme for this year.")
+  sortOrder Int       @default(0)
+  officers  Officer[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([sortOrder])
+}
+
+model Officer {
+  id        String   @id @default(cuid())
+  yearId    String
+  name      String   @default("Vacant Slot")
+  role      String   @default("Open Position")
+  image     String?
+  sortOrder Int      @default(0)
+  year      AdminYear @relation(fields: [yearId], references: [id], onDelete: Cascade)
+
+  @@index([yearId])
+  @@index([sortOrder])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  clientId  String   @unique // idempotency key from client
+  name      String
+  email     String
+  subject   String
+  category  String   @default("General Inquiry")
+  message   String
+  status    String   @default("new") // new | read | resolved | archived
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([email])
+}
+
+model AdminUser {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  name         String?
+  passwordHash String
+  role         String        @default("admin")
+  sessions     AdminSession[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model AdminSession {
+  id        String     @id @default(cuid())
+  userId    String
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime   @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // create | update | delete | login | logout
+  entity    String   // announcement | officer | year | message
+  entityId  String?
+  summary   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([entity])
+}
