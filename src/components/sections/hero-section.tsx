@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import { Megaphone, MessageSquare, Users } from "lucide-react";
 import { useCountUp } from "@/hooks/use-count-up";
@@ -53,15 +52,18 @@ export function HeroSection({ stats, onNav }: HeroSectionProps) {
         <div className="absolute inset-0 bg-gradient-to-br from-navy-950/70 via-navy-900/50 to-navy-800/70" />
       </div>
 
-      <div className="relative mx-auto w-full max-w-7xl px-6 py-16 sm:px-8 lg:py-24">
-        <div className="flex flex-col items-center gap-8 lg:flex-row lg:items-center lg:justify-between">
-          {/* Text content column - order-2 on mobile (below logo), order-1 on desktop (left) */}
-          <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="order-2 flex flex-1 flex-col items-start gap-7 sm:gap-8 lg:order-1"
-          >
+      <div className="relative mx-auto w-full max-w-5xl px-6 py-16 sm:px-8 lg:py-24">
+        {/* Single-column layout: the hero's signature is the typography (gold
+            "Coders" accent + display h1). The logo was removed to concentrate
+            the ambition on the type, per 05-ui-ux-design.md section 1: "One
+            bold idea, well executed, reads as more premium than five competing
+            ones." The content is left-aligned for a confident editorial feel. */}
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="flex flex-col items-start gap-7 sm:gap-8"
+        >
           <motion.div variants={item} className="flex items-center gap-3">
             <span aria-hidden="true" className="h-px w-8 bg-gold-400 sm:w-10" />
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-300 sm:text-sm">
@@ -81,7 +83,8 @@ export function HeroSection({ stats, onNav }: HeroSectionProps) {
             variants={item}
             className="max-w-xl text-lg leading-relaxed text-navy-100/90 sm:text-xl"
           >
-            A community of developers, innovators, and tech leaders at CTU Danao.
+            A community of developers, innovators, and tech leaders at CTU
+            Danao.
           </motion.p>
 
           <motion.div variants={item} className="flex flex-wrap gap-3 pt-1">
@@ -116,7 +119,11 @@ export function HeroSection({ stats, onNav }: HeroSectionProps) {
               className="mt-4 grid w-full grid-cols-2 gap-x-4 gap-y-6 border-t border-white/10 pt-8 sm:mt-6 sm:max-w-2xl sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-white/10"
             >
               {stats.map(({ value, label }) => (
-                <div key={label} role="listitem" className="sm:px-4 sm:first:pl-0">
+                <div
+                  key={label}
+                  role="listitem"
+                  className="sm:px-4 sm:first:pl-0"
+                >
                   <AnimatedStat value={value} />
                   <div className="mt-1 text-xs uppercase tracking-wider text-navy-100/80 sm:text-sm">
                     {label}
@@ -126,50 +133,6 @@ export function HeroSection({ stats, onNav }: HeroSectionProps) {
             </motion.div>
           )}
         </motion.div>
-
-          {/* Logo column - order-1 on mobile (above text, centered), order-2 on
-              desktop (right). Uses the official logo.png (720px, brand-accurate)
-              via next/image for automatic WebP/AVIF optimization. The ambient
-              breathing animation was dropped: animating the whole PNG's opacity
-              would pulse the dark background (reads as flicker, not breathing);
-              a static, well-framed mark is more premium per 05 §1 ("quiet and
-              disciplined") and §7 ("motion without a job reads as noise"). The
-              staggered entrance animation is preserved (purposeful orientation).
-              Frame: frosted flat color (not gradient, 05 §3) + subtle gold glow
-              (light effect, not a gradient surface) + hover ring intensification
-              (full state set, 05 §4). */}
-          <motion.div
-            variants={item}
-            initial="hidden"
-            animate="show"
-            className="order-1 flex shrink-0 justify-center lg:order-2 lg:justify-end"
-          >
-            <div className="group relative">
-              {/* Soft gold glow behind the badge - a blurred solid color (light
-                  effect), not a gradient fill. Faint so it doesn't compete with
-                  the typographic signature (05 §1). Warms the dark-on-dark logo
-                  against the navy hero and ties to the brand accent. */}
-              <div
-                aria-hidden="true"
-                className="absolute inset-0 -z-10 rounded-3xl bg-gold-500/10 blur-2xl transition-opacity duration-300 group-hover:bg-gold-500/20"
-              />
-              {/* Framed badge: frosted flat color, gold hairline ring, soft
-                  depth shadow. Hover intensifies the ring (full state set).
-                  Mobile stays 80px (compact); desktop scales up to 160px so
-                  the official emblem's detail is legible as a hero focal point. */}
-              <div className="relative inline-flex items-center justify-center rounded-2xl bg-white/5 p-3 ring-1 ring-gold-400/30 shadow-2xl shadow-navy-950/50 backdrop-blur-sm transition-all duration-300 group-hover:ring-gold-400/50 sm:p-3.5 lg:p-4">
-                <Image
-                  src="/logo.png"
-                  width={720}
-                  height={720}
-                  alt="Alliance of Coders official logo"
-                  priority
-                  className="block h-20 w-20 object-contain sm:h-24 sm:w-24 lg:h-40 lg:w-40"
-                />
-              </div>
-            </div>
-          </motion.div>
-        </div>
       </div>
     </section>
   );

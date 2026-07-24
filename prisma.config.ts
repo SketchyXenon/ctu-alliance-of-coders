@@ -5,19 +5,18 @@
 // adapter.
 //
 // This config defaults to the PostgreSQL production schema (schema.prisma).
-// For local SQLite dev, set the PRISMA_SCHEMA env var to
-// prisma/schema.sqlite.prisma, or run CLI commands with --schema.
+// For local SQLite dev, set DATABASE_URL=file:./db/custom.db and the
+// PRISMA_SCHEMA env var to prisma/schema.sqlite.prisma (or run the db:push:sqlite
+// script which sets both).
 //
-// Per 03-software-engineering.md section 6: fail fast with a clear message
-// on misconfiguration. Per 02-system-design.md: keep dev close to prod.
+// Per 03-software-engineering.md section 6: fail fast with a clear message.
 
 import path from "node:path";
-import { defineConfig } from "prisma/config";
+import { defineConfig } from "@prisma/config";
 
 // Select schema based on DATABASE_URL scheme or PRISMA_SCHEMA override.
 // - file:*           -> SQLite dev schema
 // - postgresql://    -> Postgres prod schema
-// This lets `bun run db:push` work for both dev and prod without flag changes.
 function resolveSchema(): string {
   const override = process.env.PRISMA_SCHEMA;
   if (override) return override;
