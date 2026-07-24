@@ -1,6 +1,12 @@
-// Alliance of Coders - database schema
-// SQLite-backed. Access patterns: read announcements/officers publicly,
-// write only via authenticated admin session.
+// Alliance of Coders - development schema (SQLite).
+// Used for local dev with DATABASE_URL=file:./db/custom.db.
+// Prisma 7: the datasource URL is in prisma.config.ts (for CLI) and passed
+// as an adapter to PrismaClient (for runtime). See src/lib/db.ts.
+//
+// Mirrors the production schema (schema.prisma) but uses SQLite types
+// (no @db.Uuid, no @db.Text, no @map needed - SQLite is case-insensitive).
+// Per 02-system-design.md: keep dev close to production (same models, same
+// access patterns) so "works on my machine" bugs don't hide.
 
 generator client {
   provider = "prisma-client-js"
@@ -8,17 +14,16 @@ generator client {
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Announcement {
   id        String   @id
-  type      String   @default("general") // award | recognition | report | general
+  type      String   @default("general")
   title     String
   body      String
   image     String?
   pinned    Boolean  @default(false)
-  date      String   // YYYY-MM-DD, stored as string for stable ordering
+  date      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -29,7 +34,7 @@ model Announcement {
 
 model AdminYear {
   id        String    @id @default(cuid())
-  year      String    @unique // e.g. "2024-2025"
+  year      String    @unique
   theme     String    @default("Set a leadership theme for this year.")
   sortOrder Int       @default(0)
   officers  Officer[]
@@ -54,13 +59,13 @@ model Officer {
 
 model ContactMessage {
   id        String   @id @default(cuid())
-  clientId  String   @unique // idempotency key from client
+  clientId  String   @unique
   name      String
   email     String
   subject   String
   category  String   @default("General Inquiry")
   message   String
-  status    String   @default("new") // new | read | resolved | archived
+  status    String   @default("new")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -94,8 +99,8 @@ model AdminSession {
 model ActivityLog {
   id        String   @id @default(cuid())
   userId    String
-  action    String   // create | update | delete | login | logout
-  entity    String   // announcement | officer | year | message
+  action    String
+  entity    String
   entityId  String?
   summary   String
   createdAt DateTime @default(now())

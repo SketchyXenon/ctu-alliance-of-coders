@@ -1,11 +1,12 @@
-// Production schema - PostgreSQL (Supabase).
-// Aligned with the Supabase migration SQL (supabase/migrations/). The
-// migration creates UUID columns for admin_years, officers, contact_messages,
-// admin_users, admin_sessions, activity_logs; and a text id for announcements.
-// Column names use snake_case in the DB (image_url, year_id, etc.) and are
-// mapped via @map. Per 03-software-engineering.md: single source of truth is
-// the migration SQL; this schema mirrors it. Per 02-system-design.md: design
-// data for how it's read.
+// Alliance of Coders - production schema (PostgreSQL / Supabase).
+// Prisma 7: the datasource URL is no longer in the schema. It lives in
+// prisma.config.ts (for CLI) and is passed as an adapter to PrismaClient
+// (for runtime). See prisma.config.ts and src/lib/db.ts.
+//
+// Aligned with supabase/migrations/20260721000000_init_schema.sql: UUID ids,
+// snake_case column names via @map, @db.Text for long text, @db.Uuid for UUID
+// columns. Per 03-software-engineering.md: single source of truth is the
+// migration SQL; this schema mirrors it.
 
 generator client {
   provider = "prisma-client-js"
@@ -13,7 +14,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Announcement {

@@ -1,33 +1,28 @@
-import { PrismaClient } from "@prisma/client";
+// Prisma 7 client with runtime adapter selection.
+// Prisma 7 requires passing a database adapter to PrismaClient instead of
+// reading DATABASE_URL from the schema. This module detects the DATABASE_URL
+// scheme and selects the right adapter:
+//   - file:*        -> @prisma/adapter-better-sqlite3 (dev)
+//   - postgresql:// -> @prisma/adapter-pg (prod)
+// Per 02-system-design.md section 6: "Assume every dependency will fail, and
+// design for it." Per 03 section 6: fail fast with a clear message.
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+import { PrismaClient } from "@prisma/client";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 /**
  * Warn if DATABASE_URL uses Supabase's DIRECT connection endpoint.
- *
- * Supabase's direct URL (db.<project-ref>.supabase.co:5432) resolves to IPv6.
- * Vercel serverless functions (and many cloud platforms) cannot do IPv6
- * egress, so the connection silently fails with "Can't reach database server"
- * even when the DB is perfectly healthy. The fix is to use Supabase's
- * CONNECTION POOLER URL (aws-0-<region>.pooler.supabase.com) which provides
- * an IPv4 endpoint designed for serverless.
- *
- * Per 02-system-design.md section 6: "Assume every dependency will fail, and
- * design for it." Per 03-software-engineering.md section 6: fail fast with a
- * clear, actionable message.
+ * Supabase's direct URL (db.<ref>.supabase.co:5432) is IPv6-only and
+ * unreachable from Vercel serverless. Use the Transaction mode pooler
+ * (port 6543) instead. Per 02 section 6 and 03 section 6.
  */
 function validateConnectionString(): void {
   const url = process.env.DATABASE_URL || "";
-  if (!url) return; // env.ts handles the missing-URL case at boot
+  if (!url) return;
 
-  // Detect Supabase direct connection: db.<ref>.supabase.co (IPv6-only)
   const isSupabaseDirect =
     /^postgres(ql)?:\/\/.*@db\.[a-z0-9]+\.supabase\.(co|in)/i.test(url);
-
-  // Detect Supabase Session-mode pooler (port 5432) — still unreachable from
-  // Vercel serverless in many cases. Transaction mode (port 6543) is required.
   const isSessionModePooler =
     /pooler\.supabase\.(com|in)/i.test(url) && /:5432\b/.test(url);
 
@@ -35,49 +30,57 @@ function validateConnectionString(): void {
     if (isSupabaseDirect) {
       console.warn(
         "[DB] WARNING: DATABASE_URL uses Supabase's DIRECT connection (db.*.supabase.co).\n" +
-          "      This endpoint is IPv6-only and is unreachable from Vercel serverless functions.\n" +
-          "      Use the Supabase TRANSACTION MODE pooler URL instead:\n" +
-          "        1. Supabase Dashboard > Project Settings > Database > Connection Pooling > Transaction mode\n" +
-          "        2. Copy the URL (host: aws-0-<region>.pooler.supabase.com, port: 6543)\n" +
-          "        3. Append ?pgbouncer=true&connection_limit=1&connect_timeout=15\n" +
-          "        4. Set DATABASE_URL to that URL in your Vercel environment variables.",
+          "      This endpoint is IPv6-only and unreachable from Vercel serverless.\n" +
+          "      Use the TRANSACTION MODE pooler (port 6543) with ?pgbouncer=true.\n" +
+          "      See .env.example for the correct URL format.",
       );
     } else if (isSessionModePooler) {
       console.warn(
-        "[DB] WARNING: DATABASE_URL uses Supabase's SESSION MODE pooler (port 5432).\n" +
-          "      Session mode can fail from Vercel serverless. Switch to TRANSACTION MODE:\n" +
-          "        1. Supabase Dashboard > Project Settings > Database > Connection Pooling > Transaction mode\n" +
-          "        2. Use port 6543 (NOT 5432) and append ?pgbouncer=true&connection_limit=1\n" +
-          "        3. Update DATABASE_URL in your Vercel environment variables and redeploy.",
+        "[DB] WARNING: DATABASE_URL uses Session mode pooler (port 5432).\n" +
+          "      Switch to Transaction mode (port 6543) for Vercel serverless.",
       );
     }
   }
 }
 
-// Lazy init: only create the client (and read env) on first access.
-// This avoids breaking `next build` when env vars aren't set yet.
+/**
+ * Create a PrismaClient with the adapter matching the DATABASE_URL scheme.
+ * Prisma 7 requires the adapter at construction time. Both adapter
+ * constructors are synchronous, so this function is synchronous.
+ */
 function createClient(): PrismaClient {
   validateConnectionString();
 
-  const isProd = process.env.NODE_ENV === "production";
-  return new PrismaClient({
-    log: isProd ? ["error"] : ["error", "warn"],
-    // Serverless: limit to 1 connection per function instance to avoid
-    // exhausting the Supabase connection pool. Per 02 section 5 (stateless
-    // services) and Supabase's serverless guidance.
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
-  });
+  const url = process.env.DATABASE_URL || "";
+  if (!url) {
+    throw new Error(
+      "DATABASE_URL is not set. For dev: set DATABASE_URL=file:./db/custom.db. " +
+        "For prod: set DATABASE_URL to your Supabase Transaction mode pooler URL.",
+    );
+  }
+
+  // SQLite: file:./db/custom.db
+  if (url.startsWith("file:")) {
+    const adapter = new PrismaBetterSqlite3({ url });
+    return new PrismaClient({ adapter });
+  }
+
+  // PostgreSQL: postgresql:// or postgres://
+  if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
+    const adapter = new PrismaPg({ connectionString: url });
+    return new PrismaClient({ adapter });
+  }
+
+  throw new Error(
+    `Unsupported DATABASE_URL scheme. Expected "file:" (SQLite) or "postgresql://" (Postgres). Got: ${url.slice(0, 20)}...`,
+  );
 }
 
 /**
  * Wrap a DB operation with retry + exponential backoff + jitter.
  * Per 02-system-design.md section 6: "Retries with exponential backoff and
- * jitter for transient failures." Serverless cold starts and Supabase pooler
- * warmups can cause transient connection failures on the first attempt.
+ * jitter for transient failures." Serverless cold starts and pool warmups
+ * can cause transient connection failures on the first attempt.
  */
 export async function withDbRetry<T>(
   fn: () => Promise<T>,
@@ -91,8 +94,6 @@ export async function withDbRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error;
-      // Only retry on connection/initialization errors, not on validation
-      // or known request errors (P2002, P2025, etc.).
       const name = (error as { name?: string })?.name ?? "";
       const msg = (error as { message?: string })?.message ?? "";
       const isTransient =
@@ -107,7 +108,6 @@ export async function withDbRetry<T>(
         throw error;
       }
 
-      // Exponential backoff with jitter: 200ms, 400ms, 800ms (+ random 0-100ms).
       const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 100;
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
@@ -116,6 +116,27 @@ export async function withDbRetry<T>(
   throw lastError;
 }
 
-export const db = globalForPrisma.prisma ?? createClient();
+// Lazy singleton: create on first access, reuse for all subsequent requests.
+// In dev, the same instance is reused across hot reloads via globalThis.
+let _db: PrismaClient | null = null;
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = db;
+function getDb(): PrismaClient {
+  if (!_db) {
+    _db = createClient();
+  }
+  return _db;
+}
+
+// Export the client. PrismaClient is constructed lazily on first property
+// access via a getter, so module import doesn't trigger DB connection.
+// This keeps `next build` working when DATABASE_URL isn't set yet.
+export const db = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
+    const client = getDb();
+    const value = Reflect.get(client, prop, receiver);
+    if (typeof value === "function") {
+      return value.bind(client);
+    }
+    return value;
+  },
+}) as PrismaClient;

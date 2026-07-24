@@ -1,10 +1,25 @@
 // Seed the database with initial Alliance of Coders data.
-// Run with: bun run db:seed (or prisma db seed)
+// Run with: bun run db:seed
 // Idempotent: safe to run multiple times.
+// Prisma 7: uses adapter pattern (see src/lib/db.ts for adapter selection).
 
 import { PrismaClient } from "@prisma/client";
 
-const db = new PrismaClient();
+async function createDb(): Promise<PrismaClient> {
+  const url = process.env.DATABASE_URL || "";
+  if (!url) {
+    throw new Error("DATABASE_URL is not set. For dev: file:./db/custom.db");
+  }
+  if (url.startsWith("file:")) {
+    const { PrismaBetterSqlite3 } =
+      await import("@prisma/adapter-better-sqlite3");
+    return new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) });
+  }
+  const { PrismaPg } = await import("@prisma/adapter-pg");
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+}
+
+let db: PrismaClient;
 
 const ANNOUNCEMENTS = [
   {
@@ -98,6 +113,8 @@ const ADMIN_YEARS = [
 ];
 
 async function main() {
+  db = await createDb();
+
   // Announcements
   for (const ann of ANNOUNCEMENTS) {
     await db.announcement.upsert({
@@ -137,7 +154,9 @@ async function main() {
   // first admin interactively (see scripts/bootstrap-admin.ts).
 
   console.info("Seed complete.");
-  console.info("No admin account created. Run `bun run bootstrap` to create one.");
+  console.info(
+    "No admin account created. Run `bun run bootstrap` to create one.",
+  );
 }
 
 main()
