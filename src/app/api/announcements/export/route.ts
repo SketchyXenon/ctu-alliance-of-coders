@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { csvEscape } from "@/lib/csv";
+import { buildCsv } from "@/lib/csv";
 
 /**
  * GET /api/announcements/export - admin only, returns CSV.
+ * Uses buildCsv so every cell is run through csvEscape (defense-in-depth
+ * against formula injection, per 06 A05). No cell is interpolated raw.
  */
 export async function GET() {
   try {
@@ -18,16 +20,18 @@ export async function GET() {
     take: 500,
   });
 
-  const header = "id,type,title,date,pinned,image\n";
-  const body = rows
-    .map((r) => {
-      const title = csvEscape(r.title);
-      const image = r.image ? csvEscape(r.image) : "";
-      return `${r.id},${r.type},${title},${r.date},${r.pinned},${image}`;
-    })
-    .join("\n");
+  const csv = buildCsv(
+    ["id", "type", "title", "date", "pinned", "image"],
+    rows.map((r) => [
+      r.id,
+      r.type,
+      r.title,
+      r.date,
+      String(r.pinned),
+      r.image ?? "",
+    ])
+  );
 
-  const csv = header + body;
   const res = new NextResponse(csv);
   res.headers.set("Content-Type", "text/csv; charset=utf-8");
   res.headers.set(

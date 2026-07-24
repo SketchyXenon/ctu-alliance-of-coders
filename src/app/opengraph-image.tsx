@@ -5,6 +5,9 @@ export const alt = "Alliance of Coders - CTU Danao Campus";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+// Site URL from env (single source of truth). Falls back to localhost in dev.
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
 /**
  * Dynamic Open Graph image at /opengraph-image.
  * Renders the brand name on a navy background with gold accent.
@@ -33,7 +36,7 @@ export default function OGImage() {
           }}
         >
           <img
-            src="https://allianceofcoders.ph/logo.png"
+            src={`${siteUrl}/logo.png`}
             width={120}
             height={120}
             alt=""

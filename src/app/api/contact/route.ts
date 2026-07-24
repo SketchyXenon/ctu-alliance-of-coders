@@ -1,20 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
-import {
-  validateText,
-  validateEmail,
-  rateLimit,
-  generateToken,
-  getClientIp,
-} from "@/lib/security";
+import { validateText, validateEmail, rateLimit, generateToken, getClientIp } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
 import { CONTACT_TOPICS } from "@/lib/constants";
-import type {
-  ContactMessage,
-  ContactCategory,
-  ContactStatus,
-} from "@/lib/types";
+import type { ContactMessage, ContactCategory, ContactStatus } from "@/lib/types";
 import type { ContactMessage as PrismaContactMessage } from "@prisma/client";
 
 const MAX_MESSAGE = 2000;
@@ -59,16 +49,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
   const ipLimit = rateLimit(`contact-ip:${ip}`, 4, 10 * 60_000);
   if (!ipLimit.allowed) {
     return NextResponse.json(
-      {
-        error:
-          "Too many submissions from this address. Please wait a few minutes.",
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)),
-        },
-      },
+      { error: "Too many submissions from this address. Please wait a few minutes." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)) } }
     );
   }
 
@@ -79,33 +61,17 @@ export const POST = withPrismaError(async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const nameCheck = validateText(body.name, {
-    required: true,
-    minLen: 2,
-    maxLen: 80,
-  });
-  if (!nameCheck.valid)
-    return NextResponse.json({ error: nameCheck.error }, { status: 400 });
+  const nameCheck = validateText(body.name, { required: true, minLen: 2, maxLen: 80 });
+  if (!nameCheck.valid) return NextResponse.json({ error: nameCheck.error }, { status: 400 });
 
   const emailCheck = validateEmail(body.email);
-  if (!emailCheck.valid)
-    return NextResponse.json({ error: emailCheck.error }, { status: 400 });
+  if (!emailCheck.valid) return NextResponse.json({ error: emailCheck.error }, { status: 400 });
 
-  const subjectCheck = validateText(body.subject, {
-    required: true,
-    minLen: 3,
-    maxLen: 120,
-  });
-  if (!subjectCheck.valid)
-    return NextResponse.json({ error: subjectCheck.error }, { status: 400 });
+  const subjectCheck = validateText(body.subject, { required: true, minLen: 3, maxLen: 120 });
+  if (!subjectCheck.valid) return NextResponse.json({ error: subjectCheck.error }, { status: 400 });
 
-  const messageCheck = validateText(body.message, {
-    required: true,
-    minLen: 10,
-    maxLen: MAX_MESSAGE,
-  });
-  if (!messageCheck.valid)
-    return NextResponse.json({ error: messageCheck.error }, { status: 400 });
+  const messageCheck = validateText(body.message, { required: true, minLen: 10, maxLen: MAX_MESSAGE });
+  if (!messageCheck.valid) return NextResponse.json({ error: messageCheck.error }, { status: 400 });
 
   const category = String(body.category ?? "General Inquiry");
   if (!CONTACT_TOPICS.some((t) => t.value === category)) {
@@ -113,23 +79,11 @@ export const POST = withPrismaError(async function POST(request: Request) {
   }
 
   const normalizedEmail = String(body.email).trim().toLowerCase();
-  const emailLimit = rateLimit(
-    `contact-email:${normalizedEmail}`,
-    2,
-    30 * 60_000,
-  );
+  const emailLimit = rateLimit(`contact-email:${normalizedEmail}`, 2, 30 * 60_000);
   if (!emailLimit.allowed) {
     return NextResponse.json(
-      {
-        error:
-          "Too many submissions from this email. Please wait and try again.",
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
-        },
-      },
+      { error: "Too many submissions from this email. Please wait and try again." },
+      { status: 429, headers: { "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)) } }
     );
   }
 
@@ -158,20 +112,12 @@ export const POST = withPrismaError(async function POST(request: Request) {
     });
   } catch (error) {
     const { Prisma } = await import("@prisma/client");
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      const existing = await db.contactMessage.findUnique({
-        where: { clientId },
-      });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const existing = await db.contactMessage.findUnique({ where: { clientId } });
       if (existing) {
         const admin = await getCurrentUser();
         if (admin && admin.role === "admin") {
-          return NextResponse.json({
-            item: toContactMessageDTO(existing),
-            deduplicated: true,
-          });
+          return NextResponse.json({ item: toContactMessageDTO(existing), deduplicated: true });
         }
         return NextResponse.json({ ok: true });
       }
@@ -183,10 +129,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
   // form does not consume the response body; the admin inbox does).
   const admin = await getCurrentUser();
   if (admin && admin.role === "admin") {
-    return NextResponse.json(
-      { item: toContactMessageDTO(created) },
-      { status: 201 },
-    );
+    return NextResponse.json({ item: toContactMessageDTO(created) }, { status: 201 });
   }
   return NextResponse.json({ ok: true }, { status: 201 });
 });

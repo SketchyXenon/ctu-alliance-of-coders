@@ -4,7 +4,12 @@ import * as React from "react";
 import { Check, Info, Printer, type LucideIcon } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { SectionHeading } from "@/components/section-heading";
@@ -69,12 +74,10 @@ export function PolicyPageSection({ policy }: PolicyPageProps) {
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <CardTitle className="font-display text-xl">
-                  {policy.title}
-                </CardTitle>
+                <CardTitle className="font-display text-xl">{policy.title}</CardTitle>
               </div>
               <span className="text-xs font-medium text-muted-foreground">
-                Last updated: July 2026
+                Last updated: July 2025
               </span>
             </div>
           </CardHeader>
@@ -96,7 +99,7 @@ export function PolicyPageSection({ policy }: PolicyPageProps) {
                     className={cn(
                       "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
                       "bg-[var(--color-success-bg)] text-[var(--color-success-fg)]",
-                      "ring-1 ring-[var(--color-success-border)]",
+                      "ring-1 ring-[var(--color-success-border)]"
                     )}
                   >
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -118,9 +121,8 @@ export function PolicyPageSection({ policy }: PolicyPageProps) {
           <Separator />
           <CardContent className="flex flex-col gap-5 pt-6">
             <p className="text-sm leading-relaxed text-muted-foreground">
-              This section is part of the Alliance of Coders policy center. A
-              few things to keep in mind while reviewing the details on the
-              left.
+              This section is part of the Alliance of Coders policy center. A few
+              things to keep in mind while reviewing the details on the left.
             </p>
             <ul className="flex flex-col gap-3">
               {QUICK_NOTES.map((note, idx) => (
@@ -142,8 +144,7 @@ export function PolicyPageSection({ policy }: PolicyPageProps) {
             >
               <p className="text-xs leading-relaxed text-muted-foreground">
                 Questions about this policy? Use the contact form to reach the
-                admin team - choose &ldquo;Technical Support&rdquo; as the
-                topic.
+                admin team - choose &ldquo;Technical Support&rdquo; as the topic.
               </p>
             </div>
           </CardContent>

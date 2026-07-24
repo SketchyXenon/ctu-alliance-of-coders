@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { siteConfig, getSameAsUrls } from "@/lib/site-config";
 
 const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
@@ -24,7 +25,9 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-const siteUrl = "https://allianceofcoders.ph";
+// Single source of truth: siteUrl comes from NEXT_PUBLIC_SITE_URL env var
+// (via siteConfig). Falls back to localhost:3000 in dev. Per Z.md + 03 §1 (DRY).
+const siteUrl = siteConfig.url;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -94,10 +97,7 @@ export default function RootLayout({
         addressCountry: "PH",
       },
     },
-    sameAs: [
-      "https://facebook.com/allianceofcoders",
-      "https://github.com/allianceofcoders",
-    ],
+    sameAs: getSameAsUrls(),
   };
 
   return (

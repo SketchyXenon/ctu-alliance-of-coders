@@ -53,7 +53,7 @@ export async function GET() {
   // Public, cacheable for 60s at the CDN, stale-while-revalidate for 300s.
   res.headers.set(
     "Cache-Control",
-    "public, s-maxage=60, stale-while-revalidate=300",
+    "public, s-maxage=60, stale-while-revalidate=300"
   );
   return res;
 }

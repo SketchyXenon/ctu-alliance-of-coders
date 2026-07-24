@@ -7,6 +7,7 @@ import {
   Facebook,
   FileText,
   Github,
+  HelpCircle,
   Home,
   LayoutDashboard,
   Link as LinkIcon,
@@ -22,9 +23,20 @@ import { GearLogo } from "@/components/gear-logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { NAV_LINKS, POLICY_PAGES } from "@/lib/constants";
+import { getSocialLinks } from "@/lib/site-config";
 import { usePageStore } from "@/lib/store";
 import type { SectionKey } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/**
+ * Icon registry mapping each social icon name to a Lucide component.
+ * Resolves the string icon names from getSocialLinks() to components.
+ */
+const SOCIAL_ICONS: Record<string, LucideIcon> = {
+  Facebook,
+  Github,
+  Mail,
+};
 
 /**
  * Icon registry mapping each section key to a Lucide icon.
@@ -36,6 +48,7 @@ const NAV_ICONS: Partial<Record<SectionKey, LucideIcon>> = {
   Announcements: Megaphone,
   Officers: Users,
   Contact: MessageSquare,
+  FAQ: HelpCircle,
   "Admin Panel": LayoutDashboard,
 };
 
@@ -50,44 +63,6 @@ const POLICY_ICONS: Record<string, LucideIcon> = {
   Cookie,
 };
 
-interface SocialEntry {
-  key: string;
-  label: string;
-  icon: LucideIcon;
-  href: string | null;
-}
-
-/**
- * Social links. Uses NEXT_PUBLIC_ env vars if set, otherwise falls back to
- * sensible defaults so the footer always has working links.
- */
-const SOCIAL_LINKS: SocialEntry[] = [
-  {
-    key: "facebook",
-    label: "Facebook",
-    icon: Facebook,
-    href:
-      process.env.NEXT_PUBLIC_FACEBOOK_URL ||
-      "https://facebook.com/allianceofcoders",
-  },
-  {
-    key: "github",
-    label: "GitHub",
-    icon: Github,
-    href:
-      process.env.NEXT_PUBLIC_GITHUB_URL ||
-      "https://github.com/allianceofcoders",
-  },
-  {
-    key: "email",
-    label: "Email",
-    icon: Mail,
-    href:
-      process.env.NEXT_PUBLIC_CONTACT_EMAIL ||
-      "mailto:allianceofcoders@ctu.edu.ph",
-  },
-];
-
 /**
  * SiteFooter - site-wide footer with brand, quick links, socials, and policies.
  *
@@ -98,6 +73,7 @@ const SOCIAL_LINKS: SocialEntry[] = [
 export function SiteFooter() {
   const setActiveNav = usePageStore((s) => s.setActiveNav);
   const year = React.useMemo(() => new Date().getFullYear(), []);
+  const socialLinks = React.useMemo(() => getSocialLinks(), []);
 
   return (
     <footer
@@ -160,36 +136,38 @@ export function SiteFooter() {
             </ul>
           </nav>
 
-          {/* Socials column */}
-          <div className="flex flex-col gap-3">
-            <FooterHeading icon={Share2}>Socials</FooterHeading>
-            <ul className="flex flex-col gap-0.5">
-              {SOCIAL_LINKS.map((social) => {
-                const Icon = social.icon;
-                return (
-                  <li key={social.key}>
-                    <a
-                      href={social.href ?? "#"}
-                      target={social.href?.startsWith("mailto:") ? "_self" : "_blank"}
-                      rel="noopener noreferrer"
-                      className={cn(
-                        "group flex h-9 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm font-medium",
-                        "text-muted-foreground transition-all duration-200",
-                        "hover:bg-accent/60 hover:text-foreground hover:translate-x-0.5",
-                        "focus-visible:bg-accent/60 focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      )}
-                    >
-                      <Icon
-                        className="size-4 shrink-0 text-gold-500 transition-transform duration-200 group-hover:scale-110"
-                        aria-hidden="true"
-                      />
-                      {social.label}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          {/* Socials column - only rendered if at least one social link is configured in env */}
+          {socialLinks.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <FooterHeading icon={Share2}>Socials</FooterHeading>
+              <ul className="flex flex-col gap-0.5">
+                {socialLinks.map((social) => {
+                  const Icon = SOCIAL_ICONS[social.icon] ?? LinkIcon;
+                  return (
+                    <li key={social.key}>
+                      <a
+                        href={social.href ?? "#"}
+                        target={social.href?.startsWith("mailto:") ? "_self" : "_blank"}
+                        rel="noopener noreferrer"
+                        className={cn(
+                          "group flex h-9 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm font-medium",
+                          "text-muted-foreground transition-all duration-200",
+                          "hover:bg-accent/60 hover:text-foreground hover:translate-x-0.5",
+                          "focus-visible:bg-accent/60 focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        )}
+                      >
+                        <Icon
+                          className="size-4 shrink-0 text-gold-500 transition-transform duration-200 group-hover:scale-110"
+                          aria-hidden="true"
+                        />
+                        {social.label}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           {/* Policies column */}
           <nav aria-label="Policies" className="flex flex-col gap-3">

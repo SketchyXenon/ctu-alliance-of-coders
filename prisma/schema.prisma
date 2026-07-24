@@ -1,5 +1,5 @@
 // Production schema - PostgreSQL (Supabase).
-// Use with: DATABASE_URL=postgresql://... prisma db push --schema=prisma/schema.prod.prisma
+// Use with: DATABASE_URL=postgresql://... prisma db push --schema=prisma/schema.prisma
 // Models mirror schema.prisma but use native Postgres types for production scale.
 
 generator client {

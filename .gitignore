@@ -69,6 +69,8 @@ server.log
 # process id files
 workspace-93a9dfdd-5d87-4120-8ced-80f38a50b4d0
 *.pid
+
+#local files
 tool-results
 node_modules
 download
@@ -80,3 +82,4 @@ tests
 public/logo.svg
 scripts/
 worklog.md
+temp/

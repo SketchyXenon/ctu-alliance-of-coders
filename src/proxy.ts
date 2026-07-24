@@ -7,8 +7,8 @@ import { getClientIp } from "@/lib/security";
 // See https://nextjs.org/docs/messages/middleware-to-proxy
 
 // CSRF origin allowlist. Env-driven so staging/preview URLs can be added
-// without a code change (S9). Falls back to localhost + the prod domain.
-const PROD_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || "https://allianceofcoders.ph";
+// without a code change (S9). Falls back to localhost for dev.
+const PROD_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const EXTRA_ORIGINS = (process.env.CSRF_ALLOWED_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())

@@ -28,14 +28,14 @@ export async function GET() {
       l.entity,
       l.entityId ?? "",
       l.summary,
-    ]),
+    ])
   );
 
   const res = new NextResponse(csv);
   res.headers.set("Content-Type", "text/csv; charset=utf-8");
   res.headers.set(
     "Content-Disposition",
-    `attachment; filename="activity-log-${new Date().toISOString().slice(0, 10)}.csv"`,
+    `attachment; filename="activity-log-${new Date().toISOString().slice(0, 10)}.csv"`
   );
   res.headers.set("Cache-Control", "no-store");
   return res;

@@ -78,7 +78,10 @@ export function SiteNav() {
             "focus-visible:bg-transparent focus-visible:text-foreground",
           )}
         >
-          <GearLogo size={36} spinOnHover />
+          <GearLogo
+            size={36}
+            spinOnHover
+          />
           <span className="flex flex-col items-start leading-tight">
             <span className="font-display text-base font-bold tracking-tight text-foreground">
               Alliance of Coders
@@ -134,9 +137,7 @@ export function SiteNav() {
                   aria-hidden="true"
                   className={cn(
                     "pointer-events-none absolute inset-x-3 bottom-1 h-0.5 origin-left rounded-full bg-gold-500 transition-transform duration-200 ease-out",
-                    isActive
-                      ? "scale-x-100"
-                      : "scale-x-0 group-hover:scale-x-100",
+                    isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100",
                   )}
                 />
               </Button>
@@ -148,9 +149,7 @@ export function SiteNav() {
             size="sm"
             onClick={() => {
               // Dispatch a custom event the page listens for.
-              window.dispatchEvent(
-                new KeyboardEvent("keydown", { key: "k", metaKey: true }),
-              );
+              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
             }}
             className="ml-2 hidden items-center gap-2 text-muted-foreground lg:inline-flex"
             aria-label="Open command palette"

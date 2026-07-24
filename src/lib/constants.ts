@@ -13,6 +13,7 @@ export const NAV_LINKS: NavLink[] = [
   { key: "Announcements", label: "Announcements" },
   { key: "Officers", label: "Officers" },
   { key: "Contact", label: "Contact" },
+  { key: "FAQ", label: "FAQ" },
   { key: "Admin Panel", label: "Admin Panel" },
 ];
 

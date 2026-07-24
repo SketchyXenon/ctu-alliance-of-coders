@@ -107,9 +107,7 @@ export function FaqSection() {
           <button
             type="button"
             onClick={() => {
-              window.dispatchEvent(
-                new KeyboardEvent("keydown", { key: "k", metaKey: true }),
-              );
+              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
             }}
             className="font-medium text-gold-600 underline-offset-2 hover:underline dark:text-gold-400"
           >

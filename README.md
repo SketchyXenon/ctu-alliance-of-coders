@@ -14,7 +14,7 @@ The official website for the Alliance of Coders at Cebu Technological University
 
 | Layer | Technology |
 |-------|-----------|
-| Framework | Next.js 16 (App Router, webpack) |
+| Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript 5 |
 | Database | SQLite (dev) / PostgreSQL via Supabase (prod) |
 | ORM | Prisma 6 |
@@ -65,23 +65,43 @@ See [`.env.example`](./.env.example) for all variables.
 
 | Script | Description |
 |--------|-------------|
-| `bun run dev` | Start dev server (port 3000, webpack) |
-| `bun run build` | Production build |
-| `bun run start` | Start production server |
+| `bun run dev` | Start dev server (port 3000, Turbopack) |
+| `bun run build` | Production build (standalone output) |
+| `bun run start` | Start production server (standalone) |
 | `bun run lint` | Run ESLint |
-| `bun run db:push` | Push schema to dev database |
+| `bun run typecheck` | Run TypeScript type checking (tsc --noEmit) |
+| `bun run test` | Run vitest test suite |
+| `bun run db:push` | Push schema to dev database (SQLite) |
 | `bun run db:push:prod` | Push schema to production (PostgreSQL) |
+| `bun run db:migrate:prod` | Apply production migrations (migrate deploy) |
 | `bun run db:seed` | Seed initial data |
 | `bun run bootstrap` | Create first admin account |
 
-## Deployment (Vercel)
+## Deployment
 
-1. Push to GitHub
-2. Import project in Vercel
-3. Set environment variables (see above)
-4. Run `bun run db:push:prod` to create database tables
-5. Run `bun run bootstrap` to create admin account
-6. Deploy
+### Option A: Standalone server (sandbox / VM / container)
+
+The app builds to a self-contained standalone server via `.zscripts/build.sh`.
+
+1. Set required environment variables (see `.env.example`) — `DATABASE_URL` is mandatory.
+2. Build: `BUILD_ID=<id> bash .zscripts/build.sh` — produces a tarball with the standalone server, static assets, Caddyfile, and start.sh.
+3. Extract the tarball on the target host.
+4. Run `bun run db:migrate:prod` to apply the production schema (PostgreSQL).
+5. Run `bun run bootstrap` to create the first admin account (interactive prompt).
+6. Start: `./start.sh` — launches Next.js + Caddy (Caddy runs as PID 1).
+
+Caddy listens on `:81` and proxies to Next.js on `:3000`. See `Caddyfile` for the gateway config and security headers.
+
+### Option B: Vercel
+
+1. Push to GitHub.
+2. Import the project in Vercel.
+3. Set environment variables (see above). `DATABASE_URL` must point to Postgres.
+4. Run `bun run db:migrate:prod` against your Postgres instance to create tables.
+5. Run `bun run bootstrap` to create the admin account (run locally with prod env).
+6. Deploy.
+
+See [docs/deployment.md](./docs/deployment.md) for the full deployment runbook.
 
 ## Documentation
 
