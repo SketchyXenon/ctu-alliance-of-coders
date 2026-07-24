@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3000 2>&1",
     "build": "bunx prisma generate && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "build:prod": "bunx prisma generate --schema=prisma/schema.prod.prisma && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "vercel-build": "bunx prisma generate --schema=prisma/schema.prod.prisma && next build",
+    "build:prod": "bunx prisma generate --schema=prisma/schema.prisma && next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
+    "vercel-build": "bunx prisma generate --schema=prisma/schema.prisma && next build",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
