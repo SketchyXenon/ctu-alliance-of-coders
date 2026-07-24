@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { db } from "@/lib/db";
 import { getCurrentUser, SESSION_COOKIE } from "@/lib/auth";
+import { withPrismaError } from "@/lib/route-helpers";
 import { cookies } from "next/headers";
 
 // H2 fix: never expose the raw session token (which IS the httpOnly cookie
@@ -16,8 +17,11 @@ function sessionDisplayId(rawId: string): string {
 /**
  * GET /api/sessions - list active sessions for the current user.
  * Returns surrogate display ids, never the raw session token.
+ * Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500
+ * (defense-in-depth: getCurrentUser already fails closed, but this closes the
+ * TOCTOU window if the DB drops between auth and the findMany).
  */
-export async function GET() {
+export const GET = withPrismaError(async function GET() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -50,6 +54,6 @@ export async function GET() {
   const res = NextResponse.json({ items });
   res.headers.set("Cache-Control", "no-store");
   return res;
-}
+});
 
 export { sessionDisplayId };

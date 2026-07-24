@@ -4,16 +4,18 @@ import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
+import { withPrismaError } from "@/lib/route-helpers";
 import { sessionDisplayId } from "../route";
 
 /**
  * DELETE /api/sessions/[id] - revoke a specific session.
  * `id` is a non-reversible surrogate (SHA-256 prefix of the real session
  * token). Cannot revoke the current session (use /api/auth/logout instead).
+ * Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500.
  */
-export async function DELETE(
+export const DELETE = withPrismaError(async function DELETE(
   _request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user) {
@@ -28,7 +30,7 @@ export async function DELETE(
   if (currentSessionId && sessionDisplayId(currentSessionId) === id) {
     return NextResponse.json(
       { error: "Use sign out to end your current session." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -55,4 +57,4 @@ export async function DELETE(
   });
 
   return NextResponse.json({ ok: true });
-}
+});

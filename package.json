@@ -3,9 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000 2>&1 | tee dev.log",
+    "dev": "next dev -p 3000 2>&1",
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
-    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
+    "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 ",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -14,12 +14,12 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
-    "db:push:prod": "prisma db push --schema=prisma/schema.prod.prisma",
-    "db:generate:prod": "prisma generate --schema=prisma/schema.prod.prisma",
-    "db:migrate:prod": "prisma migrate deploy --schema=prisma/schema.prod.prisma",
+    "db:push:prod": "prisma db push --schema=prisma/schema.prisma",
+    "db:generate:prod": "prisma generate --schema=prisma/schema.prisma",
+    "db:migrate:prod": "prisma migrate deploy --schema=prisma/schema.prisma",
     "db:seed": "bunx tsx prisma/seed.ts",
     "bootstrap": "prisma generate && bunx tsx scripts/bootstrap-admin.ts",
-    "bootstrap:prod": "prisma generate --schema=prisma/schema.prod.prisma && bunx tsx scripts/bootstrap-admin.ts"
+    "bootstrap:prod": "prisma generate --schema=prisma/schema.prisma && bunx tsx scripts/bootstrap-admin.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -28,7 +28,7 @@
     "@hookform/resolvers": "^5.1.1",
     "@prisma/client": "^6.11.1",
     "@radix-ui/react-accordion": "^1.2.11",
-    "@radix-ui/react-alert-dialog": "^1.1.14",
+    "@radix-ui/react-alert-dialog": "^1.1.14",.
     "@radix-ui/react-aspect-ratio": "^1.1.7",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",

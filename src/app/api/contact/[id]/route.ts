@@ -2,14 +2,20 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
-import type { ContactMessage, ContactCategory, ContactStatus } from "@/lib/types";
+import { withPrismaError } from "@/lib/route-helpers";
+import type {
+  ContactMessage,
+  ContactCategory,
+  ContactStatus,
+} from "@/lib/types";
 
 const VALID_STATUSES: ContactStatus[] = ["new", "read", "resolved", "archived"];
 
-/** PATCH /api/contact/[id] - admin only, update status. */
-export async function PATCH(
+/** PATCH /api/contact/[id] - admin only, update status.
+ *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
+export const PATCH = withPrismaError(async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   let user;
   try {
@@ -64,12 +70,13 @@ export async function PATCH(
   }
 
   return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
-}
+});
 
-/** DELETE /api/contact/[id] - admin only. */
-export async function DELETE(
+/** DELETE /api/contact/[id] - admin only.
+ *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
+export const DELETE = withPrismaError(async function DELETE(
   _request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   let user;
   try {
@@ -94,4 +101,4 @@ export async function DELETE(
   });
 
   return NextResponse.json({ ok: true });
-}
+});
