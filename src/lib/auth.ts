@@ -168,8 +168,6 @@ export async function getCurrentUser() {
   }
   if (!session) return null;
   if (session.expiresAt < new Date()) {
-    // Don't swallow silently - log so expired-session cleanup failures are
-    // visible (03-software-engineering.md section 6).
     try {
       await db.adminSession.delete({ where: { id: sessionId } });
     } catch (e) {

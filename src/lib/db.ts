@@ -117,7 +117,6 @@ export async function withDbRetry<T>(
 }
 
 // Lazy singleton: create on first access, reuse for all subsequent requests.
-// In dev, the same instance is reused across hot reloads via globalThis.
 let _db: PrismaClient | null = null;
 
 function getDb(): PrismaClient {

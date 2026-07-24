@@ -1,15 +1,21 @@
-// Prisma config file.
-// Keep this runtime-free so Prisma can load it even when the dependency tree
-// has not been installed yet. The CLI only needs a plain object here.
+// Prisma 7 configuration file.
+// Per Prisma 7: the datasource URL is no longer in the schema file. It lives
+// here (for CLI commands like db push, migrate) and is passed as an adapter
+// to PrismaClient (for runtime queries). See src/lib/db.ts for the runtime
+// adapter.
 //
 // This config defaults to the PostgreSQL production schema (schema.prisma).
 // For local SQLite dev, set DATABASE_URL=file:./db/custom.db and the
-// PRISMA_SCHEMA env var to prisma/schema.sqlite.prisma (or run the
-// db:push:sqlite script which sets both).
+// PRISMA_SCHEMA env var to prisma/schema.sqlite.prisma (or run the db:push:sqlite
+// script which sets both).
 //
 // Per 03-software-engineering.md section 6: fail fast with a clear message.
 
 import path from "node:path";
+import { config as loadEnv } from "dotenv";
+
+loadEnv();
+import { defineConfig } from "@prisma/config";
 
 // Select schema based on DATABASE_URL scheme or PRISMA_SCHEMA override.
 // - file:*           -> SQLite dev schema
@@ -26,7 +32,7 @@ function resolveSchema(): string {
   return path.join("prisma", "schema.prisma");
 }
 
-const config = {
+export default defineConfig({
   schema: resolveSchema(),
   migrations: {
     path: path.join("prisma", "migrations"),
@@ -36,6 +42,4 @@ const config = {
   datasource: {
     url: process.env.DATABASE_URL,
   },
-};
-
-export default config;
+});

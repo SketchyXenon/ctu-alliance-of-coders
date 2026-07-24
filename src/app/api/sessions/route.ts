@@ -17,9 +17,7 @@ function sessionDisplayId(rawId: string): string {
 /**
  * GET /api/sessions - list active sessions for the current user.
  * Returns surrogate display ids, never the raw session token.
- * Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500
- * (defense-in-depth: getCurrentUser already fails closed, but this closes the
- * TOCTOU window if the DB drops between auth and the findMany).
+ * Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500.
  */
 export const GET = withPrismaError(async function GET() {
   const user = await getCurrentUser();

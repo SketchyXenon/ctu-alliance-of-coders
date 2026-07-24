@@ -2,11 +2,6 @@
 // Prisma 7: the datasource URL is no longer in the schema. It lives in
 // prisma.config.ts (for CLI) and is passed as an adapter to PrismaClient
 // (for runtime). See prisma.config.ts and src/lib/db.ts.
-//
-// Aligned with supabase/migrations/20260721000000_init_schema.sql: UUID ids,
-// snake_case column names via @map, @db.Text for long text, @db.Uuid for UUID
-// columns. Per 03-software-engineering.md: single source of truth is the
-// migration SQL; this schema mirrors it.
 
 generator client {
   provider = "prisma-client-js"
@@ -17,7 +12,7 @@ datasource db {
 }
 
 model Announcement {
-  id        String   @id // text PK; code sets ann-<uuid>
+  id        String   @id
   type      String   @default("general")
   title     String
   body      String   @db.Text

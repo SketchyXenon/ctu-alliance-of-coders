@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { verifyPassword, createSession } from "@/lib/auth";
-import { validateEmail, rateLimit, getClientIp, maskEmail } from "@/lib/security";
+import {
+  validateEmail,
+  rateLimit,
+  getClientIp,
+  maskEmail,
+} from "@/lib/security";
 import { validatePassword } from "@/lib/validation";
 import { logActivity } from "@/lib/activity";
 import { logger } from "@/lib/logger";
+import { withPrismaError } from "@/lib/route-helpers";
 
 // Dummy hash used to keep verification timing uniform for non-existent users
 // (mitigates user enumeration via timing). Must use the salt:hash format that
 // verifyPassword expects. Uses a 16-byte salt to match the real hashPassword.
-const DUMMY_HASH = "deadbeefdeadbeefdeadbeefdeadbeef:0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+const DUMMY_HASH =
+  "deadbeefdeadbeefdeadbeefdeadbeef:0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
-/** POST /api/auth/login - email + password, sets session cookie. */
-export async function POST(request: Request) {
+/** POST /api/auth/login - email + password, sets session cookie.
+ *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
+export const POST = withPrismaError(async function POST(request: Request) {
   const ip = getClientIp(request.headers);
 
   // IP rate limit: 5 per minute.
@@ -20,7 +28,12 @@ export async function POST(request: Request) {
   if (!ipLimit.allowed) {
     return NextResponse.json(
       { error: "Too many login attempts. Please wait a minute." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)) } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)),
+        },
+      },
     );
   }
 
@@ -35,7 +48,10 @@ export async function POST(request: Request) {
   const passCheck = validatePassword(body.password, { minLen: 1, maxLen: 128 });
   if (!emailCheck.valid || !passCheck.valid || !passCheck.value) {
     // Enumeration-safe: same response for invalid format.
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Invalid email or password." },
+      { status: 401 },
+    );
   }
 
   const email = String(body.email).trim().toLowerCase();
@@ -46,7 +62,12 @@ export async function POST(request: Request) {
   if (!emailLimit.allowed) {
     return NextResponse.json(
       { error: "Too many attempts for this account. Please try later." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)) } }
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
+        },
+      },
     );
   }
 
@@ -61,13 +82,23 @@ export async function POST(request: Request) {
     // M5: mask email in warn log; full email stays in the access-controlled
     // audit trail (logActivity) only. Per 06-security-architecture.md section 11.
     logger.warn("Failed login attempt", { email: maskEmail(email), ip });
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    return NextResponse.json(
+      { error: "Invalid email or password." },
+      { status: 401 },
+    );
   }
 
   // Role check: return same 401 as invalid credentials (no role oracle).
   if (user.role !== "admin") {
-    logger.warn("Non-admin login attempt", { email: maskEmail(email), ip, role: user.role });
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    logger.warn("Non-admin login attempt", {
+      email: maskEmail(email),
+      ip,
+      role: user.role,
+    });
+    return NextResponse.json(
+      { error: "Invalid email or password." },
+      { status: 401 },
+    );
   }
 
   await createSession(user.id);
@@ -81,4 +112,4 @@ export async function POST(request: Request) {
   return NextResponse.json({
     user: { id: user.id, email: user.email, name: user.name, role: user.role },
   });
-}
+});

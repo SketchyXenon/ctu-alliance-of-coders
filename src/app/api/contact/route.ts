@@ -145,12 +145,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
   // A leaked clientId (log/referrer) would otherwise let an attacker read
   // another submitter's name/email/subject/message. Only an authenticated
   // admin receives the full DTO; anonymous callers get a bare ack.
-  //
-  // The P2002 check uses duck-typing (error.name + error.code) in addition to
-  // instanceof, because bundled serverless builds can resolve @prisma/client to
-  // a different module instance than the generated client, breaking instanceof.
-  // Non-P2002 errors (including PrismaClientInitializationError) are re-thrown
-  // so withPrismaError -> handlePrismaError maps them to a clean 503.
   let created;
   try {
     // withDbRetry: retry on transient connection failures (serverless cold
@@ -169,6 +163,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
       }),
     );
   } catch (error) {
+    // Duck-typed P2002 check (instanceof can fail across module instances in
+    // bundled serverless builds). Non-P2002 errors re-throw to withPrismaError.
     const isP2002 =
       (error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002") ||

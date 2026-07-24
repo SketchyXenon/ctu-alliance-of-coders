@@ -114,7 +114,6 @@ const ADMIN_YEARS = [
 
 async function main() {
   db = await createDb();
-
   // Announcements
   for (const ann of ANNOUNCEMENTS) {
     await db.announcement.upsert({
