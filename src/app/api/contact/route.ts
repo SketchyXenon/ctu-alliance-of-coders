@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 import {
   validateText,
@@ -153,17 +153,21 @@ export const POST = withPrismaError(async function POST(request: Request) {
   // so withPrismaError -> handlePrismaError maps them to a clean 503.
   let created;
   try {
-    created = await db.contactMessage.create({
-      data: {
-        clientId,
-        name: String(body.name).trim(),
-        email: normalizedEmail,
-        subject: String(body.subject).trim(),
-        category,
-        message: String(body.message).trim(),
-        status: "new",
-      },
-    });
+    // withDbRetry: retry on transient connection failures (serverless cold
+    // start, Supabase pooler warmup). Per 02 section 6: retries with backoff.
+    created = await withDbRetry(() =>
+      db.contactMessage.create({
+        data: {
+          clientId,
+          name: String(body.name).trim(),
+          email: normalizedEmail,
+          subject: String(body.subject).trim(),
+          category,
+          message: String(body.message).trim(),
+          status: "new",
+        },
+      }),
+    );
   } catch (error) {
     const isP2002 =
       (error instanceof Prisma.PrismaClientKnownRequestError &&

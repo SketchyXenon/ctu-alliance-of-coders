@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import type { Announcement, AdminYear, SiteData } from "@/lib/types";
 
@@ -16,16 +16,26 @@ export const dynamic = "force-dynamic";
  *  a 200 so the page renders with empty states instead of crashing (02 §6). */
 export async function GET() {
   try {
+    // withDbRetry: retry on transient connection failures (serverless cold
+    // start, Supabase pooler warmup). Per 02 section 6: retries with backoff.
     const [annRows, yearRows] = await Promise.all([
-      db.announcement.findMany({
-        orderBy: [{ pinned: "desc" }, { date: "desc" }, { createdAt: "desc" }],
-        take: 200,
-      }),
-      db.adminYear.findMany({
-        include: { officers: { orderBy: { sortOrder: "asc" } } },
-        orderBy: { sortOrder: "asc" },
-        take: 100,
-      }),
+      withDbRetry(() =>
+        db.announcement.findMany({
+          orderBy: [
+            { pinned: "desc" },
+            { date: "desc" },
+            { createdAt: "desc" },
+          ],
+          take: 200,
+        }),
+      ),
+      withDbRetry(() =>
+        db.adminYear.findMany({
+          include: { officers: { orderBy: { sortOrder: "asc" } } },
+          orderBy: { sortOrder: "asc" },
+          take: 100,
+        }),
+      ),
     ]);
 
     const announcements: Announcement[] = annRows.map((r) => ({
