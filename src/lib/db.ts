@@ -22,20 +22,35 @@ function validateConnectionString(): void {
   const url = process.env.DATABASE_URL || "";
   if (!url) return; // env.ts handles the missing-URL case at boot
 
-  // Detect Supabase direct connection: db.<ref>.supabase.co
+  // Detect Supabase direct connection: db.<ref>.supabase.co (IPv6-only)
   const isSupabaseDirect =
     /^postgres(ql)?:\/\/.*@db\.[a-z0-9]+\.supabase\.(co|in)/i.test(url);
 
-  if (isSupabaseDirect && process.env.NODE_ENV === "production") {
-    console.warn(
-      "[DB] WARNING: DATABASE_URL uses Supabase's DIRECT connection (db.*.supabase.co).\n" +
-        "      This endpoint is IPv6-only and is unreachable from Vercel serverless functions.\n" +
-        "      Use the Supabase CONNECTION POOLER URL instead:\n" +
-        "        1. Supabase Dashboard > Project Settings > Database > Connection Pooling\n" +
-        "        2. Copy the 'Session mode' URL (host: aws-0-<region>.pooler.supabase.com:5432)\n" +
-        "        3. Set DATABASE_URL to that pooler URL in your Vercel environment variables.\n" +
-        "      The pooler provides an IPv4 endpoint that Vercel can reach.",
-    );
+  // Detect Supabase Session-mode pooler (port 5432) — still unreachable from
+  // Vercel serverless in many cases. Transaction mode (port 6543) is required.
+  const isSessionModePooler =
+    /pooler\.supabase\.(com|in)/i.test(url) && /:5432\b/.test(url);
+
+  if (process.env.NODE_ENV === "production") {
+    if (isSupabaseDirect) {
+      console.warn(
+        "[DB] WARNING: DATABASE_URL uses Supabase's DIRECT connection (db.*.supabase.co).\n" +
+          "      This endpoint is IPv6-only and is unreachable from Vercel serverless functions.\n" +
+          "      Use the Supabase TRANSACTION MODE pooler URL instead:\n" +
+          "        1. Supabase Dashboard > Project Settings > Database > Connection Pooling > Transaction mode\n" +
+          "        2. Copy the URL (host: aws-0-<region>.pooler.supabase.com, port: 6543)\n" +
+          "        3. Append ?pgbouncer=true&connection_limit=1&connect_timeout=15\n" +
+          "        4. Set DATABASE_URL to that URL in your Vercel environment variables.",
+      );
+    } else if (isSessionModePooler) {
+      console.warn(
+        "[DB] WARNING: DATABASE_URL uses Supabase's SESSION MODE pooler (port 5432).\n" +
+          "      Session mode can fail from Vercel serverless. Switch to TRANSACTION MODE:\n" +
+          "        1. Supabase Dashboard > Project Settings > Database > Connection Pooling > Transaction mode\n" +
+          "        2. Use port 6543 (NOT 5432) and append ?pgbouncer=true&connection_limit=1\n" +
+          "        3. Update DATABASE_URL in your Vercel environment variables and redeploy.",
+      );
+    }
   }
 }
 

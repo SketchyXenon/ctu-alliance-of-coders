@@ -108,6 +108,48 @@ create index if not exists idx_contact_status on public.contact_messages(status)
 create index if not exists idx_contact_created on public.contact_messages(created_at desc);
 create index if not exists idx_contact_email on public.contact_messages(email);
 
+-- ── Admin Users (server-side auth, not Supabase auth) ──────────────────────
+
+create table if not exists public.admin_users (
+  id uuid primary key default uuid_generate_v4(),
+  email text unique not null,
+  name text,
+  password_hash text not null,
+  role text not null default 'admin',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_admin_users_email on public.admin_users(email);
+
+-- ── Admin Sessions ─────────────────────────────────────────────────────────
+
+create table if not exists public.admin_sessions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references public.admin_users(id) on delete cascade,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_admin_sessions_user on public.admin_sessions(user_id);
+create index if not exists idx_admin_sessions_expires on public.admin_sessions(expires_at);
+
+-- ── Activity Logs (audit trail) ────────────────────────────────────────────
+
+create table if not exists public.activity_logs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references public.admin_users(id) on delete cascade,
+  action text not null,
+  entity text not null,
+  entity_id text,
+  summary text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_activity_user on public.activity_logs(user_id);
+create index if not exists idx_activity_created on public.activity_logs(created_at desc);
+create index if not exists idx_activity_entity on public.activity_logs(entity);
+
 -- ── Row Level Security ─────────────────────────────────────────────────────
 
 alter table public.profiles enable row level security;
@@ -115,6 +157,13 @@ alter table public.announcements enable row level security;
 alter table public.admin_years enable row level security;
 alter table public.officers enable row level security;
 alter table public.contact_messages enable row level security;
+-- Admin tables: RLS enabled but no public policies. The app connects via the
+-- service role key which bypasses RLS, so all access is server-side only.
+-- This is defense-in-depth: even if a Supabase anon key is leaked, the admin
+-- tables are not accessible. Per 06 section 3: deny by default.
+alter table public.admin_users enable row level security;
+alter table public.admin_sessions enable row level security;
+alter table public.activity_logs enable row level security;
 
 -- Profiles: users can read own profile, admins can read all
 create policy "Profiles are viewable by own user"

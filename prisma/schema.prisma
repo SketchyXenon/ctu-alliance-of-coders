@@ -1,6 +1,11 @@
 // Production schema - PostgreSQL (Supabase).
-// Use with: DATABASE_URL=postgresql://... prisma db push --schema=prisma/schema.prisma
-// Models mirror schema.prisma but use native Postgres types for production scale.
+// Aligned with the Supabase migration SQL (supabase/migrations/). The
+// migration creates UUID columns for admin_years, officers, contact_messages,
+// admin_users, admin_sessions, activity_logs; and a text id for announcements.
+// Column names use snake_case in the DB (image_url, year_id, etc.) and are
+// mapped via @map. Per 03-software-engineering.md: single source of truth is
+// the migration SQL; this schema mirrors it. Per 02-system-design.md: design
+// data for how it's read.
 
 generator client {
   provider = "prisma-client-js"
@@ -12,11 +17,11 @@ datasource db {
 }
 
 model Announcement {
-  id        String   @id
+  id        String   @id // text PK; code sets ann-<uuid>
   type      String   @default("general")
   title     String
   body      String   @db.Text
-  image     String?
+  image     String?  @map("image_url")
   pinned    Boolean  @default(false)
   date      String
   createdAt DateTime @default(now()) @map("created_at")
@@ -29,7 +34,7 @@ model Announcement {
 }
 
 model AdminYear {
-  id        String    @id @default(cuid())
+  id        String    @id @default(uuid()) @db.Uuid
   year      String    @unique
   theme     String    @default("Set a leadership theme for this year.")
   sortOrder Int       @default(0) @map("sort_order")
@@ -42,12 +47,12 @@ model AdminYear {
 }
 
 model Officer {
-  id        String   @id @default(cuid())
-  yearId    String   @map("year_id")
-  name      String   @default("Vacant Slot")
-  role      String   @default("Open Position")
-  image     String?
-  sortOrder Int      @default(0) @map("sort_order")
+  id        String    @id @default(uuid()) @db.Uuid
+  yearId    String    @map("year_id") @db.Uuid
+  name      String    @default("Vacant Slot")
+  role      String    @default("Open Position")
+  image     String?   @map("image_url")
+  sortOrder Int       @default(0) @map("sort_order")
   year      AdminYear @relation(fields: [yearId], references: [id], onDelete: Cascade)
 
   @@index([yearId])
@@ -56,7 +61,7 @@ model Officer {
 }
 
 model ContactMessage {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid()) @db.Uuid
   clientId  String   @unique @map("client_id")
   name      String
   email     String
@@ -74,7 +79,7 @@ model ContactMessage {
 }
 
 model AdminUser {
-  id           String        @id @default(cuid())
+  id           String        @id @default(uuid()) @db.Uuid
   email        String        @unique
   name         String?
   passwordHash String        @map("password_hash")
@@ -87,8 +92,8 @@ model AdminUser {
 }
 
 model AdminSession {
-  id        String     @id @default(cuid())
-  userId    String     @map("user_id")
+  id        String     @id @default(uuid()) @db.Uuid
+  userId    String     @map("user_id") @db.Uuid
   user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime   @map("expires_at")
   createdAt DateTime   @default(now()) @map("created_at")
@@ -99,8 +104,8 @@ model AdminSession {
 }
 
 model ActivityLog {
-  id        String   @id @default(cuid())
-  userId    String   @map("user_id")
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
   action    String
   entity    String
   entityId  String?  @map("entity_id")

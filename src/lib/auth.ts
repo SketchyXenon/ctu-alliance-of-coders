@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { db } from "./db";
-import { generateToken } from "./security";
 import { scrypt as scryptCallback, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { logger } from "./logger";
@@ -8,7 +7,7 @@ import { logger } from "./logger";
 const scrypt = promisify(scryptCallback) as (
   password: string,
   salt: string,
-  keylen: number
+  keylen: number,
 ) => Promise<Buffer>;
 
 export const SESSION_COOKIE = "aoc_admin_session";
@@ -23,7 +22,10 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 /** Verify a password against a stored salt:hash string. Constant-time. */
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<boolean> {
   const [salt, hash] = stored.split(":");
   if (!salt || !hash) return false;
   try {
@@ -38,9 +40,11 @@ export async function verifyPassword(password: string, stored: string): Promise<
 
 /** Create a new session for a user, enforcing a max-sessions cap.
  *  Wrapped in a transaction to close the TOCTOU race where two concurrent
- *  logins could each see < cap and each create a session (M2 fix). */
+ *  logins could each see < cap and each create a session (M2 fix).
+ *  Uses crypto.randomUUID() for the session id so it works with both the
+ *  SQLite dev schema (String id) and the Postgres prod schema (UUID id). */
 export async function createSession(userId: string): Promise<string> {
-  const sessionId = generateToken(32);
+  const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
   await db.$transaction(async (tx) => {
@@ -51,7 +55,10 @@ export async function createSession(userId: string): Promise<string> {
     });
 
     if (existing.length >= MAX_SESSIONS_PER_USER) {
-      const toDelete = existing.slice(0, existing.length - MAX_SESSIONS_PER_USER + 1);
+      const toDelete = existing.slice(
+        0,
+        existing.length - MAX_SESSIONS_PER_USER + 1,
+      );
       await tx.adminSession.deleteMany({
         where: { id: { in: toDelete.map((s) => s.id) } },
       });
@@ -88,19 +95,26 @@ export async function destroySession(): Promise<void> {
 }
 
 /** Destroy all sessions for a user except the current one. */
-export async function destroyOtherSessions(userId: string, currentSessionId: string): Promise<void> {
+export async function destroyOtherSessions(
+  userId: string,
+  currentSessionId: string,
+): Promise<void> {
   try {
     await db.adminSession.deleteMany({
       where: { userId, NOT: { id: currentSessionId } },
     });
   } catch (e) {
-    logger.error("Failed to revoke other sessions", { error: String(e), userId });
+    logger.error("Failed to revoke other sessions", {
+      error: String(e),
+      userId,
+    });
   }
 }
 
-/** Rotate the current session ID (for privilege changes). Preserves expiry. */
+/** Rotate the current session ID (for privilege changes). Preserves expiry.
+ *  Uses crypto.randomUUID() for the new id (UUID type in prod). */
 export async function rotateSession(currentSessionId: string): Promise<void> {
-  const newId = generateToken(32);
+  const newId = crypto.randomUUID();
   try {
     // Fetch existing session to preserve expiresAt.
     const existing = await db.adminSession.findUnique({
@@ -108,7 +122,9 @@ export async function rotateSession(currentSessionId: string): Promise<void> {
       select: { expiresAt: true },
     });
     if (!existing) {
-      logger.error("Session not found during rotation", { sessionId: currentSessionId });
+      logger.error("Session not found during rotation", {
+        sessionId: currentSessionId,
+      });
       return;
     }
     await db.adminSession.update({
@@ -129,15 +145,27 @@ export async function rotateSession(currentSessionId: string): Promise<void> {
   }
 }
 
-/** Get the currently authenticated admin user, or null. */
+/** Get the currently authenticated admin user, or null.
+ *  When the database is unreachable, returns null (treats DB-down as
+ *  "not authenticated") rather than throwing. Per 06 section 2: fail closed.
+ *  Per 02 section 6: graceful degradation. */
 export async function getCurrentUser() {
   const store = await cookies();
   const sessionId = store.get(SESSION_COOKIE)?.value;
   if (!sessionId) return null;
-  const session = await db.adminSession.findUnique({
-    where: { id: sessionId },
-    include: { user: true },
-  });
+  let session;
+  try {
+    session = await db.adminSession.findUnique({
+      where: { id: sessionId },
+      include: { user: true },
+    });
+  } catch (e) {
+    // DB unreachable: fail closed (treat as logged out) rather than 500.
+    logger.warn("Session check failed, treating as logged out", {
+      error: String(e),
+    });
+    return null;
+  }
   if (!session) return null;
   if (session.expiresAt < new Date()) {
     // Don't swallow silently - log so expired-session cleanup failures are
