@@ -9,11 +9,15 @@
 // raw. MUST NOT be applied to password fields; use validatePassword from
 // lib/validation.ts for those (strong passwords may legitimately contain
 // these substrings). See 06-security-architecture.md S2.
+//
+// Per A05-1 fix: the on\w+\s*= regex was too broad (matched "online=true",
+// "ongoing=task"). Tightened to require an HTML tag context: only matches
+// on* event handlers inside angle brackets (e.g. <div onclick=...>).
 const DANGEROUS_PATTERNS = [
   /<script/i,
   /javascript:/i,
   /vbscript:/i,
-  /on\w+\s*=/i,
+  /<[^>]*\son\w+\s*=/i, // event handlers only inside HTML tags
 ];
 
 export interface ValidationResult {
@@ -24,7 +28,7 @@ export interface ValidationResult {
 /** Validate a plain-text display field with length and dangerous-pattern checks. */
 export function validateText(
   value: unknown,
-  opts: { maxLen?: number; minLen?: number; required?: boolean } = {}
+  opts: { maxLen?: number; minLen?: number; required?: boolean } = {},
 ): ValidationResult {
   const { maxLen = 500, minLen = 0, required = false } = opts;
   if (typeof value !== "string") {
@@ -92,7 +96,7 @@ let lastEvictionRun = 0;
 export function rateLimit(
   key: string,
   limit: number,
-  windowMs: number
+  windowMs: number,
 ): { allowed: boolean; retryAfterMs: number } {
   const now = Date.now();
 
@@ -150,7 +154,10 @@ const TRUSTED_PROXY_HOPS = 1;
 export function getClientIp(headers: Headers): string {
   const xff = headers.get("x-forwarded-for");
   if (xff) {
-    const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
+    const parts = xff
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (parts.length > 0) {
       const trustedIndex = Math.max(0, parts.length - TRUSTED_PROXY_HOPS);
       return parts[trustedIndex] || parts[parts.length - 1];

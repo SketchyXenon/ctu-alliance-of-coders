@@ -28,6 +28,8 @@ import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
+import { uploadToStorage, isSupabaseConfigured } from "./supabase";
+import { logger } from "./logger";
 
 // 8MB pre-decode. Sharp's re-encode typically shrinks this 5-10x for photos.
 // Per 06 section 7: request/payload size limits prevent DoS via memory exhaustion.
@@ -69,17 +71,20 @@ export interface UploadResult {
  *   5. Re-encode with sharp (strips EXIF + embedded payloads).
  *   6. Resize if over MAX_DIMENSION (decompression-bomb defense).
  *   7. Generate server-side filename (no user input in path).
- *   8. Write to public/uploads/<bucket>/.
+ *   8. Save to Supabase Storage (prod) or local filesystem (dev).
  *   9. Return the public URL.
  */
 export async function processImageUpload(
   fileBuffer: Buffer,
   bucket: string,
-  uploadRoot: string
+  uploadRoot: string,
 ): Promise<UploadResult> {
   // Layer 1: validate bucket name. Never trust user input for the path.
   if (!VALID_BUCKETS.includes(bucket as UploadBucket)) {
-    return { ok: false, error: "Invalid bucket. Must be 'officer' or 'announcement'." };
+    return {
+      ok: false,
+      error: "Invalid bucket. Must be 'officer' or 'announcement'.",
+    };
   }
 
   // Layer 2: size check before any processing.
@@ -99,7 +104,11 @@ export async function processImageUpload(
   // it implicitly."
   const detected = await fileTypeFromBuffer(fileBuffer);
   if (!detected) {
-    return { ok: false, error: "Could not detect file type. The file may be corrupt or not a real image." };
+    return {
+      ok: false,
+      error:
+        "Could not detect file type. The file may be corrupt or not a real image.",
+    };
   }
 
   const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
@@ -132,9 +141,7 @@ export async function processImageUpload(
 
   let processedBuffer: Buffer;
   try {
-    processedBuffer = await pipeline
-      .webp({ quality: WEBP_QUALITY })
-      .toBuffer();
+    processedBuffer = await pipeline.webp({ quality: WEBP_QUALITY }).toBuffer();
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown sharp error";
     return {
@@ -147,32 +154,61 @@ export async function processImageUpload(
   // original filename in the storage path (path traversal defense).
   // crypto.randomUUID is collision-resistant and unguessable.
   const filename = `${crypto.randomUUID()}.webp`;
-  const bucketDir = path.join(uploadRoot, bucket);
-  const filePath = path.join(bucketDir, filename);
-
-  // Defensive: resolve and confirm the final path is within the upload root.
-  // Per 06 section 5: "validate all external input." The bucket is allowlisted
-  // and the filename is server-generated, so this is belt-and-suspenders.
-  const resolvedPath = path.resolve(filePath);
-  const resolvedRoot = path.resolve(uploadRoot);
-  if (!resolvedPath.startsWith(resolvedRoot + path.sep)) {
-    return { ok: false, error: "Invalid upload path." };
-  }
-
-  try {
-    await fs.mkdir(bucketDir, { recursive: true });
-    await fs.writeFile(filePath, processedBuffer);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : "Unknown fs error";
-    return { ok: false, error: `Failed to save file: ${msg}` };
-  }
 
   // Get final dimensions for the response.
   const metadata = await sharp(processedBuffer).metadata();
 
-  // Layer 9: return the public URL. The path is /uploads/<bucket>/<filename>
-  // (served as a static file from public/uploads/).
-  const url = `/uploads/${bucket}/${filename}`;
+  // Layer 9: save the processed buffer. In production (Supabase configured),
+  // upload to Supabase Storage. In dev (no Supabase), save to the local
+  // filesystem. Both paths use the same server-generated filename so there's
+  // no user input in the storage path. Per 02 section 9 (trade-offs): the
+  // local fallback means dev uploads don't persist across serverless
+  // instances — acceptable for dev; prod uses Supabase.
+  let url: string;
+  if (isSupabaseConfigured()) {
+    // Production: Supabase Storage.
+    const storageResult = await uploadToStorage(
+      processedBuffer,
+      bucket,
+      filename,
+    );
+    if (!storageResult) {
+      return {
+        ok: false,
+        error: "Failed to upload image to Supabase Storage. Check server logs.",
+      };
+    }
+    url = storageResult.url;
+    logger.info("Image uploaded to Supabase Storage", {
+      bucket,
+      filename,
+      bytes: processedBuffer.length,
+    });
+  } else {
+    // Dev: local filesystem (public/uploads/<bucket>/<filename>).
+    const bucketDir = path.join(uploadRoot, bucket);
+    const filePath = path.join(bucketDir, filename);
+
+    // Defensive: resolve and confirm the final path is within the upload root.
+    // Per 06 section 5: "validate all external input." The bucket is allowlisted
+    // and the filename is server-generated, so this is belt-and-suspenders.
+    const resolvedPath = path.resolve(filePath);
+    const resolvedRoot = path.resolve(uploadRoot);
+    if (!resolvedPath.startsWith(resolvedRoot + path.sep)) {
+      return { ok: false, error: "Invalid upload path." };
+    }
+
+    try {
+      await fs.mkdir(bucketDir, { recursive: true });
+      await fs.writeFile(filePath, processedBuffer);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Unknown fs error";
+      return { ok: false, error: `Failed to save file: ${msg}` };
+    }
+
+    // Local URL path (served as a static file from public/uploads/).
+    url = `/uploads/${bucket}/${filename}`;
+  }
 
   return {
     ok: true,

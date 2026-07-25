@@ -17,6 +17,7 @@
 // App passwords). Regular account passwords will not work.
 
 import type { Transporter } from "nodemailer";
+import { logger } from "./logger";
 
 let _transporter: Transporter | null = null;
 
@@ -71,7 +72,7 @@ async function getTransporter(): Promise<Transporter> {
   const cfg = getSmtpConfig();
   if (!cfg) {
     throw new Error(
-      "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in .env."
+      "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS in .env.",
     );
   }
 
@@ -117,7 +118,7 @@ export interface SendEmailResult {
  * deliverable and cannot carry script. The cost is no rich formatting.
  */
 export async function sendReplyEmail(
-  params: ReplyEmailParams
+  params: ReplyEmailParams,
 ): Promise<SendEmailResult> {
   const cfg = getSmtpConfig();
   if (!cfg) {
@@ -164,12 +165,47 @@ export async function sendReplyEmail(
     const info = await transporter.sendMail(mailOptions);
     return { ok: true, messageId: info.messageId };
   } catch (error) {
-    // Per 03 section 6: never swallow an exception silently. Return the
-    // error message so the API route can surface it (masked) to the admin.
-    const msg =
+    // Per A10-1 fix: never surface raw nodemailer error messages to the
+    // client — they may include internal hostnames, ports, or stack traces.
+    // Log the full error server-side; return a mapped user-friendly message.
+    const rawMsg =
       error instanceof Error ? error.message : "Unknown SMTP error";
-    return { ok: false, error: msg };
+    logger.error("SMTP send failed", { error: rawMsg });
+    return { ok: false, error: mapSmtpError(rawMsg) };
   }
+}
+
+/**
+ * Map raw nodemailer/SMTP error messages to user-friendly strings.
+ * Per 06 A10: "Error responses reveal what the user needs, not stack traces
+ * or internal state." The admin sees a friendly message; the full error is
+ * logged server-side for diagnosis.
+ */
+function mapSmtpError(msg: string): string {
+  const lower = msg.toLowerCase();
+  if (
+    /auth|authentication|535|username and password|invalid login/i.test(lower)
+  ) {
+    return "SMTP authentication failed. Check SMTP_USER and SMTP_PASS (use a Google App Password, not your account password).";
+  }
+  if (
+    /connect|econnrefused|econnreset|etimedout|enotfound|can't reach/i.test(
+      lower,
+    )
+  ) {
+    return "Could not connect to the SMTP server. Check SMTP_HOST and SMTP_PORT, and verify your network allows outbound SMTP.";
+  }
+  if (/recipient|address rejected|550|551|553/i.test(lower)) {
+    return "The recipient email address was rejected by the SMTP server.";
+  }
+  if (/quota|limit|421|450|451|452/i.test(lower)) {
+    return "The SMTP server temporarily rejected the email (rate limit or quota). Please try again later.";
+  }
+  if (/ssl|tls|cert|self-signed/i.test(lower)) {
+    return "SMTP TLS/SSL error. Check SMTP_PORT (587 for STARTTLS, 465 for TLS) and the server's certificate.";
+  }
+  // Generic fallback — no internal details leaked.
+  return "Failed to send email. Check the server logs for details.";
 }
 
 /**
@@ -204,9 +240,11 @@ export async function sendTestEmail(to: string): Promise<SendEmailResult> {
     });
     return { ok: true, messageId: info.messageId };
   } catch (error) {
-    const msg =
+    // Per A10-1 fix: map to user-friendly message; log full error server-side.
+    const rawMsg =
       error instanceof Error ? error.message : "Unknown SMTP error";
-    return { ok: false, error: msg };
+    logger.error("SMTP test email failed", { error: rawMsg, to });
+    return { ok: false, error: mapSmtpError(rawMsg) };
   }
 }
 

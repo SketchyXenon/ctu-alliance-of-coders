@@ -37,8 +37,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   // IP rate limit: 5 per minute.
   const ipLimit = rateLimit(`login-ip:${ip}`, 5, 60_000);
   if (!ipLimit.allowed) {
+    // Per A06-2: identical message for IP and email rate limits — prevents
+    // an attacker from distinguishing which limit was hit.
     return NextResponse.json(
-      { error: "Too many login attempts. Please wait a minute." },
+      { error: "Too many login attempts. Please try again later." },
       {
         status: 429,
         headers: {
@@ -68,8 +70,9 @@ export const POST = withPrismaError(async function POST(request: Request) {
   // Email-keyed rate limit: 10 per hour per email.
   const emailLimit = rateLimit(`login-email:${email}`, 10, 60 * 60_000);
   if (!emailLimit.allowed) {
+    // Per A06-2: identical message to the IP rate limit.
     return NextResponse.json(
-      { error: "Too many attempts for this account. Please try later." },
+      { error: "Too many login attempts. Please try again later." },
       {
         status: 429,
         headers: {

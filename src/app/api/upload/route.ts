@@ -130,10 +130,11 @@ export const POST = withPrismaError(async function POST(request: Request) {
   }
 
   // Audit log the upload. Per 06 section 11: "Log security-relevant events."
+  // Per Bug-4: use the correct entity type based on the bucket.
   await logActivity({
     userId: user.id,
     action: "create",
-    entity: "announcement", // closest existing entity; uploads aren't a separate entity
+    entity: bucket === "officer" ? "officer" : "announcement",
     entityId: result.filename,
     summary: `Uploaded image to ${bucket} bucket: ${result.filename} (${result.bytes} bytes, ${result.width}x${result.height})`,
   });

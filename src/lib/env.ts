@@ -1,6 +1,12 @@
 // Centralized environment variable validation.
 // Per 06-security-architecture.md: secrets in env, validated at startup.
 // Per 03-software-engineering.md: fail fast and loud on misconfiguration.
+//
+// Production requires Supabase for image storage (officer photos +
+// announcement images). The upload route (src/lib/upload.ts) uses Supabase
+// Storage when configured, falling back to local fs in dev. In prod, the
+// Supabase env vars are mandatory so uploads don't silently fall back to
+// a local fs that doesn't persist across serverless instances.
 
 import { z } from "zod";
 
@@ -13,7 +19,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -33,20 +41,26 @@ export function getEnv(): Env {
       .map((i) => `  - ${i.path.join(".")}: ${i.message}`)
       .join("\n");
     throw new Error(
-      `Environment validation failed:\n${issues}\n\nCheck .env or Vercel settings.`
+      `Environment validation failed:\n${issues}\n\nCheck .env or Vercel settings.`,
     );
   }
 
-  // Production requires Supabase for image storage.
+  // Production requires Supabase for image storage. Per 03 section 6: fail
+  // fast — a prod deploy without Supabase would silently fall back to local
+  // fs, which doesn't persist across serverless instances. Better to refuse
+  // to start than to silently lose uploads.
   if (parsed.data.NODE_ENV === "production") {
     const missing: string[] = [];
-    if (!parsed.data.NEXT_PUBLIC_SUPABASE_URL) missing.push("NEXT_PUBLIC_SUPABASE_URL");
-    if (!parsed.data.NEXT_PUBLIC_SUPABASE_ANON_KEY) missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-    if (!parsed.data.SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    if (!parsed.data.NEXT_PUBLIC_SUPABASE_URL)
+      missing.push("NEXT_PUBLIC_SUPABASE_URL");
+    if (!parsed.data.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+      missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    if (!parsed.data.SUPABASE_SERVICE_ROLE_KEY)
+      missing.push("SUPABASE_SERVICE_ROLE_KEY");
     if (missing.length > 0) {
       throw new Error(
-        `Production requires Supabase env vars:\n` +
-          missing.map((m) => `  - ${m}`).join("\n")
+        `Production requires Supabase env vars for image storage:\n` +
+          missing.map((m) => `  - ${m}`).join("\n"),
       );
     }
   }

@@ -18,10 +18,9 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Generate the Prisma client against the production (Postgres) schema so the
-# correct query engine is bundled into the standalone output. The default
-# schema.prisma targets SQLite (dev only); a prod container connecting to
-# Postgres needs the Postgres engine. Per 03 section 6: fail fast.
-RUN bunx prisma generate --schema=prisma/schema.prod.prisma
+# correct query engine is bundled into the standalone output. schema.prisma is
+# the Postgres schema; schema.sqlite.prisma is dev-only. Per 03 section 6: fail fast.
+RUN bunx prisma generate --schema=prisma/schema.prisma
 
 RUN bun run build
 
