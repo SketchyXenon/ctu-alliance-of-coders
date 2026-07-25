@@ -12,7 +12,7 @@ import type {
 const VALID_STATUSES: ContactStatus[] = ["new", "read", "resolved", "archived"];
 
 /** PATCH /api/contact/[id] - admin only, update status.
- *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
+ *  Wrapped with withPrismaError so DB-down returns a clean 503 (03 §6). */
 export const PATCH = withPrismaError(async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -73,7 +73,7 @@ export const PATCH = withPrismaError(async function PATCH(
 });
 
 /** DELETE /api/contact/[id] - admin only.
- *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
+ *  Wrapped with withPrismaError so DB-down returns a clean 503 (03 §6). */
 export const DELETE = withPrismaError(async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },

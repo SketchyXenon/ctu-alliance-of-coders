@@ -14,12 +14,7 @@ import {
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -34,6 +29,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { api } from "@/lib/api-client";
 import { formatDateTime } from "@/lib/security";
 import { cn } from "@/lib/utils";
@@ -53,10 +58,7 @@ const STATUS_FILTERS: { value: ContactStatus | "all"; label: string }[] = [
 ];
 
 function statusBadge(status: ContactStatus) {
-  const map: Record<
-    ContactStatus,
-    { label: string; className: string }
-  > = {
+  const map: Record<ContactStatus, { label: string; className: string }> = {
     new: {
       label: "New",
       className:
@@ -128,6 +130,7 @@ function MessageCard({
   busyId: string | null;
 }) {
   const [expanded, setExpanded] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const busy = busyId === message.id;
   const preview = expanded
     ? message.message
@@ -236,7 +239,7 @@ function MessageCard({
                 size="sm"
                 variant="ghost"
                 disabled={busy}
-                onClick={() => onDelete(message.id)}
+                onClick={() => setConfirmOpen(true)}
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 aria-label="Delete message"
               >
@@ -248,6 +251,37 @@ function MessageCard({
           </Tooltip>
         </div>
       </CardContent>
+
+      {/* H15: destructive action confirmation per 05-ui-ux-design.md §6.
+          AlertDialog (not Dialog) so it requires explicit Action — does not
+          close on outside click or Escape, preventing accidental data loss. */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes the message from{" "}
+              <span className="font-medium text-foreground">
+                {message.name}
+              </span>{" "}
+              (&ldquo;{message.subject}&rdquo;). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={busy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                void onDelete(message.id).then(() => setConfirmOpen(false));
+              }}
+            >
+              {busy ? "Deleting..." : "Delete message"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
@@ -264,7 +298,7 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
       read: messages.filter((m) => m.status === "read").length,
       resolved: messages.filter((m) => m.status === "resolved").length,
     }),
-    [messages]
+    [messages],
   );
 
   const filtered = React.useMemo(() => {
@@ -285,7 +319,7 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
     setBusyId(id);
     const { data, error } = await api.patch<{ item: ContactMessage }>(
       `/api/contact/${id}`,
-      { status }
+      { status },
     );
     setBusyId(null);
     if (error || !data) {
@@ -348,11 +382,12 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
               />
               <Select
                 value={filter}
-                onValueChange={(v) =>
-                  setFilter(v as ContactStatus | "all")
-                }
+                onValueChange={(v) => setFilter(v as ContactStatus | "all")}
               >
-                <SelectTrigger className="h-9 w-44" aria-label="Filter by status">
+                <SelectTrigger
+                  className="h-9 w-44"
+                  aria-label="Filter by status"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -395,7 +430,9 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
               </div>
               <div className="space-y-1">
                 <p className="font-display text-base font-semibold text-foreground">
-                  {messages.length === 0 ? "Inbox is empty" : "No matching messages"}
+                  {messages.length === 0
+                    ? "Inbox is empty"
+                    : "No matching messages"}
                 </p>
                 <p className="max-w-xs text-sm text-muted-foreground">
                   {messages.length === 0
@@ -411,7 +448,10 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
                   disabled={refreshing}
                   className="mt-1"
                 >
-                  <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden="true" />
+                  <RefreshCw
+                    className={cn("size-4", refreshing && "animate-spin")}
+                    aria-hidden="true"
+                  />
                   Refresh
                 </Button>
               )}

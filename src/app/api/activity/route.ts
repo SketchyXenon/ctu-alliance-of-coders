@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { withPrismaError } from "@/lib/route-helpers";
 
 const PAGE_SIZE = 50;
 
 /**
  * GET /api/activity - admin only, returns paginated activity logs.
  * Query params: ?cursor=<id> for pagination (cursor-based).
+ * Wrapped with withPrismaError so DB-down returns a clean 503 (03 §6).
  */
-export async function GET(request: Request) {
+export const GET = withPrismaError(async function GET(request: Request) {
   try {
     await requireAdmin();
   } catch {
@@ -41,4 +43,4 @@ export async function GET(request: Request) {
   });
   res.headers.set("Cache-Control", "no-store");
   return res;
-}
+});

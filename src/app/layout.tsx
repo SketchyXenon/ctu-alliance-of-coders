@@ -36,10 +36,11 @@ export const metadata: Metadata = {
     template: "%s | Alliance of Coders",
   },
   description:
-    "Building the future, one commit at a time. The official site of the Alliance of Coders at Cebu Technological University - Danao Campus: announcements, officers, and contact.",
+    "Building the future, one commit at a time. The official site of the Alliance of Coders (AOC) at Cebu Technological University - Danao Campus: announcements, officers, and contact.",
   keywords: [
     "Alliance of Coders",
     "CTU Danao",
+    "AOC",
     "Cebu Technological University",
     "student tech organization",
     "coding club",
@@ -72,7 +73,7 @@ export const metadata: Metadata = {
     follow: true,
   },
   verification: {
-    google: "xGoFsD35EJOooX2sRmirf64phBcPBMeRSe7izICboX8"
+    google: "xGoFsD35EJOooX2sRmirf64phBcPBMeRSe7izICboX8",
   },
 };
 
@@ -87,7 +88,7 @@ export default function RootLayout({
     name: "Alliance of Coders",
     alternateName: "AoC",
     url: siteUrl,
-    logo: `${siteUrl}/logo.svg`,
+    logo: `${siteUrl}/logo.png`,
     description:
       "A community of passionate developers, innovators, and tech leaders at Cebu Technological University - Danao Campus, united by code.",
     foundingLocation: {

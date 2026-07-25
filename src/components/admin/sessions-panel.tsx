@@ -1,9 +1,27 @@
 "use client";
 
 import * as React from "react";
-import { Clock, Loader2, Monitor, ShieldCheck, Smartphone, Tablet, Trash2 } from "lucide-react";
+import {
+  Clock,
+  Loader2,
+  Monitor,
+  ShieldCheck,
+  Smartphone,
+  Tablet,
+  Trash2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +44,11 @@ export function SessionsPanel() {
   const [loading, setLoading] = React.useState(true);
   const [revoking, setRevoking] = React.useState<string | null>(null);
   const [revokingAll, setRevokingAll] = React.useState(false);
+  // H15: track which session is pending revoke confirmation. null = dialog closed.
+  const [confirmRevokeId, setConfirmRevokeId] = React.useState<string | null>(
+    null,
+  );
+  const confirmSession = sessions.find((s) => s.id === confirmRevokeId) ?? null;
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -92,7 +115,9 @@ export function SessionsPanel() {
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
         <Monitor className="size-8 text-muted-foreground" aria-hidden="true" />
-        <p className="text-sm font-medium text-foreground">No active sessions</p>
+        <p className="text-sm font-medium text-foreground">
+          No active sessions
+        </p>
       </div>
     );
   }
@@ -130,11 +155,11 @@ export function SessionsPanel() {
           // Rotate device icon by session index for visual variety.
           const DeviceIcon = session.isCurrent
             ? ShieldCheck
-            : [Monitor, Smartphone, Tablet, Monitor][
+            : ([Monitor, Smartphone, Tablet, Monitor][
                 Math.abs(
-                  session.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0)
+                  session.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0),
                 ) % 3
-              ] ?? Monitor;
+              ] ?? Monitor);
           return (
             <li
               key={session.id}
@@ -142,7 +167,7 @@ export function SessionsPanel() {
                 "flex items-center gap-3 rounded-md border p-3 transition-colors",
                 session.isCurrent
                   ? "border-emerald-300/60 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-950/20"
-                  : "border-border/60 bg-card/40 hover:bg-card/80 hover:border-border"
+                  : "border-border/60 bg-card/40 hover:bg-card/80 hover:border-border",
               )}
             >
               <span
@@ -150,7 +175,7 @@ export function SessionsPanel() {
                   "flex size-9 shrink-0 items-center justify-center rounded-full",
                   session.isCurrent
                     ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-muted text-muted-foreground",
                 )}
               >
                 <DeviceIcon className="size-4" aria-hidden="true" />
@@ -181,7 +206,7 @@ export function SessionsPanel() {
                   variant="ghost"
                   size="icon"
                   className="size-8 shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => handleRevoke(session.id)}
+                  onClick={() => setConfirmRevokeId(session.id)}
                   disabled={revoking === session.id}
                   aria-label="Revoke session"
                 >
@@ -196,6 +221,46 @@ export function SessionsPanel() {
           );
         })}
       </ul>
+
+      {/* H15: destructive action confirmation per 05-ui-ux-design.md §6.
+          Revoking a session signs out that device immediately. AlertDialog
+          forces an explicit confirm — does not close on outside click. */}
+      <AlertDialog
+        open={confirmSession !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRevokeId(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke this session?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmSession
+                ? `Signed in ${timeAgo(confirmSession.createdAt)}. The device will be signed out immediately and will need to sign in again. This action cannot be undone.`
+                : "The device will be signed out immediately and will need to sign in again."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={revoking !== null}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={revoking !== null}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                if (confirmSession) {
+                  void handleRevoke(confirmSession.id).then(() =>
+                    setConfirmRevokeId(null),
+                  );
+                }
+              }}
+            >
+              {revoking !== null ? "Revoking..." : "Revoke session"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

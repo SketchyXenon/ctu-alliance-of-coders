@@ -1,33 +1,45 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { validateText, rateLimit } from "@/lib/security";
 import { validateImageUrl } from "@/lib/validation";
 import { withPrismaError } from "@/lib/route-helpers";
 import { logActivity } from "@/lib/activity";
+import { logger } from "@/lib/logger";
 import type { Announcement, AnnouncementType } from "@/lib/types";
 import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
 
 const MAX_BODY = 5000;
 
-/** GET /api/announcements - public read, newest first. Cached for 60s. */
+/** GET /api/announcements - public read, newest first. Cached for 60s.
+ *  Graceful degradation: on DB-down returns 200 with empty items so the page
+ *  renders empty states instead of crashing (02 §6). Matches /api/site-data. */
 export async function GET() {
-  const rows = await db.announcement.findMany({
-    orderBy: [{ pinned: "desc" }, { date: "desc" }, { createdAt: "desc" }],
-    take: 200,
-  });
-  const items: Announcement[] = rows.map((r) => ({
-    id: r.id,
-    type: r.type as AnnouncementType,
-    title: r.title,
-    body: r.body,
-    image: r.image,
-    pinned: r.pinned,
-    date: r.date,
-  }));
-  const res = NextResponse.json({ items });
-  res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
-  return res;
+  try {
+    const rows = await withDbRetry(() =>
+      db.announcement.findMany({
+        orderBy: [{ pinned: "desc" }, { date: "desc" }, { createdAt: "desc" }],
+        take: 200,
+      })
+    );
+    const items: Announcement[] = rows.map((r) => ({
+      id: r.id,
+      type: r.type as AnnouncementType,
+      title: r.title,
+      body: r.body,
+      image: r.image,
+      pinned: r.pinned,
+      date: r.date,
+    }));
+    const res = NextResponse.json({ items });
+    res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+    return res;
+  } catch (e) {
+    logger.warn("announcements DB query failed, returning empty list", { error: String(e) });
+    const res = NextResponse.json({ items: [] });
+    res.headers.set("Cache-Control", "public, max-age=10");
+    return res;
+  }
 }
 
 /** POST /api/announcements - admin only, create new. */

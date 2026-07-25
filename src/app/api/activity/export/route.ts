@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { buildCsv } from "@/lib/csv";
+import { withPrismaError } from "@/lib/route-helpers";
 
 /**
  * GET /api/activity/export - admin only, returns CSV.
  * Uses buildCsv so every cell is run through csvEscape (defense-in-depth
  * against formula injection, per 06 A05). No cell is interpolated raw.
+ * Wrapped with withPrismaError so DB-down returns a clean 503 (03 §6).
  */
-export async function GET() {
+export const GET = withPrismaError(async function GET() {
   try {
     await requireAdmin();
   } catch {
@@ -28,15 +30,15 @@ export async function GET() {
       l.entity,
       l.entityId ?? "",
       l.summary,
-    ])
+    ]),
   );
 
   const res = new NextResponse(csv);
   res.headers.set("Content-Type", "text/csv; charset=utf-8");
   res.headers.set(
     "Content-Disposition",
-    `attachment; filename="activity-log-${new Date().toISOString().slice(0, 10)}.csv"`
+    `attachment; filename="activity-log-${new Date().toISOString().slice(0, 10)}.csv"`,
   );
   res.headers.set("Cache-Control", "no-store");
   return res;
-}
+});

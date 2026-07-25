@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db, withDbRetry } from "@/lib/db";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
+import type { AdminUser } from "@prisma/client";
 import {
   validateText,
   validateEmail,
@@ -21,7 +22,7 @@ import type { ContactMessage as PrismaContactMessage } from "@prisma/client";
 const MAX_MESSAGE = 2000;
 
 // Q7: extract the DTO mapper that was duplicated 4x in this file.
-function toContactMessageDTO(r: PrismaContactMessage): ContactMessage {
+export function toContactMessageDTO(r: PrismaContactMessage): ContactMessage {
   return {
     id: r.id,
     clientId: r.clientId,
@@ -33,6 +34,24 @@ function toContactMessageDTO(r: PrismaContactMessage): ContactMessage {
     status: r.status as ContactStatus,
     createdAt: r.createdAt.toISOString(),
   };
+}
+
+// H1 regression helper: build the dedup response based on caller role.
+// Anonymous callers get a bare {ok:true} ack (no PII). Authenticated admins
+// get the full DTO + deduplicated:true flag so the admin inbox can show the
+// existing message. Extracted as a helper (03 §1 DRY) so the regression test
+// in tests/contact-dedup.test.ts can pin both response shapes.
+export function buildDedupResponse(
+  existing: PrismaContactMessage,
+  admin: Pick<AdminUser, "id" | "role"> | null,
+): NextResponse {
+  if (admin && admin.role === "admin") {
+    return NextResponse.json({
+      item: toContactMessageDTO(existing),
+      deduplicated: true,
+    });
+  }
+  return NextResponse.json({ ok: true });
 }
 
 /** GET /api/contact - admin only, list all messages newest first.
@@ -176,13 +195,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
       });
       if (existing) {
         const admin = await getCurrentUser();
-        if (admin && admin.role === "admin") {
-          return NextResponse.json({
-            item: toContactMessageDTO(existing),
-            deduplicated: true,
-          });
-        }
-        return NextResponse.json({ ok: true });
+        return buildDedupResponse(existing, admin);
       }
     }
     throw error;

@@ -15,8 +15,19 @@ import { withPrismaError } from "@/lib/route-helpers";
 // Dummy hash used to keep verification timing uniform for non-existent users
 // (mitigates user enumeration via timing). Must use the salt:hash format that
 // verifyPassword expects. Uses a 16-byte salt to match the real hashPassword.
-const DUMMY_HASH =
+export const DUMMY_HASH =
   "deadbeefdeadbeefdeadbeefdeadbeef:0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
+// Enumeration-safe failure response: every 401 path returns the exact same
+// status + body so an attacker cannot distinguish "no such email" from "wrong
+// password" from "non-admin role". Per 06-security-architecture.md §2: login,
+// registration, and password-reset flows must return identical responses for
+// valid and invalid identifiers. Extracted as a helper (03 §1 DRY) so the
+// regression test in tests/login-enumeration.test.ts can pin the shape.
+export const LOGIN_FAILURE_MESSAGE = "Invalid email or password.";
+export function loginFailureResponse() {
+  return NextResponse.json({ error: LOGIN_FAILURE_MESSAGE }, { status: 401 });
+}
 
 /** POST /api/auth/login - email + password, sets session cookie.
  *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
@@ -48,10 +59,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
   const passCheck = validatePassword(body.password, { minLen: 1, maxLen: 128 });
   if (!emailCheck.valid || !passCheck.valid || !passCheck.value) {
     // Enumeration-safe: same response for invalid format.
-    return NextResponse.json(
-      { error: "Invalid email or password." },
-      { status: 401 },
-    );
+    return loginFailureResponse();
   }
 
   const email = String(body.email).trim().toLowerCase();
@@ -82,10 +90,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     // M5: mask email in warn log; full email stays in the access-controlled
     // audit trail (logActivity) only. Per 06-security-architecture.md section 11.
     logger.warn("Failed login attempt", { email: maskEmail(email), ip });
-    return NextResponse.json(
-      { error: "Invalid email or password." },
-      { status: 401 },
-    );
+    return loginFailureResponse();
   }
 
   // Role check: return same 401 as invalid credentials (no role oracle).
@@ -95,10 +100,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
       ip,
       role: user.role,
     });
-    return NextResponse.json(
-      { error: "Invalid email or password." },
-      { status: 401 },
-    );
+    return loginFailureResponse();
   }
 
   await createSession(user.id);

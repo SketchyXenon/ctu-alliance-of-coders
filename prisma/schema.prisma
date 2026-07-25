@@ -2,6 +2,18 @@
 // Prisma 7: the datasource URL is no longer in the schema. It lives in
 // prisma.config.ts (for CLI) and is passed as an adapter to PrismaClient
 // (for runtime). See prisma.config.ts and src/lib/db.ts.
+//
+// Supabase note: prisma db push / migrate do NOT work through PgBouncer
+// transaction pooling (pooler port 6543). The config's datasource.url is
+// set to DIRECT_URL when available (see prisma.config.ts). Runtime queries
+// use DATABASE_URL (the pooler) directly via the adapter in src/lib/db.ts.
+//
+// Multi-schema: the database has a `profiles` table (dead code per ADR-0003)
+// with a FK to `auth.users` (Supabase's managed auth schema). Prisma db push
+// fails with P4002 if it can't introspect across schemas. Adding "auth" to
+// schemas lets Prisma resolve the cross-schema reference. Our models are all
+// in "public"; the auth schema is listed only so Prisma can introspect the
+// FK without error. We do NOT model auth.users — it's managed by Supabase.
 
 generator client {
   provider = "prisma-client-js"
@@ -9,6 +21,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["public", "auth"]
 }
 
 model Announcement {
@@ -26,6 +39,7 @@ model Announcement {
   @@index([pinned])
   @@index([date(sort: Desc)])
   @@map("announcements")
+  @@schema("public")
 }
 
 model AdminYear {
@@ -39,6 +53,7 @@ model AdminYear {
 
   @@index([sortOrder])
   @@map("admin_years")
+  @@schema("public")
 }
 
 model Officer {
@@ -53,6 +68,7 @@ model Officer {
   @@index([yearId])
   @@index([sortOrder])
   @@map("officers")
+  @@schema("public")
 }
 
 model ContactMessage {
@@ -71,31 +87,34 @@ model ContactMessage {
   @@index([createdAt(sort: Desc)])
   @@index([email])
   @@map("contact_messages")
+  @@schema("public")
 }
 
 model AdminUser {
-  id           String        @id @default(uuid()) @db.Uuid
-  email        String        @unique
+  id           String         @id @default(uuid()) @db.Uuid
+  email        String         @unique
   name         String?
-  passwordHash String        @map("password_hash")
-  role         String        @default("admin")
+  passwordHash String         @map("password_hash")
+  role         String         @default("admin")
   sessions     AdminSession[]
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
 
   @@map("admin_users")
+  @@schema("public")
 }
 
 model AdminSession {
-  id        String     @id @default(uuid()) @db.Uuid
-  userId    String     @map("user_id") @db.Uuid
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
   user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime   @map("expires_at")
-  createdAt DateTime   @default(now()) @map("created_at")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([userId])
   @@index([expiresAt])
   @@map("admin_sessions")
+  @@schema("public")
 }
 
 model ActivityLog {
@@ -111,4 +130,5 @@ model ActivityLog {
   @@index([createdAt(sort: Desc)])
   @@index([entity])
   @@map("activity_logs")
+  @@schema("public")
 }
