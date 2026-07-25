@@ -3,6 +3,7 @@
 import * as React from "react";
 import {
   Award,
+  ExternalLink,
   FileText,
   Megaphone,
   Pencil,
@@ -121,7 +122,7 @@ export function AnnouncementCard({
         "focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/40",
         featured
           ? "border-gold-300 ring-1 ring-gold-300/50 hover:shadow-gold lg:col-span-2 lg:grid lg:grid-cols-[1.05fr_1fr] lg:items-stretch"
-          : "border-border"
+          : "border-border",
       )}
     >
       {/* Visual header (clickable) */}
@@ -133,7 +134,7 @@ export function AnnouncementCard({
           "relative block w-full overflow-hidden border-0 bg-transparent p-0 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
           featured
             ? "aspect-[16/9] lg:aspect-auto lg:h-full lg:min-h-[280px]"
-            : "aspect-[16/9]"
+            : "aspect-[16/9]",
         )}
       >
         {ann.image ? (
@@ -158,7 +159,7 @@ export function AnnouncementCard({
             <TypeIcon
               className={cn(
                 "relative text-white/75 transition-transform duration-500 ease-out group-hover:scale-110",
-                featured ? "h-16 w-16" : "h-12 w-12"
+                featured ? "h-16 w-16" : "h-12 w-12",
               )}
               aria-hidden="true"
             />
@@ -166,14 +167,19 @@ export function AnnouncementCard({
         )}
         <Badge
           variant="outline"
-          className={cn("absolute left-3 top-3 backdrop-blur-sm", badgeCfg.className)}
+          className={cn(
+            "absolute left-3 top-3 backdrop-blur-sm",
+            badgeCfg.className,
+          )}
         >
           {badgeCfg.label}
         </Badge>
       </button>
 
       {/* Content body */}
-      <div className={cn("flex flex-1 flex-col gap-3 p-5", featured && "lg:p-7")}>
+      <div
+        className={cn("flex flex-1 flex-col gap-3 p-5", featured && "lg:p-7")}
+      >
         {/* Meta row */}
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Badge variant="outline" className={badgeCfg.className}>
@@ -200,7 +206,7 @@ export function AnnouncementCard({
           <h3
             className={cn(
               "font-display font-bold tracking-tight text-foreground transition-colors group-hover:text-primary",
-              featured ? "text-2xl sm:text-3xl" : "text-lg"
+              featured ? "text-2xl sm:text-3xl" : "text-lg",
             )}
           >
             {ann.title}
@@ -211,11 +217,40 @@ export function AnnouncementCard({
         <p
           className={cn(
             "text-sm leading-relaxed text-muted-foreground",
-            featured && "sm:text-base"
+            featured && "sm:text-base",
           )}
         >
           {preview}
         </p>
+
+        {/* Specialized links — shown on the card so end users see them without
+            opening the modal. Per 05 section 5: icon supports the label. */}
+        {ann.links && ann.links.length > 0 && (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
+            {ann.links.slice(0, featured ? 6 : 3).map((link, i) => (
+              <li key={i}>
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <ExternalLink
+                    className="h-3 w-3 shrink-0"
+                    aria-hidden="true"
+                  />
+                  {link.label}
+                </a>
+              </li>
+            ))}
+            {ann.links.length > (featured ? 6 : 3) && (
+              <li className="text-xs text-muted-foreground">
+                +{ann.links.length - (featured ? 6 : 3)} more
+              </li>
+            )}
+          </ul>
+        )}
 
         {/* Bottom row: read-full-story + admin actions */}
         <div className="mt-auto flex min-h-[2rem] items-center justify-between gap-2 pt-2">
@@ -231,7 +266,10 @@ export function AnnouncementCard({
               Read full story
             </Button>
           ) : (
-            <span className="text-xs text-muted-foreground/60" aria-hidden="true">
+            <span
+              className="text-xs text-muted-foreground/60"
+              aria-hidden="true"
+            >
               &nbsp;
             </span>
           )}

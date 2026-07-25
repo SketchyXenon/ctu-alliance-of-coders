@@ -25,12 +25,23 @@ export interface ValidationResult {
   error: string | null;
 }
 
-/** Validate a plain-text display field with length and dangerous-pattern checks. */
+/** Validate a plain-text display field with length and dangerous-pattern checks.
+ *  When required is false (default), undefined/null are treated as "not provided"
+ *  and return valid (the caller applies a default). Per 03 section 6: fail
+ *  safe, but don't over-block optional fields. */
 export function validateText(
   value: unknown,
   opts: { maxLen?: number; minLen?: number; required?: boolean } = {},
 ): ValidationResult {
   const { maxLen = 500, minLen = 0, required = false } = opts;
+  // When the field is optional, undefined/null are valid (not provided).
+  // The caller is responsible for applying a default value.
+  if (value === undefined || value === null) {
+    if (required) {
+      return { valid: false, error: "This field is required." };
+    }
+    return { valid: true, error: null };
+  }
   if (typeof value !== "string") {
     return { valid: false, error: "Invalid type." };
   }
