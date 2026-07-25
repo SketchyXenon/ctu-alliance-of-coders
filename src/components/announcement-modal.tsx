@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  ExternalLink,
   FileText,
   Megaphone,
   Pencil,
@@ -91,7 +92,8 @@ export function AnnouncementModal({
     return list.findIndex((a) => a.id === ann.id);
   }, [ann, list]);
   const canPrev = hasList && currentIndex > 0;
-  const canNext = hasList && currentIndex >= 0 && currentIndex < (list!.length - 1);
+  const canNext =
+    hasList && currentIndex >= 0 && currentIndex < list!.length - 1;
 
   const goPrev = React.useCallback(() => {
     if (canPrev && list && onNavigate) {
@@ -157,7 +159,11 @@ export function AnnouncementModal({
             canNext={canNext}
             onPrev={goPrev}
             onNext={goNext}
-            position={hasList && currentIndex >= 0 ? `${currentIndex + 1} / ${list!.length}` : null}
+            position={
+              hasList && currentIndex >= 0
+                ? `${currentIndex + 1} / ${list!.length}`
+                : null
+            }
           />
         ) : (
           <div className="p-6 text-sm text-muted-foreground">
@@ -236,17 +242,13 @@ function AnnouncementModalBody({
       {/* Optional image hero */}
       {ann.image && (
         <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden">
-          <img
-            src={ann.image}
-            alt=""
-            className="h-full w-full object-cover"
-          />
+          <img src={ann.image} alt="" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-navy-950/70 via-navy-950/15 to-transparent" />
           <Badge
             variant="outline"
             className={cn(
               "absolute left-4 top-4 backdrop-blur-sm",
-              badgeCfg.className
+              badgeCfg.className,
             )}
           >
             {badgeCfg.label}
@@ -262,7 +264,7 @@ function AnnouncementModalBody({
               <span
                 className={cn(
                   "inline-flex h-9 w-9 items-center justify-center rounded-lg",
-                  badgeCfg.className
+                  badgeCfg.className,
                 )}
                 aria-hidden="true"
               >
@@ -306,6 +308,35 @@ function AnnouncementModalBody({
               {p}
             </p>
           ))}
+
+          {/* Specialized links — displayed as a list with external-link icons.
+              Per 05-ui-ux-design.md §5: icon supports a label, doesn't replace
+              it. Per 06 §5: URLs are http/https only (validated server-side). */}
+          {ann.links && ann.links.length > 0 && (
+            <div className="space-y-2 border-t pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Links
+              </p>
+              <ul className="space-y-1.5">
+                {ann.links.map((link, i) => (
+                  <li key={i}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                    >
+                      <ExternalLink
+                        className="h-3.5 w-3.5 shrink-0"
+                        aria-hidden="true"
+                      />
+                      {link.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 

@@ -1,14 +1,14 @@
 # Alliance of Coders
 
-The official website for the Alliance of Coders at Cebu Technological University - Danao Campus. Built with Next.js 16, TypeScript, Prisma, and shadcn/ui.
+The official website for the Alliance of Coders at Cebu Technological University - Danao Campus. Built with Next.js 16, TypeScript, Prisma 7, and shadcn/ui.
 
 ## Features
 
-- **Public**: Hero landing, announcements feed, officers org chart, contact form, policy pages
-- **Admin**: Dashboard with inbox, officer management, activity log, session management
-- **Security**: Session-based auth with scrypt hashing, CSRF protection, rate limiting, CSP headers, RLS-ready Supabase schema
+- **Public**: Hero landing, announcements feed (with specialized links), officers org chart, contact form, FAQ, policy pages
+- **Admin**: Dashboard with inbox (email reply via SMTP), officer management (inline edit + photo upload), announcements CRUD (with links), activity log, session management, integrations panel
+- **Security**: Session-based auth with scrypt hashing, CSRF protection, rate limiting, CSP headers, 9-layer upload defense, enumeration-safe login, fail-closed error handling
 - **Performance**: ISR caching on public endpoints, image compression (sharp -> WebP), lazy-loaded sections
-- **UX**: Command palette (Cmd+K), keyboard shortcuts, dark mode, responsive design, print styles
+- **UX**: Command palette (Cmd+K), keyboard shortcuts, dark mode, responsive design, print styles, AlertDialog confirmations on destructive actions
 
 ## Tech Stack
 
@@ -17,10 +17,11 @@ The official website for the Alliance of Coders at Cebu Technological University
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript 5 |
 | Database | SQLite (dev) / PostgreSQL via Supabase (prod) |
-| ORM | Prisma 6 |
-| UI | shadcn/ui (New York), Tailwind CSS 4, Lucide icons |
-| Auth | Custom session-based (scrypt, httpOnly cookies) |
+| ORM | Prisma 7 (adapter pattern: better-sqlite3 dev, pg prod) |
+| UI | shadcn/ui (New York), Tailwind CSS 4, Lucide icons, Framer Motion |
+| Auth | Custom session-based (scrypt, httpOnly cookies, 8h TTL, max 5 sessions) |
 | Storage | Supabase Storage (prod) / local filesystem (dev) |
+| Email | Nodemailer via Gmail SMTP (admin reply-to-contact + test email) |
 | Fonts | Space Grotesk (display), IBM Plex Sans (body) |
 
 ## Quick Start
@@ -32,8 +33,8 @@ bun install
 # Copy env file and set DATABASE_URL
 cp .env.example .env
 
-# Push database schema
-bun run db:push
+# Push database schema (SQLite dev)
+bun run db:push:sqlite
 
 # Seed initial data (announcements, officers, years)
 bun run db:seed
@@ -53,29 +54,36 @@ See [`.env.example`](./.env.example) for all variables.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | SQLite path (dev) or PostgreSQL URL (prod) |
-| `NEXT_PUBLIC_SUPABASE_URL` | Prod only | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Prod only | Supabase anon key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Prod only | Supabase service role key (server-only) |
-| `NEXT_PUBLIC_FACEBOOK_URL` | No | Footer Facebook link |
-| `NEXT_PUBLIC_GITHUB_URL` | No | Footer GitHub link |
-| `NEXT_PUBLIC_CONTACT_EMAIL` | No | Footer email link |
+| `DATABASE_URL` | Yes | SQLite path (dev) or Supabase pooler URL (prod, port 6543) |
+| `DIRECT_URL` | Prod | Supabase session-mode pooler (port 5432) for `prisma db push` / `migrate` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Prod | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Prod | Supabase anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Prod | Supabase service role key (server-only, bypasses RLS) |
+| `SMTP_HOST` | Optional | Gmail SMTP host (e.g. smtp.gmail.com) for inbox reply |
+| `SMTP_PORT` | Optional | 587 (STARTTLS) or 465 (TLS) |
+| `SMTP_USER` | Optional | Gmail/Workspace address |
+| `SMTP_PASS` | Optional | Google App Password (NOT the account password) |
+| `SMTP_FROM_NAME` | Optional | Display name (default: "Alliance of Coders") |
+| `SMTP_FROM_EMAIL` | Optional | From address (default: SMTP_USER) |
+| `NEXT_PUBLIC_SITE_URL` | Optional | Canonical site URL for SEO/OG tags |
+| `NEXT_PUBLIC_FACEBOOK_URL` | Optional | Footer Facebook link |
+| `NEXT_PUBLIC_GITHUB_URL` | Optional | Footer GitHub link |
+| `NEXT_PUBLIC_CONTACT_EMAIL` | Optional | Footer email link |
 
 ## Scripts
 
 | Script | Description |
-|--------|-------------|
+|--------|------------|
 | `bun run dev` | Start dev server (port 3000, Turbopack) |
 | `bun run build` | Production build (standalone output) |
 | `bun run start` | Start production server (standalone) |
 | `bun run lint` | Run ESLint |
 | `bun run typecheck` | Run TypeScript type checking (tsc --noEmit) |
-| `bun run test` | Run vitest test suite |
-| `bun run db:push` | Push schema to dev database (SQLite) |
-| `bun run db:push:prod` | Push schema to production (PostgreSQL) |
-| `bun run db:migrate:prod` | Apply production migrations (migrate deploy) |
+| `bun run test` | Run vitest test suite (182 tests) |
+| `bun run db:push` | Push schema to database (uses prisma.config.ts) |
+| `bun run db:push:sqlite` | Push schema to dev SQLite database |
 | `bun run db:seed` | Seed initial data |
-| `bun run bootstrap` | Create first admin account |
+| `bun run bootstrap` | Create first admin account (interactive prompt) |
 
 ## Deployment
 
@@ -83,22 +91,20 @@ See [`.env.example`](./.env.example) for all variables.
 
 The app builds to a self-contained standalone server via `.zscripts/build.sh`.
 
-1. Set required environment variables (see `.env.example`) — `DATABASE_URL` is mandatory.
-2. Build: `BUILD_ID=<id> bash .zscripts/build.sh` — produces a tarball with the standalone server, static assets, Caddyfile, and start.sh.
-3. Extract the tarball on the target host.
-4. Run `bun run db:migrate:prod` to apply the production schema (PostgreSQL).
-5. Run `bun run bootstrap` to create the first admin account (interactive prompt).
-6. Start: `./start.sh` — launches Next.js + Caddy (Caddy runs as PID 1).
-
-Caddy listens on `:81` and proxies to Next.js on `:3000`. See `Caddyfile` for the gateway config and security headers.
+1. Set required environment variables (see `.env.example`).
+2. For Supabase prod: set `DATABASE_URL` (pooler port 6543) + `DIRECT_URL` (session pooler port 5432).
+3. Run `bun run db:push` to create the schema (uses DIRECT_URL for DDL).
+4. Run `bun run bootstrap` to create the first admin account.
+5. Build: `BUILD_ID=<id> bash .zscripts/build.sh`.
+6. Start: `./start.sh` (launches Next.js + Caddy).
 
 ### Option B: Vercel
 
 1. Push to GitHub.
 2. Import the project in Vercel.
-3. Set environment variables (see above). `DATABASE_URL` must point to Postgres.
-4. Run `bun run db:migrate:prod` against your Postgres instance to create tables.
-5. Run `bun run bootstrap` to create the admin account (run locally with prod env).
+3. Set environment variables. `DATABASE_URL` = pooler (port 6543), `DIRECT_URL` = session pooler (port 5432).
+4. Run `bun run db:push` to create tables.
+5. Run `bun run bootstrap` (locally with prod env) to create the admin account.
 6. Deploy.
 
 See [docs/deployment.md](./docs/deployment.md) for the full deployment runbook.
@@ -108,6 +114,9 @@ See [docs/deployment.md](./docs/deployment.md) for the full deployment runbook.
 - [Architecture](./docs/ARCHITECTURE.md) - System design, data flow, trade-offs
 - [Security](./docs/SECURITY.md) - OWASP alignment, threat model, hardening
 - [API Reference](./docs/API.md) - All endpoints with examples
+- [Deployment](./docs/deployment.md) - Deployment runbook (standalone, Docker, Vercel)
+- [Activity Log](./docs/activity-log.md) - Major decisions and changes
+- [ADRs](./docs/adr/) - Architecture Decision Records
 
 ## License
 

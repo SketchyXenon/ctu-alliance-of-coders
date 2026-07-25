@@ -1,0 +1,50 @@
+# AI Scraper Policy for Alliance of Coders
+# https://ctu-alliance-of-coders.vercel.app
+#
+# This file defines the policy for AI crawlers, scrapers, and training pipelines
+# accessing this website. Per 06-security-architecture.md section 5 (reduce
+# attack surface) and 05-ui-ux-design.md section 8 (SEO).
+
+# ---------------------------------------------------------------------------
+# Allowed use cases
+# ---------------------------------------------------------------------------
+
+# 1. Summarizing public announcements, officer rosters, and FAQ content
+# 2. Answering questions about the organization (location, purpose, contact)
+# 3. Citing the organization in search results or knowledge bases
+# 4. Indexing the public pages listed in llms.txt for retrieval
+
+# ---------------------------------------------------------------------------
+# Disallowed use cases
+# ---------------------------------------------------------------------------
+
+# 1. Scraping /api/* endpoints (admin surfaces, PII, auth — disallowed in robots.txt)
+# 2. Storing personally identifiable information (contact form submissions, emails)
+# 3. Bypassing rate limits, authentication, or access controls
+# 4. Impersonating the organization or generating fake announcements
+# 5. Training models to phish or social-engineer against the organization
+# 6. Scraping admin panel content (requires authentication)
+
+# ---------------------------------------------------------------------------
+# Attribution requirements
+# ---------------------------------------------------------------------------
+
+# When citing or summarizing content from this site:
+# - Credit "Alliance of Coders" as the source
+# - Link to the original page (not a cached copy)
+# - Do not misrepresent the organization's statements or positions
+
+# ---------------------------------------------------------------------------
+# Rate limits
+# ---------------------------------------------------------------------------
+
+# Public endpoints are CDN-cached (60s). Please respect cache headers.
+# Do not exceed 30 requests per minute to any endpoint.
+# The /api/health endpoint is rate-limited at 60/min per IP.
+
+# ---------------------------------------------------------------------------
+# Contact
+# ---------------------------------------------------------------------------
+
+# Security issues: see /.well-known/security.txt
+# General inquiries: use the contact form at https://ctu-alliance-of-coders.vercel.app

@@ -5,8 +5,7 @@
 //
 // Mirrors the production schema (schema.prisma) but uses SQLite types
 // (no @db.Uuid, no @db.Text, no @map needed - SQLite is case-insensitive).
-// Per 02-system-design.md: keep dev close to production (same models, same
-// access patterns) so "works on my machine" bugs don't hide.
+// Per 02-system-design.md: keep dev close to production.
 
 generator client {
   provider = "prisma-client-js"
@@ -22,6 +21,7 @@ model Announcement {
   title     String
   body      String
   image     String?
+  links     String   @default("")  // JSON-encoded array of {url, label} objects
   pinned    Boolean  @default(false)
   date      String
   createdAt DateTime @default(now())

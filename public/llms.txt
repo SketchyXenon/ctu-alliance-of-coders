@@ -1,0 +1,38 @@
+# Alliance of Coders
+
+> The official website of the Alliance of Coders (AOC) at Cebu Technological University - Danao Campus. A community of developers, innovators, and tech leaders united by code.
+
+Alliance of Coders (AoC) is a student tech organization at Cebu Technological University - Danao Campus. This website serves as the official portal for announcements, officer rosters, and public contact.
+
+## Public content (suitable for LLM indexing)
+
+- [Home / Announcements](https://ctu-alliance-of-coders.vercel.app): Latest news, awards, recognitions, and reports. Announcements may include specialized links (registration forms, event pages, resources).
+- [Officers](https://ctu-alliance-of-coders.vercel.app): Leadership roster by academic year, with org-chart view. Officers include name, role, and photo.
+- [Contact](https://ctu-alliance-of-coders.vercel.app): Public contact form for membership, events, technical support, and partnership inquiries.
+- [FAQ](https://ctu-alliance-of-coders.vercel.app): Frequently asked questions about the organization.
+- [Privacy Policy](https://ctu-alliance-of-coders.vercel.app): What we collect and how we use it.
+- [Data Protection](https://ctu-alliance-of-coders.vercel.app): How we protect stored data.
+- [Terms of Use](https://ctu-alliance-of-coders.vercel.app): Using this site.
+- [Cookie Policy](https://ctu-alliance-of-coders.vercel.app): How we use local storage.
+
+## Content NOT for indexing
+
+- `/api/*` — all API endpoints (admin-only, PII, auth surfaces). Disallowed in robots.txt.
+- Admin panel content — requires authentication, not public.
+- Individual contact messages — PII, admin-only.
+
+## Summary facts
+
+- Organization: Alliance of Coders
+- Campus: Cebu Technological University - Danao Campus
+- Location: Danao City, Cebu, Philippines
+- Founded: student tech organization
+- Language: English
+- Tech stack: Next.js 16, TypeScript, Prisma 7, Supabase (PostgreSQL + Storage)
+
+## AI scraping policy
+
+See [ai.txt](https://ctu-alliance-of-coders.vercel.app/ai.txt) for the full AI scraping policy. Summary:
+- Allowed: summarizing public announcements, answering questions about the org, citing the org
+- Not allowed: scraping admin content, storing PII, bypassing rate limits, impersonating the org
+- Attribution: cite "Alliance of Coders" and link to the source page

@@ -42,18 +42,14 @@ interface OfficersSectionProps {
 
 const PAGE_SIZE = 8;
 
-export function OfficersSection({
-  adminYears,
-}: OfficersSectionProps) {
+export function OfficersSection({ adminYears }: OfficersSectionProps) {
   const sectionRef = React.useRef<HTMLElement | null>(null);
 
   // Sort years by sortOrder ascending so the last one is the "latest".
   const sortedYears = React.useMemo(
     () =>
-      [...adminYears].sort(
-        (a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
-      ),
-    [adminYears]
+      [...adminYears].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [adminYears],
   );
 
   // Default to the latest year (last in sorted array).
@@ -61,12 +57,13 @@ export function OfficersSection({
     () => {
       if (sortedYears.length === 0) return "";
       return String(sortedYears.length - 1);
-    }
+    },
   );
 
   const [page, setPage] = React.useState(1);
   const [search, setSearch] = React.useState("");
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
+  const [showVacant, setShowVacant] = React.useState(true);
   const [modalOfficer, setModalOfficer] = React.useState<Officer | null>(null);
   const [modalOpen, setModalOpen] = React.useState(false);
 
@@ -102,7 +99,7 @@ export function OfficersSection({
     return sorted.filter(
       (o) =>
         (o.name ?? "").toLowerCase().includes(q) ||
-        (o.role ?? "").toLowerCase().includes(q)
+        (o.role ?? "").toLowerCase().includes(q),
     );
   }, [selectedYear, search]);
 
@@ -112,23 +109,20 @@ export function OfficersSection({
   const pageEnd = Math.min(pageStart + PAGE_SIZE, officers.length);
   const visibleOfficers = officers.slice(pageStart, pageEnd);
 
-  const handleYearChange = React.useCallback(
-    (value: string) => {
-      setSelectedYearIndex(value);
-      setPage(1);
-      setSearch("");
-      // Smoothly scroll the section back into view so the new roster is visible.
-      if (typeof window !== "undefined" && sectionRef.current) {
-        window.requestAnimationFrame(() => {
-          sectionRef.current?.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
+  const handleYearChange = React.useCallback((value: string) => {
+    setSelectedYearIndex(value);
+    setPage(1);
+    setSearch("");
+    // Smoothly scroll the section back into view so the new roster is visible.
+    if (typeof window !== "undefined" && sectionRef.current) {
+      window.requestAnimationFrame(() => {
+        sectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
         });
-      }
-    },
-    []
-  );
+      });
+    }
+  }, []);
 
   // Reset to page 1 whenever the search query changes.
   React.useEffect(() => {
@@ -140,17 +134,17 @@ export function OfficersSection({
       const clamped = Math.min(Math.max(1, next), totalPages);
       setPage(clamped);
     },
-    [totalPages]
+    [totalPages],
   );
 
-  const goToPrev = React.useCallback(() => goToPage(safePage - 1), [
-    goToPage,
-    safePage,
-  ]);
-  const goToNext = React.useCallback(() => goToPage(safePage + 1), [
-    goToPage,
-    safePage,
-  ]);
+  const goToPrev = React.useCallback(
+    () => goToPage(safePage - 1),
+    [goToPage, safePage],
+  );
+  const goToNext = React.useCallback(
+    () => goToPage(safePage + 1),
+    [goToPage, safePage],
+  );
 
   // Keyboard navigation for pagination (left/right arrows when the pager is focused).
   const onPagerKeyDown = React.useCallback(
@@ -169,7 +163,7 @@ export function OfficersSection({
         goToPage(totalPages);
       }
     },
-    [goToPrev, goToNext, goToPage, totalPages]
+    [goToPrev, goToNext, goToPage, totalPages],
   );
 
   const showPagination = officers.length > PAGE_SIZE;
@@ -207,10 +201,13 @@ export function OfficersSection({
                 aria-label="Select academic year"
                 className={cn(
                   "w-[220px] bg-card font-display font-semibold text-foreground",
-                  "hover:border-gold-400/60 focus-visible:border-gold-400 focus-visible:ring-gold-400/40"
+                  "hover:border-gold-400/60 focus-visible:border-gold-400 focus-visible:ring-gold-400/40",
                 )}
               >
-                <Calendar className="mr-1 h-4 w-4 text-gold-500" aria-hidden="true" />
+                <Calendar
+                  className="mr-1 h-4 w-4 text-gold-500"
+                  aria-hidden="true"
+                />
                 <SelectValue placeholder="Select a year" />
               </SelectTrigger>
               <SelectContent>
@@ -249,7 +246,7 @@ export function OfficersSection({
                 aria-label="Search officers by name or role"
                 className={cn(
                   "h-10 bg-card pl-9 pr-9 text-sm",
-                  "hover:border-gold-400/60 focus-visible:border-gold-400 focus-visible:ring-gold-400/40"
+                  "hover:border-gold-400/60 focus-visible:border-gold-400 focus-visible:ring-gold-400/40",
                 )}
               />
               {search && (
@@ -286,42 +283,60 @@ export function OfficersSection({
       {/* Year banner + grid */}
       {hasYears && selectedYear && (
         <>
-          {/* View toggle - segmented control for Grid / Org Chart */}
-          <div
-            role="group"
-            aria-label="Officers view mode"
-            className="mt-6 flex items-center gap-1 rounded-lg border-2 border-border/60 bg-card p-1 w-fit shadow-sm"
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              aria-pressed={viewMode === "grid"}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50",
-                viewMode === "grid"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
+          {/* View toggle - segmented control for Grid / Org Chart + vacant toggle */}
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <div
+              role="group"
+              aria-label="Officers view mode"
+              className="flex items-center gap-1 rounded-lg border-2 border-border/60 bg-card p-1 w-fit shadow-sm"
             >
-              <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
-              Grid
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("org")}
-              aria-pressed={viewMode === "org"}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50",
-                viewMode === "org"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
-              )}
-            >
-              <Network className="h-3.5 w-3.5" aria-hidden="true" />
-              Org Chart
-            </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("grid")}
+                aria-pressed={viewMode === "grid"}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50",
+                  viewMode === "grid"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" aria-hidden="true" />
+                Grid
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode("org")}
+                aria-pressed={viewMode === "org"}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50",
+                  viewMode === "org"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                )}
+              >
+                <Network className="h-3.5 w-3.5" aria-hidden="true" />
+                Org Chart
+              </button>
+            </div>
+
+            {/* Vacant-slot toggle — only visible in org-chart mode. Per 05 §4:
+                full state set (on/off). Lets admins hide vacant positions for
+                a clean presentation view. */}
+            {viewMode === "org" && (
+              <label className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-lg border-2 border-border/60 bg-card px-3 text-xs font-semibold shadow-sm transition-colors hover:bg-accent">
+                <input
+                  type="checkbox"
+                  checked={showVacant}
+                  onChange={(e) => setShowVacant(e.target.checked)}
+                  className="h-3.5 w-3.5 cursor-pointer accent-primary"
+                  aria-label="Show vacant positions in org chart"
+                />
+                Show vacant
+              </label>
+            )}
           </div>
 
           {/* Year banner - signature element */}
@@ -329,7 +344,7 @@ export function OfficersSection({
             className={cn(
               "relative mt-6 overflow-hidden rounded-xl p-6 sm:p-8",
               "bg-gradient-to-r from-navy-700 to-navy-600 text-white shadow-lg",
-              "ring-1 ring-inset ring-white/10"
+              "ring-1 ring-inset ring-white/10",
             )}
           >
             {/* Decorative gold accents */}
@@ -352,7 +367,7 @@ export function OfficersSection({
                   className={cn(
                     "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-lg",
                     "bg-white/10 ring-1 ring-inset ring-white/20",
-                    "text-gold-300"
+                    "text-gold-300",
                   )}
                 >
                   <Calendar className="h-6 w-6" aria-hidden="true" />
@@ -376,7 +391,7 @@ export function OfficersSection({
                 <div
                   className={cn(
                     "flex flex-col items-end rounded-lg bg-white/5 px-4 py-2",
-                    "ring-1 ring-inset ring-white/15"
+                    "ring-1 ring-inset ring-white/15",
                   )}
                 >
                   <span className="font-display text-2xl font-bold text-gold-300 tabular-nums">
@@ -395,7 +410,7 @@ export function OfficersSection({
           {hasOfficers ? (
             <div
               className={cn(
-                "mt-8 rounded-xl border-2 border-border/60 bg-card/40 p-4 sm:p-6 shadow-sm"
+                "mt-8 rounded-xl border-2 border-border/60 bg-card/40 p-4 sm:p-6 shadow-sm",
               )}
             >
               {viewMode === "grid" ? (
@@ -404,7 +419,7 @@ export function OfficersSection({
                     role="list"
                     aria-label={`Officers for academic year ${selectedYear.year}`}
                     className={cn(
-                      "grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4"
+                      "grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4",
                     )}
                   >
                     {visibleOfficers.map((officer) => (
@@ -455,11 +470,13 @@ export function OfficersSection({
                             "h-8 px-2.5",
                             "hover:border-gold-400/60 hover:bg-gold-100/40 hover:text-gold-800",
                             "focus-visible:ring-2 focus-visible:ring-gold-400/50",
-                            "dark:hover:bg-gold-400/10 dark:hover:text-gold-300"
+                            "dark:hover:bg-gold-400/10 dark:hover:text-gold-300",
                           )}
                         >
                           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-                          <span className="sr-only sm:not-sr-only sm:ml-1">Prev</span>
+                          <span className="sr-only sm:not-sr-only sm:ml-1">
+                            Prev
+                          </span>
                         </Button>
 
                         <div
@@ -484,7 +501,7 @@ export function OfficersSection({
                                   !isActive &&
                                     "hover:border-gold-400/60 hover:bg-gold-100/40 hover:text-gold-800 dark:hover:bg-gold-400/10 dark:hover:text-gold-300",
                                   isActive &&
-                                    "bg-primary text-primary-foreground ring-1 ring-inset ring-gold-400/40"
+                                    "bg-primary text-primary-foreground ring-1 ring-inset ring-gold-400/40",
                                 )}
                               >
                                 {pageNum}
@@ -504,11 +521,16 @@ export function OfficersSection({
                             "h-8 px-2.5",
                             "hover:border-gold-400/60 hover:bg-gold-100/40 hover:text-gold-800",
                             "focus-visible:ring-2 focus-visible:ring-gold-400/50",
-                            "dark:hover:bg-gold-400/10 dark:hover:text-gold-300"
+                            "dark:hover:bg-gold-400/10 dark:hover:text-gold-300",
                           )}
                         >
-                          <span className="sr-only sm:not-sr-only sm:mr-1">Next</span>
-                          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                          <span className="sr-only sm:not-sr-only sm:mr-1">
+                            Next
+                          </span>
+                          <ChevronRight
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          />
                         </Button>
                       </div>
                     </nav>
@@ -518,6 +540,7 @@ export function OfficersSection({
                 <OfficerOrgChart
                   officers={officers}
                   onNodeClick={handleOfficerClick}
+                  showVacant={showVacant}
                 />
               )}
             </div>
@@ -525,13 +548,13 @@ export function OfficersSection({
             <div
               className={cn(
                 "mt-8 flex flex-col items-center justify-center gap-3",
-                "rounded-xl border border-dashed border-border bg-card/60 px-6 py-16 text-center"
+                "rounded-xl border border-dashed border-border bg-card/60 px-6 py-16 text-center",
               )}
             >
               <span
                 className={cn(
                   "inline-flex h-12 w-12 items-center justify-center rounded-full",
-                  "bg-muted text-muted-foreground"
+                  "bg-muted text-muted-foreground",
                 )}
               >
                 {search.trim() ? (
@@ -541,7 +564,9 @@ export function OfficersSection({
                 )}
               </span>
               <h3 className="font-display text-lg font-semibold text-foreground">
-                {search.trim() ? "No matching officers" : "No officers for this year"}
+                {search.trim()
+                  ? "No matching officers"
+                  : "No officers for this year"}
               </h3>
               <p className="max-w-md text-sm text-muted-foreground">
                 {search.trim() ? (

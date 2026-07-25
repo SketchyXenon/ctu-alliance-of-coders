@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { parseLinks } from "@/lib/announcements";
 import type { Announcement, AdminYear, SiteData } from "@/lib/types";
 
 // Force dynamic: never prerender this route at build time. The route queries
@@ -44,6 +45,7 @@ export async function GET() {
       title: r.title,
       body: r.body,
       image: r.image,
+      links: parseLinks(r.links),
       pinned: r.pinned,
       date: r.date,
     }));

@@ -12,6 +12,11 @@ interface OfficerOrgChartProps {
   officers: Officer[];
   onNodeClick?: (officer: Officer) => void;
   className?: string;
+  /** When true (default), vacant slots (officers with no name) are shown as
+   *  dashed-border nodes. When false, vacant slots are hidden. Per 05 §4:
+   *  full state set — the toggle lets admins choose a clean view for
+   *  presentation vs. a complete view for planning. */
+  showVacant?: boolean;
 }
 
 /**
@@ -48,7 +53,7 @@ function getInitials(name: string): string {
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   const first = parts[0]?.[0] ?? "";
-  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  const second = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
   return (first + second).toUpperCase().slice(0, 2);
 }
 
@@ -97,7 +102,7 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
           "relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full",
           "bg-gradient-to-br from-navy-700 to-navy-900",
           "ring-2 shadow-md",
-          isPresident ? "ring-gold-400/60" : "ring-gold-400/30"
+          isPresident ? "ring-gold-400/60" : "ring-gold-400/30",
         )}
       >
         {officer.image ? (
@@ -112,7 +117,7 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
           <span
             className={cn(
               "font-display text-lg font-bold tracking-wide",
-              isVacant ? "text-muted-foreground/70" : "text-gold-400"
+              isVacant ? "text-muted-foreground/70" : "text-gold-400",
             )}
             aria-hidden="true"
           >
@@ -124,7 +129,7 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
         <span
           className={cn(
             "font-display text-sm font-semibold leading-tight text-foreground text-balance",
-            isVacant && "text-muted-foreground"
+            isVacant && "text-muted-foreground",
           )}
         >
           {displayName}
@@ -141,7 +146,7 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
       <div
         className={cn(
           "flex w-[128px] flex-col items-center rounded-lg border-2 border-dashed border-border/60 bg-card/60 px-2 py-3",
-          "opacity-90"
+          "opacity-90",
         )}
         aria-label={`${displayRole} - vacant`}
       >
@@ -161,7 +166,7 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
         "shadow-sm transition-all duration-200",
         "hover:-translate-y-0.5 hover:border-gold-300/70 hover:shadow-md",
         "focus-visible:outline-none focus-visible:border-gold-400 focus-visible:ring-2 focus-visible:ring-gold-400/40",
-        "active:translate-y-0"
+        "active:translate-y-0",
       )}
     >
       {avatar}
@@ -178,10 +183,18 @@ export function OfficerOrgChart({
   officers,
   onNodeClick,
   className,
+  showVacant = true,
 }: OfficerOrgChartProps) {
-  if (officers.length === 0) return null;
+  // Filter out vacant slots when showVacant is false. A vacant slot is one
+  // with no name (just a role placeholder). Per 05 §4: the toggle gives the
+  // admin a clean presentation view (no vacant slots) vs. a planning view.
+  const filteredOfficers = showVacant
+    ? officers
+    : officers.filter((o) => o.name?.trim());
 
-  const sorted = sortOfficers(officers);
+  if (filteredOfficers.length === 0) return null;
+
+  const sorted = sortOfficers(filteredOfficers);
   const root = sorted[0];
   const children = sorted.slice(1);
 
@@ -192,7 +205,7 @@ export function OfficerOrgChart({
     <div
       className={cn(
         "officer-org-chart overflow-x-auto scrollbar-thin",
-        className
+        className,
       )}
       role="tree"
       aria-label="Officers organizational chart"

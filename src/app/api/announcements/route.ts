@@ -6,6 +6,11 @@ import { validateImageUrl } from "@/lib/validation";
 import { withPrismaError } from "@/lib/route-helpers";
 import { logActivity } from "@/lib/activity";
 import { logger } from "@/lib/logger";
+import {
+  serializeLinks,
+  parseLinks,
+  validateAnnouncementLinks,
+} from "@/lib/announcements";
 import type { Announcement, AnnouncementType } from "@/lib/types";
 import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
 
@@ -20,7 +25,7 @@ export async function GET() {
       db.announcement.findMany({
         orderBy: [{ pinned: "desc" }, { date: "desc" }, { createdAt: "desc" }],
         take: 200,
-      })
+      }),
     );
     const items: Announcement[] = rows.map((r) => ({
       id: r.id,
@@ -28,14 +33,20 @@ export async function GET() {
       title: r.title,
       body: r.body,
       image: r.image,
+      links: parseLinks(r.links),
       pinned: r.pinned,
       date: r.date,
     }));
     const res = NextResponse.json({ items });
-    res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
+    res.headers.set(
+      "Cache-Control",
+      "public, s-maxage=60, stale-while-revalidate=300",
+    );
     return res;
   } catch (e) {
-    logger.warn("announcements DB query failed, returning empty list", { error: String(e) });
+    logger.warn("announcements DB query failed, returning empty list", {
+      error: String(e),
+    });
     const res = NextResponse.json({ items: [] });
     res.headers.set("Cache-Control", "public, max-age=10");
     return res;
@@ -55,7 +66,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Too many requests. Please slow down." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+      },
     );
   }
 
@@ -66,21 +80,40 @@ export const POST = withPrismaError(async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const titleCheck = validateText(body.title, { required: true, minLen: 5, maxLen: 200 });
-  if (!titleCheck.valid) return NextResponse.json({ error: titleCheck.error }, { status: 400 });
+  const titleCheck = validateText(body.title, {
+    required: true,
+    minLen: 5,
+    maxLen: 200,
+  });
+  if (!titleCheck.valid)
+    return NextResponse.json({ error: titleCheck.error }, { status: 400 });
 
-  const bodyCheck = validateText(body.body, { required: true, minLen: 10, maxLen: MAX_BODY });
-  if (!bodyCheck.valid) return NextResponse.json({ error: bodyCheck.error }, { status: 400 });
+  const bodyCheck = validateText(body.body, {
+    required: true,
+    minLen: 10,
+    maxLen: MAX_BODY,
+  });
+  if (!bodyCheck.valid)
+    return NextResponse.json({ error: bodyCheck.error }, { status: 400 });
 
   const type = String(body.type ?? "general");
   if (!ANNOUNCEMENT_TYPES.includes(type as AnnouncementType)) {
-    return NextResponse.json({ error: "Invalid announcement type." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid announcement type." },
+      { status: 400 },
+    );
   }
 
   // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
   const imageCheck = validateImageUrl(body.image);
   if (!imageCheck.valid) {
     return NextResponse.json({ error: imageCheck.error }, { status: 400 });
+  }
+
+  // Validate links array (06 section 5: validate all external input).
+  const linksCheck = validateAnnouncementLinks(body.links);
+  if (!linksCheck.valid) {
+    return NextResponse.json({ error: linksCheck.error }, { status: 400 });
   }
 
   const id = `ann-${crypto.randomUUID()}`;
@@ -92,6 +125,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
       title: String(body.title).trim(),
       body: String(body.body).trim(),
       image: imageCheck.normalized,
+      links: serializeLinks(linksCheck.normalized),
       pinned: typeof body.pinned === "boolean" ? body.pinned : false,
       date,
     },
@@ -103,6 +137,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     title: created.title,
     body: created.body,
     image: created.image,
+    links: parseLinks(created.links),
     pinned: created.pinned,
     date: created.date,
   };

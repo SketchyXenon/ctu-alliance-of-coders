@@ -117,6 +117,8 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
         />
+        {/* LLM crawler guide (llms.txt standard). Per 05-ui-ux-design.md section 8. */}
+        <link rel="llms.txt" href="/llms.txt" />
       </head>
       <body
         className={`${spaceGrotesk.variable} ${ibmPlexSans.variable} ${geistMono.variable} antialiased`}

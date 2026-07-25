@@ -15,9 +15,24 @@ import {
   X,
 } from "lucide-react";
 
-import type { Announcement, AnnouncementType, SyncStatus } from "@/lib/types";
-import { ANNOUNCEMENT_TYPES, BADGE_CONFIG, FILTER_OPTIONS } from "@/lib/constants";
+import type {
+  Announcement,
+  AnnouncementLink,
+  AnnouncementType,
+  SyncStatus,
+} from "@/lib/types";
+import {
+  ANNOUNCEMENT_TYPES,
+  BADGE_CONFIG,
+  FILTER_OPTIONS,
+} from "@/lib/constants";
 import { validateText } from "@/lib/security";
+import {
+  LINKS_MAX,
+  LINK_LABEL_MAX,
+  LINK_URL_MAX,
+  validateAnnouncementLink,
+} from "@/lib/announcements";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -37,6 +52,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { AnnouncementCard } from "@/components/announcement-card";
 import { AnnouncementModal } from "@/components/announcement-modal";
 import { ImageUploadField } from "@/components/image-upload-field";
+import { Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 6;
 const TITLE_MAX = 200;
@@ -51,6 +67,7 @@ interface AnnouncementDraft {
   type: AnnouncementType;
   body: string;
   image: string;
+  links: AnnouncementLink[];
   pinned: boolean;
 }
 
@@ -59,6 +76,7 @@ const EMPTY_DRAFT: AnnouncementDraft = {
   type: "general",
   body: "",
   image: "",
+  links: [],
   pinned: false,
 };
 
@@ -74,7 +92,9 @@ function generateClientId(): string {
 export interface AnnouncementsSectionProps {
   announcements: Announcement[];
   isAdmin: boolean;
-  onAdd: (ann: Omit<Announcement, "date"> & { date?: string }) => void | Promise<void>;
+  onAdd: (
+    ann: Omit<Announcement, "date"> & { date?: string },
+  ) => void | Promise<void>;
   onUpdate: (ann: Announcement) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<boolean>;
   syncStatus: SyncStatus;
@@ -97,7 +117,9 @@ export function AnnouncementsSection({
 }: AnnouncementsSectionProps) {
   const [filter, setFilter] = React.useState<FilterValue>("all");
   const [search, setSearch] = React.useState("");
-  const [sortBy, setSortBy] = React.useState<"date-desc" | "date-asc" | "title-asc">("date-desc");
+  const [sortBy, setSortBy] = React.useState<
+    "date-desc" | "date-asc" | "title-asc"
+  >("date-desc");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
   const [showForm, setShowForm] = React.useState(false);
@@ -134,8 +156,7 @@ export function AnnouncementsSection({
     if (q) {
       result = result.filter(
         (a) =>
-          a.title.toLowerCase().includes(q) ||
-          a.body.toLowerCase().includes(q)
+          a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q),
       );
     }
     if (dateFrom) {
@@ -186,7 +207,7 @@ export function AnnouncementsSection({
     async (id: string) => {
       await onDelete(id);
     },
-    [onDelete]
+    [onDelete],
   );
 
   const startCreate = () => {
@@ -203,6 +224,7 @@ export function AnnouncementsSection({
       type: ann.type,
       body: ann.body,
       image: ann.image ?? "",
+      links: ann.links ?? [],
       pinned: ann.pinned,
     });
     setFormError(null);
@@ -248,6 +270,20 @@ export function AnnouncementsSection({
       }
     }
 
+    // Validate links — filter out empty rows, validate each URL (06 §5).
+    const cleanLinks = draft.links.filter((l) => l.url.trim());
+    for (let i = 0; i < cleanLinks.length; i++) {
+      const check = validateAnnouncementLink(
+        cleanLinks[i].url,
+        cleanLinks[i].label,
+      );
+      if (!check.valid) {
+        setFormError(`Link ${i + 1}: ${check.error}`);
+        return;
+      }
+      cleanLinks[i] = check.normalized!;
+    }
+
     setSubmitting(true);
     try {
       if (isEditing && draft.id) {
@@ -258,10 +294,9 @@ export function AnnouncementsSection({
           type: draft.type,
           body: draft.body.trim(),
           image: draft.image.trim() || null,
+          links: cleanLinks,
           pinned: draft.pinned,
-          date:
-            existing?.date ??
-            new Date().toISOString().slice(0, 10),
+          date: existing?.date ?? new Date().toISOString().slice(0, 10),
         });
         setFormSuccess("Announcement updated successfully.");
       } else {
@@ -271,6 +306,7 @@ export function AnnouncementsSection({
           type: draft.type,
           body: draft.body.trim(),
           image: draft.image.trim() || null,
+          links: cleanLinks,
           pinned: draft.pinned,
         });
         setFormSuccess("Announcement published successfully.");
@@ -279,7 +315,7 @@ export function AnnouncementsSection({
       setShowForm(false);
     } catch (err) {
       setFormError(
-        err instanceof Error ? err.message : "Failed to save announcement."
+        err instanceof Error ? err.message : "Failed to save announcement.",
       );
     } finally {
       setSubmitting(false);
@@ -376,13 +412,19 @@ export function AnnouncementsSection({
             >
               Sort by
             </Label>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+            <Select
+              value={sortBy}
+              onValueChange={(v) => setSortBy(v as typeof sortBy)}
+            >
               <SelectTrigger
                 id="announcement-sort"
                 className="w-full sm:w-[160px]"
                 aria-label="Sort announcements"
               >
-                <ArrowDownUp className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                <ArrowDownUp
+                  className="mr-1.5 h-3.5 w-3.5"
+                  aria-hidden="true"
+                />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -431,7 +473,7 @@ export function AnnouncementsSection({
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
                 isActive
                   ? "border-gold-400 bg-gold-500/15 text-gold-700 dark:text-gold-300"
-                  : "border-border bg-card text-muted-foreground hover:border-gold-300/50 hover:text-foreground"
+                  : "border-border bg-card text-muted-foreground hover:border-gold-300/50 hover:text-foreground",
               )}
             >
               {opt.label}
@@ -440,7 +482,7 @@ export function AnnouncementsSection({
                   "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
                   isActive
                     ? "bg-gold-500/20 text-gold-800 dark:text-gold-200"
-                    : "bg-muted text-muted-foreground"
+                    : "bg-muted text-muted-foreground",
                 )}
               >
                 {count}
@@ -453,7 +495,10 @@ export function AnnouncementsSection({
       {/* Date range filter */}
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label htmlFor="ann-date-from" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <Label
+            htmlFor="ann-date-from"
+            className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+          >
             From
           </Label>
           <Input
@@ -469,7 +514,10 @@ export function AnnouncementsSection({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="ann-date-to" className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+          <Label
+            htmlFor="ann-date-to"
+            className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+          >
             To
           </Label>
           <Input
@@ -485,7 +533,12 @@ export function AnnouncementsSection({
           />
         </div>
         {hasDateFilter && (
-          <Button variant="ghost" size="sm" onClick={clearDateFilter} className="h-9">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearDateFilter}
+            className="h-9"
+          >
             <X className="mr-1 h-3.5 w-3.5" />
             Clear dates
           </Button>
@@ -544,7 +597,10 @@ export function AnnouncementsSection({
                   aria-required="true"
                   aria-describedby="ann-title-help"
                 />
-                <p id="ann-title-help" className="text-xs text-muted-foreground">
+                <p
+                  id="ann-title-help"
+                  className="text-xs text-muted-foreground"
+                >
                   {draft.title.length}/{TITLE_MAX} characters
                 </p>
               </div>
@@ -581,9 +637,7 @@ export function AnnouncementsSection({
                 <Textarea
                   id="ann-body"
                   value={draft.body}
-                  onChange={(e) =>
-                    setDraft({ ...draft, body: e.target.value })
-                  }
+                  onChange={(e) => setDraft({ ...draft, body: e.target.value })}
                   maxLength={BODY_MAX}
                   rows={6}
                   placeholder="Write the announcement details. Separate paragraphs with a blank line."
@@ -603,6 +657,82 @@ export function AnnouncementsSection({
                 onChange={(url) => setDraft({ ...draft, image: url })}
                 bucket="announcement"
               />
+
+              {/* Specialized links — multiple URLs with labels (e.g. registration
+                  form, event page, PDF). Per 05-ui-ux-design.md §4: full state
+                  set (add/remove/edit). Per 06 §5: URLs validated client-side
+                  (http/https only) and re-validated server-side. */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Specialized links (optional)
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Add links to registration forms, event pages, or resources. Up
+                  to {LINKS_MAX} links.
+                </p>
+                <div className="space-y-2">
+                  {draft.links.map((link, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        type="url"
+                        value={link.url}
+                        onChange={(e) => {
+                          const next = [...draft.links];
+                          next[idx] = { ...next[idx], url: e.target.value };
+                          setDraft({ ...draft, links: next });
+                        }}
+                        placeholder="https://example.com/register"
+                        maxLength={LINK_URL_MAX}
+                        aria-label={`Link ${idx + 1} URL`}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={link.label}
+                        onChange={(e) => {
+                          const next = [...draft.links];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          setDraft({ ...draft, links: next });
+                        }}
+                        placeholder="Label (optional)"
+                        maxLength={LINK_LABEL_MAX}
+                        aria-label={`Link ${idx + 1} label`}
+                        className="w-40"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-9 shrink-0 text-destructive hover:bg-destructive/10"
+                        onClick={() => {
+                          const next = draft.links.filter((_, i) => i !== idx);
+                          setDraft({ ...draft, links: next });
+                        }}
+                        aria-label={`Remove link ${idx + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  {draft.links.length < LINKS_MAX && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setDraft({
+                          ...draft,
+                          links: [...draft.links, { url: "", label: "" }],
+                        });
+                      }}
+                      className="gap-1.5"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add link
+                    </Button>
+                  )}
+                </div>
+              </div>
 
               <div className="flex items-center gap-2">
                 <Checkbox

@@ -27,6 +27,7 @@ model Announcement {
   title     String
   body      String   @db.Text
   image     String?  @map("image_url")
+  links     String   @default("")  @db.Text  // JSON-encoded array of {url, label} objects
   pinned    Boolean  @default(false)
   date      String
   createdAt DateTime @default(now()) @map("created_at")

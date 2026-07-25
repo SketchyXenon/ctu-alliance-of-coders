@@ -1,0 +1,25 @@
+# Security contact and responsible disclosure for Alliance of Coders
+# Per RFC 9116 (https://www.rfc-editor.org/rfc/rfc9116)
+# Per 06-security-architecture.md section 11 (incident response).
+
+Contact: mailto:assasinationplays09@gmail.com
+Expires: 2027-12-31T00:00:00.000Z
+Preferred-Languages: en, fil
+Canonical: https://ctu-alliance-of-coders.vercel.app/.well-known/security.txt
+
+# Reporting a vulnerability
+# 1. Email the Contact address above with a description of the issue.
+# 2. Include steps to reproduce (proof of concept, screenshots, or logs).
+# 3. Do NOT publicly disclose the issue until we have responded and remediated.
+# 4. We will acknowledge receipt within 48 hours and provide a timeline
+#    for a fix within 5 business days.
+# 5. We credit responsible reporters in our activity log (with permission).
+
+# Scope
+# This policy covers https://ctu-alliance-of-coders.vercel.app and its subdomains.
+# Out of scope: social engineering, physical attacks, DoS without proof of
+# concept, automated scanner reports without manual verification.
+
+# Recognition
+# We do not offer monetary bounties (student organization). We credit
+# responsible reporters in our public activity log with their permission.

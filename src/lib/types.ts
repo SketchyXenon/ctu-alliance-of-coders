@@ -4,12 +4,20 @@
 
 export type AnnouncementType = "award" | "recognition" | "report" | "general";
 
+/** A specialized link attached to an announcement (e.g. registration form,
+ *  event page, PDF). Validated server-side via validateAnnouncementLink. */
+export interface AnnouncementLink {
+  url: string;
+  label: string;
+}
+
 export interface Announcement {
   id: string;
   type: AnnouncementType;
   title: string;
   body: string;
   image: string | null;
+  links: AnnouncementLink[];
   pinned: boolean;
   date: string; // YYYY-MM-DD
 }
