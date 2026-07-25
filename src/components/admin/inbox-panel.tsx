@@ -9,6 +9,8 @@ import {
   Inbox as InboxIcon,
   Mail,
   RefreshCw,
+  Reply,
+  Send,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -17,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -24,6 +28,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -122,21 +134,56 @@ function MessageCard({
   message,
   onStatusChange,
   onDelete,
+  onReply,
   busyId,
 }: {
   message: ContactMessage;
   onStatusChange: (id: string, status: ContactStatus) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onReply: (
+    message: ContactMessage,
+    replyBody: string,
+    subject: string,
+  ) => Promise<void>;
   busyId: string | null;
 }) {
   const [expanded, setExpanded] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [replyOpen, setReplyOpen] = React.useState(false);
+  const [replyBody, setReplyBody] = React.useState("");
+  const [replySubject, setReplySubject] = React.useState(
+    `Re: ${message.subject}`,
+  );
+  const [sendingReply, setSendingReply] = React.useState(false);
   const busy = busyId === message.id;
   const preview = expanded
     ? message.message
     : message.message.length > 200
       ? message.message.slice(0, 200) + "..."
       : message.message;
+
+  function openReply() {
+    setReplyBody("");
+    setReplySubject(`Re: ${message.subject}`);
+    setReplyOpen(true);
+  }
+
+  async function handleSendReply() {
+    if (replyBody.trim().length < 5) {
+      toast.error("Reply too short", {
+        description: "Please write at least 5 characters.",
+      });
+      return;
+    }
+    setSendingReply(true);
+    await onReply(
+      message,
+      replyBody.trim(),
+      replySubject.trim() || `Re: ${message.subject}`,
+    );
+    setSendingReply(false);
+    setReplyOpen(false);
+  }
 
   return (
     <Card className="border-border/60 transition-shadow hover:shadow-md">
@@ -189,6 +236,16 @@ function MessageCard({
         )}
 
         <div className="flex flex-wrap items-center gap-2 pt-1">
+          <Button
+            size="sm"
+            variant="default"
+            disabled={busy}
+            onClick={openReply}
+            className="gap-1.5"
+          >
+            <Reply className="size-3.5" aria-hidden="true" />
+            Reply
+          </Button>
           {message.status !== "read" && message.status !== "resolved" && (
             <Button
               size="sm"
@@ -282,6 +339,85 @@ function MessageCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reply dialog: sends an email to the message submitter via SMTP.
+          Plain text only (no HTML XSS surface). Per 05 §6: the form is
+          non-blocking (Dialog, not AlertDialog) so the admin can reference
+          other tabs while composing. */}
+      <Dialog open={replyOpen} onOpenChange={setReplyOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Reply to {message.name}</DialogTitle>
+            <DialogDescription>
+              Your reply will be sent to{" "}
+              <span className="font-medium text-foreground">
+                {message.email}
+              </span>{" "}
+              via email. The message will be marked as resolved.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="reply-subject" className="text-xs">
+                Subject
+              </Label>
+              <Input
+                id="reply-subject"
+                value={replySubject}
+                onChange={(e) => setReplySubject(e.target.value)}
+                maxLength={200}
+                disabled={sendingReply}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="reply-body" className="text-xs">
+                Message
+              </Label>
+              <Textarea
+                id="reply-body"
+                value={replyBody}
+                onChange={(e) => setReplyBody(e.target.value)}
+                placeholder="Type your reply here..."
+                rows={8}
+                maxLength={4000}
+                disabled={sendingReply}
+                className="resize-y"
+              />
+              <p className="text-right text-[10px] text-muted-foreground">
+                {replyBody.length} / 4000
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setReplyOpen(false)}
+              disabled={sendingReply}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendReply}
+              disabled={sendingReply || replyBody.trim().length < 5}
+            >
+              {sendingReply ? (
+                <>
+                  <RefreshCw
+                    className="size-3.5 animate-spin"
+                    aria-hidden="true"
+                  />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="size-3.5" aria-hidden="true" />
+                  Send Reply
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -346,6 +482,30 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
     }
     onRefresh();
     toast.success("Message deleted");
+  }
+
+  async function handleReply(
+    message: ContactMessage,
+    replyBody: string,
+    subject: string,
+  ) {
+    setBusyId(message.id);
+    const { data, error } = await api.post<{ ok: boolean; messageId?: string }>(
+      `/api/contact/${message.id}/reply`,
+      { replyBody, subject },
+    );
+    setBusyId(null);
+    if (error || !data) {
+      toast.error("Reply failed", {
+        description:
+          error?.message ?? "Could not send the email. Please try again.",
+      });
+      return;
+    }
+    onRefresh();
+    toast.success("Reply sent", {
+      description: `Email delivered to ${message.email}.`,
+    });
   }
 
   async function handleRefresh() {
@@ -464,6 +624,7 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
                   message={m}
                   onStatusChange={handleStatusChange}
                   onDelete={handleDelete}
+                  onReply={handleReply}
                   busyId={busyId}
                 />
               ))}
