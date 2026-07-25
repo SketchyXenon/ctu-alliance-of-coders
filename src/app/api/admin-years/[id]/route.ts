@@ -8,10 +8,7 @@ import type { AdminYear } from "@/lib/types";
 
 /** PATCH /api/admin-years/[id] - admin only, update year/theme/sortOrder. */
 export const PATCH = withPrismaError(
-  async (
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-  ) => {
+  async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     let user;
     try {
       user = await requireAdmin();
@@ -23,7 +20,10 @@ export const PATCH = withPrismaError(
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many requests." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
       );
     }
 
@@ -32,7 +32,10 @@ export const PATCH = withPrismaError(
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid JSON body." },
+        { status: 400 },
+      );
     }
 
     const existing = await db.adminYear.findUnique({ where: { id } });
@@ -43,24 +46,45 @@ export const PATCH = withPrismaError(
     const data: Record<string, unknown> = {};
     const changed: string[] = [];
     if (body.year !== undefined) {
-      const c = validateText(body.year, { required: true, minLen: 4, maxLen: 30 });
-      if (!c.valid) return NextResponse.json({ error: c.error }, { status: 400 });
+      const c = validateText(body.year, {
+        required: true,
+        minLen: 4,
+        maxLen: 30,
+      });
+      if (!c.valid)
+        return NextResponse.json({ error: c.error }, { status: 400 });
       data.year = String(body.year).trim();
       changed.push("year");
     }
     if (body.theme !== undefined) {
       const c = validateText(body.theme, { required: false, maxLen: 200 });
-      if (!c.valid) return NextResponse.json({ error: c.error }, { status: 400 });
+      if (!c.valid)
+        return NextResponse.json({ error: c.error }, { status: 400 });
       data.theme = String(body.theme).trim();
       changed.push("theme");
     }
     if (body.sortOrder !== undefined) {
       const sortNum = Number(body.sortOrder);
       if (!Number.isInteger(sortNum) || sortNum < 0) {
-        return NextResponse.json({ error: "sortOrder must be a non-negative integer." }, { status: 400 });
+        return NextResponse.json(
+          { error: "sortOrder must be a non-negative integer." },
+          { status: 400 },
+        );
       }
       data.sortOrder = sortNum;
       changed.push("sortOrder");
+    }
+
+    // If no fields to update, return the existing record (no-op).
+    if (Object.keys(data).length === 0) {
+      const item: AdminYear = {
+        id: existing.id,
+        year: existing.year,
+        theme: existing.theme,
+        sortOrder: existing.sortOrder,
+        officers: [],
+      };
+      return NextResponse.json({ item });
     }
 
     const updated = await db.adminYear.update({
@@ -95,14 +119,14 @@ export const PATCH = withPrismaError(
       })),
     };
     return NextResponse.json({ item });
-  }
+  },
 );
 
 /** DELETE /api/admin-years/[id] - admin only, cascades officers. */
 export const DELETE = withPrismaError(
   async (
     _request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
   ) => {
     let user;
     try {
@@ -115,7 +139,10 @@ export const DELETE = withPrismaError(
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many requests." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
       );
     }
 
@@ -135,5 +162,5 @@ export const DELETE = withPrismaError(
     });
 
     return NextResponse.json({ ok: true });
-  }
+  },
 );

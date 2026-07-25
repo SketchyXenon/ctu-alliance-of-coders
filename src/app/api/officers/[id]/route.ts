@@ -9,10 +9,7 @@ import type { Officer } from "@/lib/types";
 
 /** PATCH /api/officers/[id] - admin only, update name/role/image. */
 export const PATCH = withPrismaError(
-  async (
-    request: Request,
-    { params }: { params: Promise<{ id: string }> }
-  ) => {
+  async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     let user;
     try {
       user = await requireAdmin();
@@ -24,7 +21,10 @@ export const PATCH = withPrismaError(
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many requests." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
       );
     }
 
@@ -33,37 +33,61 @@ export const PATCH = withPrismaError(
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid JSON body." },
+        { status: 400 },
+      );
     }
 
     const existing = await db.officer.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: "Officer not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Officer not found." },
+        { status: 404 },
+      );
     }
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) {
       const c = validateText(body.name, { required: false, maxLen: 80 });
-      if (!c.valid) return NextResponse.json({ error: c.error }, { status: 400 });
+      if (!c.valid)
+        return NextResponse.json({ error: c.error }, { status: 400 });
       data.name = String(body.name).trim() || "Vacant Slot";
     }
     if (body.role !== undefined) {
       const c = validateText(body.role, { required: false, maxLen: 80 });
-      if (!c.valid) return NextResponse.json({ error: c.error }, { status: 400 });
+      if (!c.valid)
+        return NextResponse.json({ error: c.error }, { status: 400 });
       data.role = String(body.role).trim() || "Open Position";
     }
     if (body.image !== undefined) {
       // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
       const imgCheck = validateImageUrl(body.image);
-      if (!imgCheck.valid) return NextResponse.json({ error: imgCheck.error }, { status: 400 });
+      if (!imgCheck.valid)
+        return NextResponse.json({ error: imgCheck.error }, { status: 400 });
       data.image = imgCheck.normalized;
     }
     if (body.sortOrder !== undefined) {
       const sortNum = Number(body.sortOrder);
       if (!Number.isInteger(sortNum) || sortNum < 0) {
-        return NextResponse.json({ error: "sortOrder must be a non-negative integer." }, { status: 400 });
+        return NextResponse.json(
+          { error: "sortOrder must be a non-negative integer." },
+          { status: 400 },
+        );
       }
       data.sortOrder = sortNum;
+    }
+
+    // If no fields to update, return the existing record (no-op).
+    if (Object.keys(data).length === 0) {
+      const item: Officer = {
+        id: existing.id,
+        name: existing.name,
+        role: existing.role,
+        image: existing.image,
+        sortOrder: existing.sortOrder,
+      };
+      return NextResponse.json({ item });
     }
 
     const updated = await db.officer.update({ where: { id }, data });
@@ -84,14 +108,14 @@ export const PATCH = withPrismaError(
     });
 
     return NextResponse.json({ item });
-  }
+  },
 );
 
 /** DELETE /api/officers/[id] - admin only. */
 export const DELETE = withPrismaError(
   async (
     _request: Request,
-    { params }: { params: Promise<{ id: string }> }
+    { params }: { params: Promise<{ id: string }> },
   ) => {
     let user;
     try {
@@ -104,14 +128,20 @@ export const DELETE = withPrismaError(
     if (!rl.allowed) {
       return NextResponse.json(
         { error: "Too many requests." },
-        { status: 429, headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) } }
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
       );
     }
 
     const { id } = await params;
     const existing = await db.officer.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: "Officer not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Officer not found." },
+        { status: 404 },
+      );
     }
     await db.officer.delete({ where: { id } });
 
@@ -124,5 +154,5 @@ export const DELETE = withPrismaError(
     });
 
     return NextResponse.json({ ok: true });
-  }
+  },
 );

@@ -107,6 +107,21 @@ export const PATCH = withPrismaError(
       data.links = serializeLinks(linksCheck.normalized);
     }
 
+    // If no fields to update, return the existing record (no-op).
+    if (Object.keys(data).length === 0) {
+      const item: Announcement = {
+        id: existing.id,
+        type: existing.type as AnnouncementType,
+        title: existing.title,
+        body: existing.body,
+        image: existing.image,
+        links: parseLinks(existing.links),
+        pinned: existing.pinned,
+        date: existing.date,
+      };
+      return NextResponse.json({ item });
+    }
+
     const updated = await db.announcement.update({ where: { id }, data });
     const item: Announcement = {
       id: updated.id,
