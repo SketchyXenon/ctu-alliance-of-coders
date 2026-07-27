@@ -1,15 +1,7 @@
 "use client";
 
 import * as React from "react";
-import {
-  Copy,
-  Loader2,
-  Pencil,
-  Plus,
-  RefreshCw,
-  Trash2,
-  Users,
-} from "lucide-react";
+import { Copy, Pencil, Plus, RefreshCw, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +23,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  OfficerFormDialog,
+  type OfficerFormDraft,
+} from "@/components/admin/officer-form-dialog";
 import { api } from "@/lib/api-client";
 import type { AdminYear, Officer } from "@/lib/types";
 
@@ -80,9 +77,20 @@ function InlineEditField({
       return;
     }
     setSaving(true);
-    await onSave(next);
-    setSaving(false);
-    setEditing(false);
+    try {
+      await onSave(next);
+      // Only close the editor if the save succeeded. Per 03 section 6:
+      // fail loud — if onSave throws, keep the editor open so the user
+      // sees the error and can retry or cancel with Escape.
+      setEditing(false);
+    } catch {
+      // onSave already showed a toast (via the parent's error handler).
+      // Keep the editor open + restore the original value so the user
+      // isn't left with a stale draft.
+      setDraft(value);
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (editing) {
@@ -127,78 +135,96 @@ function InlineEditField({
 }
 
 // ---- Officer row ------------------------------------------------------------
+// OfficerRow is now read-only display + an Edit button (opens the modal) + a
+// Delete button (opens a double-confirm). Editing happens in the modal so all
+// fields (name/role/image/reportsTo) can be set together.
 
 function OfficerRow({
   officer,
-  onPatch,
+  onEdit,
   onDelete,
 }: {
   officer: Officer;
-  onPatch: (
-    id: string,
-    patch: Partial<Pick<Officer, "name" | "role" | "image">>
-  ) => Promise<void>;
+  onEdit: (officer: Officer) => void;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [deleting, setDeleting] = React.useState(false);
+  // Strict double confirmation per the destructive-action policy: the admin
+  // must type the officer's name (or DELETE) to arm the confirm button.
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const confirmToken = officer.name?.trim()
+    ? officer.name.trim().slice(0, 40)
+    : "DELETE";
 
-  async function handleDelete() {
+  async function handleConfirmDelete() {
     setDeleting(true);
-    await onDelete(officer.id);
-    setDeleting(false);
+    try {
+      await onDelete(officer.id);
+    } finally {
+      setDeleting(false);
+    }
+    // On success the dialog closes itself; on error ConfirmDialog surfaces it
+    // inline and stays open so the admin can retry.
   }
 
   return (
     <div className="grid grid-cols-1 gap-2 rounded-md border border-border/60 bg-card/40 p-3 transition-colors hover:bg-card/80 hover:border-gold-300/60 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-center">
-      {/* Avatar / image upload */}
       <div className="flex items-center justify-center">
-        <OfficerImageBadge
-          officer={officer}
-          onImageChange={(image) => onPatch(officer.id, { image })}
-        />
+        <OfficerImageBadge officer={officer} />
       </div>
-      <InlineEditField
-        value={officer.name}
-        placeholder="Vacant Slot"
-        maxLength={80}
-        ariaLabel="officer name"
-        onSave={async (name) => onPatch(officer.id, { name })}
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-foreground">
+          {officer.name || "Vacant Slot"}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm text-muted-foreground">
+          {officer.role || "Open Position"}
+        </p>
+      </div>
+      <div className="flex items-center justify-end gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 text-muted-foreground hover:bg-accent hover:text-foreground"
+          onClick={() => onEdit(officer)}
+          aria-label={`Edit ${officer.name || "officer"}`}
+        >
+          <Pencil className="size-4" aria-hidden="true" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          onClick={() => setConfirmOpen(true)}
+          disabled={deleting}
+          aria-label={`Remove ${officer.name || "officer"}`}
+        >
+          <Trash2 className="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        mode="destructive"
+        title={`Remove ${officer.name || "this officer"}?`}
+        description={`This permanently removes ${officer.name || "this vacant slot"}${officer.role ? ` (${officer.role})` : ""} from the roster. This action cannot be undone.`}
+        confirmLabel={deleting ? "Removing..." : "Remove officer"}
+        confirmToken={confirmToken}
+        confirmTokenHint="the officer's name"
+        onConfirm={handleConfirmDelete}
       />
-      <InlineEditField
-        value={officer.role}
-        placeholder="Open Position"
-        maxLength={80}
-        ariaLabel="officer role"
-        className="text-muted-foreground"
-        onSave={async (role) => onPatch(officer.id, { role })}
-      />
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-        onClick={handleDelete}
-        disabled={deleting}
-        aria-label={`Remove ${officer.name || "officer"}`}
-      >
-        <Trash2 className="size-4" aria-hidden="true" />
-      </Button>
     </div>
   );
 }
 
 /**
- * OfficerImageBadge - small circular avatar with upload-on-click.
- * Shows the officer photo or initials fallback; clicking opens file picker.
+ * OfficerImageBadge - small circular avatar (display only).
+ * Photo editing moved to the OfficerFormDialog (modal) so all fields are
+ * edited together. The badge just shows the photo or initials fallback.
  */
-function OfficerImageBadge({
-  officer,
-  onImageChange,
-}: {
-  officer: Officer;
-  onImageChange: (image: string) => void;
-}) {
-  const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = React.useState(false);
+function OfficerImageBadge({ officer }: { officer: Officer }) {
   const initials = (officer.name || "?")
     .split(/\s+/)
     .filter(Boolean)
@@ -207,40 +233,15 @@ function OfficerImageBadge({
     .join("")
     .toUpperCase();
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploading(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("bucket", "officer");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      const data = await res.json();
-      if (res.ok && data.url) {
-        onImageChange(data.url);
-      }
-    } catch {
-      // Network error - silently fail, user can retry.
-    } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
-    }
-  }
-
   return (
-    <button
-      type="button"
-      onClick={() => inputRef.current?.click()}
-      disabled={uploading}
-      className="relative flex size-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy-700 to-navy-900 ring-1 ring-gold-400/30 transition hover:ring-gold-400/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
-      aria-label={`Upload photo for ${officer.name || "officer"}`}
-      title="Upload photo"
+    <span
+      className="relative flex size-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-navy-700 to-navy-900 ring-1 ring-gold-400/30"
+      aria-hidden="true"
     >
       {officer.image ? (
         <img
           src={officer.image}
-          alt={officer.name || "Officer"}
+          alt=""
           className="h-full w-full object-cover"
         />
       ) : (
@@ -248,19 +249,7 @@ function OfficerImageBadge({
           {initials || "?"}
         </span>
       )}
-      {uploading && (
-        <span className="absolute inset-0 flex items-center justify-center bg-navy-900/70">
-          <Loader2 className="size-3.5 animate-spin text-white" />
-        </span>
-      )}
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        className="hidden"
-        onChange={handleFile}
-      />
-    </button>
+    </span>
   );
 }
 
@@ -269,8 +258,7 @@ function OfficerImageBadge({
 function YearCard({
   year,
   onPatchYear,
-  onAddOfficer,
-  onPatchOfficer,
+  onSubmitOfficer,
   onDeleteOfficer,
   onDuplicateYear,
   onDeleteYear,
@@ -278,21 +266,33 @@ function YearCard({
   year: AdminYear;
   onPatchYear: (
     id: string,
-    patch: Partial<Pick<AdminYear, "year" | "theme">>
+    patch: Partial<Pick<AdminYear, "year" | "theme">>,
   ) => Promise<void>;
-  onAddOfficer: (yearId: string) => Promise<void>;
-  onPatchOfficer: (
-    id: string,
-    patch: Partial<Pick<Officer, "name" | "role" | "image">>
+  /** Single handler for add (officer=null) and edit (officer set). The modal
+   *  collects name/role/image/reportsTo and submits them together. */
+  onSubmitOfficer: (
+    yearId: string,
+    officer: Officer | null,
+    draft: OfficerFormDraft,
   ) => Promise<void>;
   onDeleteOfficer: (id: string) => Promise<void>;
   onDuplicateYear: (year: AdminYear) => Promise<void>;
   onDeleteYear: (id: string) => Promise<void>;
 }) {
-  const [adding, _setAdding] = React.useState(false);
+  // OfficerFormDialog state: null = closed; { officer: Officer | null } = open
+  // in add (null) or edit (Officer) mode.
+  const [formState, setFormState] = React.useState<{
+    officer: Officer | null;
+  } | null>(null);
   const [duplicating, setDuplicating] = React.useState(false);
-  const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [deletingYear, setDeletingYear] = React.useState(false);
+  const [confirmYearDelete, setConfirmYearDelete] = React.useState(false);
+
+  const dialogOpen = formState !== null;
+
+  async function handleSubmitOfficer(draft: OfficerFormDraft) {
+    await onSubmitOfficer(year.id, formState?.officer ?? null, draft);
+  }
 
   return (
     <Card className="border-2 border-border/60 shadow-sm transition-shadow hover:shadow-md">
@@ -326,8 +326,7 @@ function YearCard({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onAddOfficer(year.id)}
-              disabled={adding}
+              onClick={() => setFormState({ officer: null })}
             >
               <Plus className="size-3.5" aria-hidden="true" />
               Add Officer
@@ -350,7 +349,7 @@ function YearCard({
               size="sm"
               variant="ghost"
               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => setConfirmYearDelete(true)}
               aria-label={`Delete ${year.year}`}
             >
               <Trash2 className="size-3.5" aria-hidden="true" />
@@ -370,7 +369,8 @@ function YearCard({
                 No officers in this year yet
               </p>
               <p className="max-w-xs text-xs text-muted-foreground">
-                Click "Add Officer" above to create the first slot for this roster.
+                Click &ldquo;Add Officer&rdquo; above to create the first slot
+                for this roster.
               </p>
             </div>
           </div>
@@ -380,7 +380,7 @@ function YearCard({
               <OfficerRow
                 key={o.id}
                 officer={o}
-                onPatch={onPatchOfficer}
+                onEdit={(officer) => setFormState({ officer })}
                 onDelete={onDeleteOfficer}
               />
             ))}
@@ -388,40 +388,36 @@ function YearCard({
         )}
       </CardContent>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete year {year.year}?</DialogTitle>
-            <DialogDescription>
-              This will permanently remove the year and all{" "}
-              {year.officers.length} officer
-              {year.officers.length === 1 ? "" : "s"} listed under it. This
-              action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setConfirmDelete(false)}
-              disabled={deletingYear}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={deletingYear}
-              onClick={async () => {
-                setDeletingYear(true);
-                await onDeleteYear(year.id);
-                setDeletingYear(false);
-                setConfirmDelete(false);
-              }}
-            >
-              {deletingYear ? "Deleting..." : "Delete year"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <OfficerFormDialog
+        open={dialogOpen}
+        onOpenChange={(o) => !o && setFormState(null)}
+        officer={formState?.officer ?? null}
+        yearLabel={year.year}
+        peers={year.officers}
+        onSubmit={handleSubmitOfficer}
+      />
+
+      {/* Year delete: strict double-confirm (type the year label). Deleting a
+          year cascades to all its officers, so this is the most destructive
+          action in the admin panel. */}
+      <ConfirmDialog
+        open={confirmYearDelete}
+        onOpenChange={setConfirmYearDelete}
+        mode="destructive"
+        title={`Delete year ${year.year}?`}
+        description={`This will permanently remove the year and all ${year.officers.length} officer${year.officers.length === 1 ? "" : "s"} listed under it. This action cannot be undone.`}
+        confirmLabel={deletingYear ? "Deleting..." : "Delete year"}
+        confirmToken={year.year}
+        confirmTokenHint="the year label"
+        onConfirm={async () => {
+          setDeletingYear(true);
+          try {
+            await onDeleteYear(year.id);
+          } finally {
+            setDeletingYear(false);
+          }
+        }}
+      />
     </Card>
   );
 }
@@ -529,7 +525,7 @@ export function OfficersManager({
     setCreating(true);
     const { data, error } = await api.post<{ item: AdminYear }>(
       "/api/admin-years",
-      { year, theme }
+      { year, theme },
     );
     setCreating(false);
     if (error || !data) {
@@ -546,48 +542,64 @@ export function OfficersManager({
 
   async function handlePatchYear(
     id: string,
-    patch: Partial<Pick<AdminYear, "year" | "theme">>
+    patch: Partial<Pick<AdminYear, "year" | "theme">>,
   ) {
     const { data, error } = await api.patch<{ item: AdminYear }>(
       `/api/admin-years/${id}`,
-      patch
+      patch,
     );
     if (error || !data) {
       toast.error("Update failed", { description: error?.message });
-      return;
+      // Throw so InlineEditField keeps the editor open (FIX-3).
+      throw new Error(error?.message ?? "Update failed");
     }
     onRefresh();
   }
 
-  async function handleAddOfficer(yearId: string) {
-    const { data, error } = await api.post<{ item: Officer }>(
-      "/api/officers",
-      { yearId }
-    );
-    if (error || !data) {
-      toast.error("Could not add officer", { description: error?.message });
-      return;
-    }
-    onRefresh();
-    toast.success("Officer slot added", {
-      description: "Click the name and role fields to fill in details.",
-    });
-  }
-
-  async function handlePatchOfficer(
-    id: string,
-    patch: Partial<Pick<Officer, "name" | "role" | "image">>
+  async function handleSubmitOfficer(
+    yearId: string,
+    officer: Officer | null,
+    draft: OfficerFormDraft,
   ) {
-    const { data, error } = await api.patch<{ item: Officer }>(
-      `/api/officers/${id}`,
-      patch
-    );
-    if (error || !data) {
-      toast.error("Could not save changes", { description: error?.message });
+    if (officer) {
+      // Edit: PATCH the existing officer with all fields at once.
+      const { data, error } = await api.patch<{ item: Officer }>(
+        `/api/officers/${officer.id}`,
+        {
+          name: draft.name,
+          role: draft.role,
+          image: draft.image,
+          reportsToId: draft.reportsToId,
+        },
+      );
+      if (error || !data) {
+        throw new Error(error?.message ?? "Could not save changes.");
+      }
       onRefresh();
-      return;
+      toast.success("Officer updated", {
+        description: `${data.item.name || "Vacant slot"} (${data.item.role || "open position"}) saved.`,
+      });
+    } else {
+      // Add: POST a new officer with all fields at once (no more inline-edit
+      // second step — the modal collects everything up front).
+      const { data, error } = await api.post<{ item: Officer }>(
+        "/api/officers",
+        {
+          yearId,
+          name: draft.name,
+          role: draft.role,
+          image: draft.image,
+          reportsToId: draft.reportsToId,
+        },
+      );
+      if (error || !data) {
+        throw new Error(error?.message ?? "Could not add officer.");
+      }
+      onRefresh();
+      toast.success("Officer added", {
+        description: `${data.item.name || "Vacant slot"} (${data.item.role || "open position"}) added to the roster.`,
+      });
     }
-    onRefresh();
   }
 
   async function handleDeleteOfficer(id: string) {
@@ -606,29 +618,45 @@ export function OfficersManager({
       {
         year: `${year.year} (copy)`,
         theme: year.theme,
-      }
+      },
     );
     if (error || !data) {
       toast.error("Could not duplicate year", { description: error?.message });
       return;
     }
-    // Duplicate officers into the new year.
+    // Duplicate officers into the new year. Track failures so we can report
+    // partial success (per 03 section 6: never swallow failures silently).
+    let successCount = 0;
+    let failCount = 0;
     if (year.officers.length > 0) {
-      await Promise.all(
+      const results = await Promise.allSettled(
         year.officers.map((o) =>
           api.post("/api/officers", {
             yearId: data.item.id,
             name: o.name,
             role: o.role,
             image: o.image,
-          })
-        )
+          }),
+        ),
       );
+      for (const r of results) {
+        if (r.status === "fulfilled" && !r.value.error) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
     }
     onRefresh();
-    toast.success("Year duplicated", {
-      description: `Created ${data.item.year} with ${year.officers.length} officer${year.officers.length === 1 ? "" : "s"}.`,
-    });
+    if (failCount === 0) {
+      toast.success("Year duplicated", {
+        description: `Created ${data.item.year} with ${successCount} officer${successCount === 1 ? "" : "s"}.`,
+      });
+    } else {
+      toast.warning("Year duplicated (partial)", {
+        description: `Created ${data.item.year}. ${successCount} officer${successCount === 1 ? "" : "s"} copied, ${failCount} failed. Please check the new year and add missing officers manually.`,
+      });
+    }
   }
 
   async function handleDeleteYear(id: string) {
@@ -657,7 +685,8 @@ export function OfficersManager({
             </p>
             <p className="text-sm text-muted-foreground">
               {adminYears.length} year{adminYears.length === 1 ? "" : "s"} on
-              record. Click any field to edit it inline.
+              record. Click &ldquo;Add Officer&rdquo; to create a slot, or the
+              pencil to edit one.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -709,8 +738,7 @@ export function OfficersManager({
               key={y.id}
               year={y}
               onPatchYear={handlePatchYear}
-              onAddOfficer={handleAddOfficer}
-              onPatchOfficer={handlePatchOfficer}
+              onSubmitOfficer={handleSubmitOfficer}
               onDeleteOfficer={handleDeleteOfficer}
               onDuplicateYear={handleDuplicateYear}
               onDeleteYear={handleDeleteYear}

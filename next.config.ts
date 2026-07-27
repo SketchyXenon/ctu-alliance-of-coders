@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
+  allowedDevOrigins: ["*.space-z.ai", "*.z.ai"],
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
@@ -25,7 +26,7 @@ const nextConfig: NextConfig = {
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://*.supabase.co",
+      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in",
       "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",

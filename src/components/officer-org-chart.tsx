@@ -6,6 +6,7 @@ import { Tree, TreeNode } from "react-organizational-chart";
 import { User } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { buildOrgTree, sortOfficersByRolePriority } from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
 
 interface OfficerOrgChartProps {
@@ -19,34 +20,6 @@ interface OfficerOrgChartProps {
   showVacant?: boolean;
 }
 
-/**
- * Role priority for the org-chart tree. Lower number = higher in the tree.
- * Sort is (priority asc, sortOrder asc, name asc). The Officer type has no
- * reportsTo field, so the hierarchy is two-level: root = top-priority officer
- * (usually President), children = everyone else ordered by this map.
- */
-const ROLE_PRIORITY: Array<{ match: RegExp; priority: number }> = [
-  { match: /^president$/i, priority: 0 },
-  { match: /vice[\s-]*president/i, priority: 10 },
-  { match: /^secretary$/i, priority: 20 },
-  { match: /^treasurer$/i, priority: 30 },
-  { match: /^auditor$/i, priority: 40 },
-  { match: /public\s*information/i, priority: 50 },
-  { match: /representative|^rep\.?$/i, priority: 80 },
-  { match: /member/i, priority: 90 },
-];
-
-const DEFAULT_PRIORITY = 60;
-
-function getRolePriority(role: string): number {
-  const r = (role ?? "").trim();
-  if (!r) return DEFAULT_PRIORITY;
-  for (const entry of ROLE_PRIORITY) {
-    if (entry.match.test(r)) return entry.priority;
-  }
-  return DEFAULT_PRIORITY;
-}
-
 function getInitials(name: string): string {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return "?";
@@ -55,18 +28,6 @@ function getInitials(name: string): string {
   const first = parts[0]?.[0] ?? "";
   const second = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
   return (first + second).toUpperCase().slice(0, 2);
-}
-
-function sortOfficers(list: Officer[]): Officer[] {
-  return list.slice().sort((a, b) => {
-    const pa = getRolePriority(a.role);
-    const pb = getRolePriority(b.role);
-    if (pa !== pb) return pa - pb;
-    const sa = a.sortOrder ?? 0;
-    const sb = b.sortOrder ?? 0;
-    if (sa !== sb) return sa - sb;
-    return (a.name ?? "").localeCompare(b.name ?? "");
-  });
 }
 
 interface OrgNodeProps {
@@ -176,8 +137,14 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
 
 /**
  * OfficerOrgChart - hierarchical tree view of officers for a single year.
- * Builds a two-level tree (root + children) from the officer role + sortOrder
- * fields. No schema changes required; admin CRUD auto-reflects here.
+ *
+ * Two modes (auto-selected):
+ *   - If any officer has reportsToId set, the chart is built from the
+ *     admin-defined hierarchy (buildOrgTree). This is the "customizable"
+ *     org chart: admins set who reports to whom via the officer modal.
+ *   - Otherwise, falls back to a two-level tree (root = top-priority officer,
+ *     usually President; children = everyone else by role priority + sortOrder).
+ *     Backward compat for years created before reportsTo existed.
  */
 export function OfficerOrgChart({
   officers,
@@ -194,12 +161,45 @@ export function OfficerOrgChart({
 
   if (filteredOfficers.length === 0) return null;
 
-  const sorted = sortOfficers(filteredOfficers);
+  const lineColor = "var(--color-border-mid, var(--border))";
+
+  // Try the customizable hierarchy first.
+  const customTree = buildOrgTree(filteredOfficers);
+  if (customTree) {
+    return (
+      <div
+        className={cn(
+          "officer-org-chart overflow-x-auto scrollbar-thin",
+          className,
+        )}
+        role="tree"
+        aria-label="Officers organizational chart"
+      >
+        <div className="min-w-max px-2 py-4">
+          {customTree.map((root) => (
+            <Tree
+              key={root.officer.id}
+              label={
+                <OrgNode officer={root.officer} onNodeClick={onNodeClick} />
+              }
+              lineColor={lineColor}
+              lineWidth="1.5px"
+              lineHeight="24px"
+              lineBorderRadius="6px"
+              nodePadding="12px"
+            >
+              {root.children.map((child) => renderSubtree(child, onNodeClick))}
+            </Tree>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Legacy two-level fallback (no reportsTo set on any officer).
+  const sorted = sortOfficersByRolePriority(filteredOfficers);
   const root = sorted[0];
   const children = sorted.slice(1);
-
-  // Muted connector color that adapts to light/dark via existing tokens.
-  const lineColor = "var(--color-border-mid, var(--border))";
 
   return (
     <div
@@ -228,6 +228,26 @@ export function OfficerOrgChart({
         </Tree>
       </div>
     </div>
+  );
+}
+
+/** Render a non-root subtree (recursive). Extracted so the main component
+ *  stays readable; the root uses <Tree>, children use <TreeNode>. */
+function renderSubtree(
+  node: {
+    officer: Officer;
+    children: { officer: Officer; children: unknown[] }[];
+  },
+  onNodeClick?: (o: Officer) => void,
+): React.ReactNode {
+  const label = <OrgNode officer={node.officer} onNodeClick={onNodeClick} />;
+  if (node.children.length === 0) {
+    return <TreeNode key={node.officer.id} label={label} />;
+  }
+  return (
+    <TreeNode key={node.officer.id} label={label}>
+      {node.children.map((c) => renderSubtree(c as typeof node, onNodeClick))}
+    </TreeNode>
   );
 }
 

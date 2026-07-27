@@ -5,9 +5,10 @@ import { validateText, rateLimit } from "@/lib/security";
 import { validateImageUrl } from "@/lib/validation";
 import { withPrismaError } from "@/lib/route-helpers";
 import { logActivity } from "@/lib/activity";
+import { wouldCreateCycle } from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
 
-/** PATCH /api/officers/[id] - admin only, update name/role/image. */
+/** PATCH /api/officers/[id] - admin only, update name/role/image/reportsToId. */
 export const PATCH = withPrismaError(
   async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     let user;
@@ -77,6 +78,38 @@ export const PATCH = withPrismaError(
       }
       data.sortOrder = sortNum;
     }
+    if (body.reportsToId !== undefined) {
+      const raw =
+        body.reportsToId === null || body.reportsToId === ""
+          ? null
+          : String(body.reportsToId);
+      if (raw !== null) {
+        // Same-year + cycle checks. Per 06 section 3 (IDOR): the parent must
+        // belong to the same year; a cross-year parent id is rejected. Per 02
+        // section 6: cycle check before the write.
+        const parent = await db.officer.findUnique({ where: { id: raw } });
+        if (!parent || parent.yearId !== existing.yearId) {
+          return NextResponse.json(
+            { error: "Parent officer must belong to the same year." },
+            { status: 400 },
+          );
+        }
+        const siblings = await db.officer.findMany({
+          where: { yearId: existing.yearId },
+          select: { id: true, reportsToId: true },
+        });
+        if (wouldCreateCycle(id, raw, siblings)) {
+          return NextResponse.json(
+            {
+              error:
+                "That parent would create a reporting cycle. Choose a different parent.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+      data.reportsToId = raw;
+    }
 
     // If no fields to update, return the existing record (no-op).
     if (Object.keys(data).length === 0) {
@@ -86,6 +119,7 @@ export const PATCH = withPrismaError(
         role: existing.role,
         image: existing.image,
         sortOrder: existing.sortOrder,
+        reportsToId: existing.reportsToId ?? null,
       };
       return NextResponse.json({ item });
     }
@@ -97,6 +131,7 @@ export const PATCH = withPrismaError(
       role: updated.role,
       image: updated.image,
       sortOrder: updated.sortOrder,
+      reportsToId: updated.reportsToId ?? null,
     };
 
     await logActivity({

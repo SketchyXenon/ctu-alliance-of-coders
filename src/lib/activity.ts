@@ -8,7 +8,13 @@ import { logger } from "./logger";
 export async function logActivity(params: {
   userId: string;
   action: "create" | "update" | "delete" | "login" | "logout";
-  entity: "announcement" | "officer" | "year" | "message" | "session";
+  entity:
+    | "announcement"
+    | "officer"
+    | "year"
+    | "message"
+    | "session"
+    | "upload";
   entityId?: string;
   summary: string;
 }): Promise<void> {

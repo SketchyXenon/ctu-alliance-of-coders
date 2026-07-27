@@ -59,12 +59,19 @@ model Officer {
   role      String    @default("Open Position")
   image     String?   @map("image_url")
   sortOrder Int       @default(0) @map("sort_order")
+  // Self-relation: who this officer reports to (org-chart hierarchy).
+  // Nullable so legacy rows + vacant slots work without a parent. The API
+  // validates the parent exists in the same year and rejects cycles.
+  reportsToId String? @map("reports_to_id") @db.Uuid
+  reportsTo   Officer?  @relation("OfficerHierarchy", fields: [reportsToId], references: [id], onDelete: SetNull)
+  directReports Officer[] @relation("OfficerHierarchy")
   createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at")
   year      AdminYear @relation(fields: [yearId], references: [id], onDelete: Cascade)
 
   @@index([yearId])
   @@index([sortOrder])
+  @@index([reportsToId])
   @@map("officers")
 }
 

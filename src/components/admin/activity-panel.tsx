@@ -61,13 +61,14 @@ const ENTITY_LABELS: Record<string, string> = {
   session: "Sessions",
 };
 
-type FilterValue = "all" | "create" | "update" | "delete" | "login";
+type FilterValue = "all" | "create" | "update" | "delete" | "login" | "logout";
 
 /**
  * ActivityPanel - shows recent admin actions with search + filter.
  */
 export function ActivityPanel() {
   const [entries, setEntries] = React.useState<ActivityEntry[]>([]);
+  const [total, setTotal] = React.useState<number | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [nextCursor, setNextCursor] = React.useState<string | null>(null);
@@ -76,9 +77,14 @@ export function ActivityPanel() {
 
   const load = React.useCallback(async () => {
     setLoading(true);
-    const { data } = await api.get<{ items: ActivityEntry[]; nextCursor: string | null }>("/api/activity");
+    const { data } = await api.get<{
+      items: ActivityEntry[];
+      total?: number;
+      nextCursor: string | null;
+    }>("/api/activity");
     if (data) {
       setEntries(data.items);
+      setTotal(data.total ?? null);
       setNextCursor(data.nextCursor);
     }
     setLoading(false);
@@ -87,9 +93,10 @@ export function ActivityPanel() {
   const loadMore = React.useCallback(async () => {
     if (!nextCursor || loadingMore) return;
     setLoadingMore(true);
-    const { data } = await api.get<{ items: ActivityEntry[]; nextCursor: string | null }>(
-      `/api/activity?cursor=${encodeURIComponent(nextCursor)}`
-    );
+    const { data } = await api.get<{
+      items: ActivityEntry[];
+      nextCursor: string | null;
+    }>(`/api/activity?cursor=${encodeURIComponent(nextCursor)}`);
     if (data) {
       setEntries((prev) => [...prev, ...data.items]);
       setNextCursor(data.nextCursor);
@@ -112,7 +119,7 @@ export function ActivityPanel() {
         (e) =>
           e.summary.toLowerCase().includes(q) ||
           e.entity.toLowerCase().includes(q) ||
-          e.action.toLowerCase().includes(q)
+          e.action.toLowerCase().includes(q),
       );
     }
     return result;
@@ -164,7 +171,10 @@ export function ActivityPanel() {
           value={actionFilter}
           onValueChange={(v) => setActionFilter(v as FilterValue)}
         >
-          <SelectTrigger className="w-full sm:w-[160px]" aria-label="Filter by action">
+          <SelectTrigger
+            className="w-full sm:w-[160px]"
+            aria-label="Filter by action"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -173,6 +183,7 @@ export function ActivityPanel() {
             <SelectItem value="update">Updates</SelectItem>
             <SelectItem value="delete">Deletes</SelectItem>
             <SelectItem value="login">Logins</SelectItem>
+            <SelectItem value="logout">Logouts</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
@@ -189,9 +200,12 @@ export function ActivityPanel() {
         </Button>
       </div>
 
-      {/* Count */}
+      {/* Count: shows loaded vs total so the admin knows how many more are
+          available via "Load more". Per 05 section 6: state what's there. */}
       <p className="text-sm text-muted-foreground" aria-live="polite">
-        {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
+        {filtered.length === entries.length
+          ? `Showing ${filtered.length} of ${total ?? filtered.length} ${filtered.length === 1 ? "entry" : "entries"}`
+          : `${filtered.length} of ${total ?? "—"} ${total === 1 ? "entry" : "entries"} match the current filter`}
       </p>
 
       {/* List */}
@@ -201,7 +215,10 @@ export function ActivityPanel() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-          <Activity className="size-8 text-muted-foreground" aria-hidden="true" />
+          <Activity
+            className="size-8 text-muted-foreground"
+            aria-hidden="true"
+          />
           <p className="text-sm font-medium text-foreground">
             {entries.length === 0 ? "No activity yet" : "No matching entries"}
           </p>
@@ -221,13 +238,13 @@ export function ActivityPanel() {
                 key={entry.id}
                 className={cn(
                   "flex items-start gap-3 rounded-md border border-border/60 bg-card/40 p-3 transition",
-                  "hover:border-border hover:bg-card/80 hover:shadow-sm"
+                  "hover:border-border hover:bg-card/80 hover:shadow-sm",
                 )}
               >
                 <span
                   className={cn(
                     "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted",
-                    color
+                    color,
                   )}
                 >
                   <Icon className="size-4" aria-hidden="true" />

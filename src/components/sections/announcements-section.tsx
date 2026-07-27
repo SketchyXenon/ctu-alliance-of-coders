@@ -98,14 +98,20 @@ export interface AnnouncementsSectionProps {
   onUpdate: (ann: Announcement) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<boolean>;
   syncStatus: SyncStatus;
+  /** Called when a card is clicked. If provided, opens the dedicated
+   *  announcement page view (blog-post feel) instead of the modal. */
+  onOpen?: (ann: Announcement) => void;
+  /** Optional ref the parent can use to trigger edit from the dedicated view. */
+  editRequestRef?: React.MutableRefObject<((ann: Announcement) => void) | null>;
 }
 
 /**
  * AnnouncementsSection - the full news feed section.
  *
  * Composes the toolbar (filter + post button), the collapsible admin
- * post/edit form, a featured lead story, the responsive grid, pagination,
- * and the detail modal. Modal open state is owned locally.
+ * post/edit form, a featured lead story, the responsive grid, and pagination.
+ * Card click opens the dedicated AnnouncementPost view (via onOpen) instead
+ * of a modal, giving a blog-post reading experience.
  */
 export function AnnouncementsSection({
   announcements,
@@ -114,6 +120,8 @@ export function AnnouncementsSection({
   onUpdate,
   onDelete,
   syncStatus,
+  onOpen,
+  editRequestRef,
 }: AnnouncementsSectionProps) {
   const [filter, setFilter] = React.useState<FilterValue>("all");
   const [search, setSearch] = React.useState("");
@@ -191,10 +199,20 @@ export function AnnouncementsSection({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const openModal = React.useCallback((ann: Announcement) => {
-    setModalAnn(ann);
-    setModalOpen(true);
-  }, []);
+  // When onOpen is provided, card clicks open the dedicated page view (blog
+  // post). Otherwise fall back to the in-section modal. Per the feature
+  // request: "instead of using modals" for reading full announcements.
+  const openModal = React.useCallback(
+    (ann: Announcement) => {
+      if (onOpen) {
+        onOpen(ann);
+        return;
+      }
+      setModalAnn(ann);
+      setModalOpen(true);
+    },
+    [onOpen],
+  );
 
   // Navigate to a different announcement within the modal (prev/next).
   const handleModalNavigate = React.useCallback((ann: Announcement) => {
@@ -231,6 +249,18 @@ export function AnnouncementsSection({
     setFormSuccess(null);
     setShowForm(true);
   }, []);
+
+  // Expose the edit handler via the parent-provided ref so the dedicated
+  // AnnouncementPost's Edit button can trigger this section's editor.
+  React.useEffect(() => {
+    if (!editRequestRef) return;
+    editRequestRef.current = (ann: Announcement) => {
+      startEdit(ann);
+    };
+    return () => {
+      if (editRequestRef) editRequestRef.current = null;
+    };
+  }, [editRequestRef, startEdit]);
 
   const cancelForm = () => {
     setShowForm(false);

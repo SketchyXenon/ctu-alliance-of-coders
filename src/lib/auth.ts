@@ -7,7 +7,7 @@ import { logger } from "./logger";
 const scrypt = promisify(scryptCallback) as (
   password: string,
   salt: string,
-  keylen: number
+  keylen: number,
 ) => Promise<Buffer>;
 
 export const SESSION_COOKIE = "aoc_admin_session";
@@ -22,7 +22,10 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 /** Verify a password against a stored salt:hash string. Constant-time. */
-export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+export async function verifyPassword(
+  password: string,
+  stored: string,
+): Promise<boolean> {
   const [salt, hash] = stored.split(":");
   if (!salt || !hash) return false;
   try {
@@ -52,7 +55,10 @@ export async function createSession(userId: string): Promise<string> {
     });
 
     if (existing.length >= MAX_SESSIONS_PER_USER) {
-      const toDelete = existing.slice(0, existing.length - MAX_SESSIONS_PER_USER + 1);
+      const toDelete = existing.slice(
+        0,
+        existing.length - MAX_SESSIONS_PER_USER + 1,
+      );
       await tx.adminSession.deleteMany({
         where: { id: { in: toDelete.map((s) => s.id) } },
       });
@@ -88,14 +94,15 @@ export async function destroySession(): Promise<void> {
   }
 }
 
-/** Destroy all sessions for a user except the current one. */
-export async function destroyOtherSessions(userId: string, currentSessionId: string): Promise<void> {
-  try {
-    await db.adminSession.deleteMany({
-      where: { userId, NOT: { id: currentSessionId } },
-    });
-  } catch (e) {
-    logger.error("Failed to revoke other sessions", { error: String(e), userId });
+/** Thrown by rotateSession when the current session no longer exists (e.g. it
+ *  was concurrently revoked between the auth check and the rotation). Per
+ *  06-security-architecture.md section 2: rotate on privilege change. Per
+ *  03 section 6: fail fast and loud — the caller MUST NOT return success with
+ *  a stale cookie (the A2 silent-fail bug). */
+export class SessionNotFoundError extends Error {
+  constructor(message = "Session not found during rotation.") {
+    super(message);
+    this.name = "SessionNotFoundError";
   }
 }
 
@@ -103,47 +110,46 @@ export async function destroyOtherSessions(userId: string, currentSessionId: str
  *  Uses crypto.randomUUID() for the new id (UUID type in prod).
  *  Wrapped in a transaction to close the TOCTOU race between findUnique and
  *  update (A07-1 fix). Per 06 section 2: rotate on privilege change.
- *  Per 06 section 11: never log the raw session token (A04-2/A09-2 fix). */
+ *  Per 06 section 11: never log the raw session token (A04-2/A09-2 fix).
+ *  Per A2 fix: throws SessionNotFoundError when the session was concurrently
+ *  revoked, so the caller fails closed instead of returning 200 with a stale
+ *  cookie. */
 export async function rotateSession(currentSessionId: string): Promise<void> {
   const newId = crypto.randomUUID();
-  try {
-    // Transaction: close the TOCTOU window where a concurrent session revoke
-    // could delete the session between our findUnique and our update.
-    // Per 02 section 6: "Atomic operations, database-level constraints/locks."
-    const result = await db.$transaction(async (tx) => {
-      const existing = await tx.adminSession.findUnique({
-        where: { id: currentSessionId },
-        select: { expiresAt: true },
-      });
-      if (!existing) {
-        // Per A04-2/A09-2: do NOT log the raw session token. Log a masked
-        // prefix only — enough for correlation, not enough to replay.
-        logger.warn("Session not found during rotation", {
-          sessionIdPrefix: currentSessionId.slice(0, 8) + "...",
-        });
-        return null;
-      }
-      await tx.adminSession.update({
-        where: { id: currentSessionId },
-        data: { id: newId },
-      });
-      return existing;
+  // Transaction: close the TOCTOU window where a concurrent session revoke
+  // could delete the session between our findUnique and our update.
+  // Per 02 section 6: "Atomic operations, database-level constraints/locks."
+  // Throws SessionNotFoundError (rolling back the no-op transaction) if the
+  // session is gone — the cookie is NOT updated, so the caller must surface
+  // the failure rather than report success.
+  const result = await db.$transaction(async (tx) => {
+    const existing = await tx.adminSession.findUnique({
+      where: { id: currentSessionId },
+      select: { expiresAt: true },
     });
-
-    if (!result) return;
-
-    const store = await cookies();
-    store.set(SESSION_COOKIE, newId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      expires: result.expiresAt,
+    if (!existing) {
+      // Per A04-2/A09-2: do NOT log the raw session token. Log a masked
+      // prefix only — enough for correlation, not enough to replay.
+      logger.warn("Session not found during rotation", {
+        sessionIdPrefix: currentSessionId.slice(0, 8) + "...",
+      });
+      throw new SessionNotFoundError();
+    }
+    await tx.adminSession.update({
+      where: { id: currentSessionId },
+      data: { id: newId },
     });
-  } catch (e) {
-    logger.error("Failed to rotate session", { error: String(e) });
-    throw e;
-  }
+    return existing;
+  });
+
+  const store = await cookies();
+  store.set(SESSION_COOKIE, newId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    expires: result.expiresAt,
+  });
 }
 
 /** Get the currently authenticated admin user, or null.
@@ -162,7 +168,9 @@ export async function getCurrentUser() {
     });
   } catch (e) {
     // DB unreachable: fail closed (treat as logged out) rather than 500.
-    logger.warn("Session check failed, treating as logged out", { error: String(e) });
+    logger.warn("Session check failed, treating as logged out", {
+      error: String(e),
+    });
     return null;
   }
   if (!session) return null;

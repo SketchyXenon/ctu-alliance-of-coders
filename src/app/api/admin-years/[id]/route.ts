@@ -116,6 +116,7 @@ export const PATCH = withPrismaError(
         role: o.role,
         image: o.image,
         sortOrder: o.sortOrder,
+        reportsToId: o.reportsToId ?? null,
       })),
     };
     return NextResponse.json({ item });

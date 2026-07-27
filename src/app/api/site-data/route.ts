@@ -61,6 +61,7 @@ export async function GET() {
         role: o.role,
         image: o.image,
         sortOrder: o.sortOrder,
+        reportsToId: o.reportsToId ?? null,
       })),
     }));
 

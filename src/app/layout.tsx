@@ -114,8 +114,9 @@ export default function RootLayout({
           }}
         />
         <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }}
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(orgJsonLd).replace(/</g, "\\u003c"),
+          }}
         />
         {/* LLM crawler guide (llms.txt standard). Per 05-ui-ux-design.md section 8. */}
         <link rel="llms.txt" href="/llms.txt" />

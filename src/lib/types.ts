@@ -28,6 +28,9 @@ export interface Officer {
   role: string;
   image: string | null;
   sortOrder: number;
+  /** Optional parent officer id for the org-chart hierarchy. Null = root.
+   *  Validated server-side (same year, no cycle) per 06 section 3. */
+  reportsToId?: string | null;
 }
 
 export interface AdminYear {

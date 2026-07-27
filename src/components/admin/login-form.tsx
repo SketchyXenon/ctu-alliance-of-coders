@@ -70,7 +70,7 @@ export function LoginForm() {
     // Apply client-side rate limit.
     const now = Date.now();
     attemptsRef.current = attemptsRef.current.filter(
-      (t) => now - t < WINDOW_MS
+      (t) => now - t < WINDOW_MS,
     );
     if (attemptsRef.current.length >= MAX_ATTEMPTS) {
       const oldest = attemptsRef.current[0];
@@ -131,7 +131,7 @@ export function LoginForm() {
   const disabled = submitting || locked;
 
   return (
-    <div className="flex min-h-[50vh] items-center justify-center px-4 py-10 pb-32">
+    <div className="flex min-h-[50vh] items-center justify-center px-4 py-12 pb-32 sm:px-6">
       <Card className="w-full max-w-md border-border/60 shadow-lg">
         <CardHeader className="items-center gap-3 text-center">
           {/* CardHeader is a grid; wrap logo in a full-width flex row to center it. */}
@@ -139,7 +139,9 @@ export function LoginForm() {
             <GearLogo size={56} />
           </div>
           <div className="space-y-1">
-            <CardTitle className="font-display text-2xl">Admin Sign In</CardTitle>
+            <CardTitle className="font-display text-2xl">
+              Admin Sign In
+            </CardTitle>
             <CardDescription>
               Restricted area. Authorized administrators only.
             </CardDescription>
@@ -149,7 +151,10 @@ export function LoginForm() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="space-y-2">
-              <Label htmlFor="admin-email" className="text-xs uppercase tracking-wider">
+              <Label
+                htmlFor="admin-email"
+                className="text-xs uppercase tracking-wider"
+              >
                 <Mail className="size-3.5" aria-hidden="true" />
                 Email
               </Label>
@@ -167,7 +172,10 @@ export function LoginForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="admin-password" className="text-xs uppercase tracking-wider">
+              <Label
+                htmlFor="admin-password"
+                className="text-xs uppercase tracking-wider"
+              >
                 <Lock className="size-3.5" aria-hidden="true" />
                 Password
               </Label>

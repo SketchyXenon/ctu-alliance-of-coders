@@ -82,7 +82,8 @@ export function AdminPanel() {
   // we show a loading state. The derived `auth` value reacts to the store so
   // LoginForm's setIsAdmin(true) immediately promotes us to the dashboard.
   const [checked, setChecked] = React.useState(false);
-  const [forbiddenUser, setForbiddenUser] = React.useState<AdminUserPublic | null>(null);
+  const [forbiddenUser, setForbiddenUser] =
+    React.useState<AdminUserPublic | null>(null);
   const [signingOut, setSigningOut] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
@@ -90,7 +91,7 @@ export function AdminPanel() {
     let cancelled = false;
     async function check() {
       const { data } = await api.get<{ user: AdminUserPublic | null }>(
-        "/api/auth/session"
+        "/api/auth/session",
       );
       if (cancelled) return;
       if (data?.user) {
@@ -145,7 +146,7 @@ export function AdminPanel() {
 
   const refreshMessages = React.useCallback(async () => {
     const { data, error } = await api.get<{ items: ContactMessage[] }>(
-      "/api/contact"
+      "/api/contact",
     );
     if (error || !data) return;
     setPendingMessages(data.items);
@@ -153,7 +154,7 @@ export function AdminPanel() {
 
   const refreshYears = React.useCallback(async () => {
     const { data, error } = await api.get<{ items: AdminYear[] }>(
-      "/api/admin-years"
+      "/api/admin-years",
     );
     if (error || !data) return;
     setAdminYears(data.items);
@@ -227,162 +228,161 @@ export function AdminPanel() {
   // ---- Admin dashboard ----------------------------------------------------
 
   const user = auth.user;
-  const initials = (user.email ?? "")
-    .split("@")[0]
-    .slice(0, 2)
-    .toUpperCase();
+  const initials = (user.email ?? "").split("@")[0].slice(0, 2).toUpperCase();
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <SectionHeading
-          eyebrow="Administration"
-          title="Admin Panel"
-          sub="Manage announcements, officers, and messages."
-          icon="LayoutDashboard"
-          iconLabel="Admin"
-        />
-        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 p-2 pl-3">
-          <Avatar className="size-8 border border-border/60">
-            <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          <div className="hidden flex-col leading-tight sm:flex">
-            <span className="text-xs font-medium text-foreground">
-              {adminEmail ?? user.email}
-            </span>
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Administrator
-            </span>
+    <div className="mx-auto w-full max-w-7xl scroll-mt-24 px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-12 lg:px-8">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <SectionHeading
+            eyebrow="Administration"
+            title="Admin Panel"
+            sub="Manage announcements, officers, and messages."
+            icon="LayoutDashboard"
+            iconLabel="Admin"
+          />
+          <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-card/60 p-2 pl-3">
+            <Avatar className="size-8 border border-border/60">
+              <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="hidden flex-col leading-tight sm:flex">
+              <span className="text-xs font-medium text-foreground">
+                {adminEmail ?? user.email}
+              </span>
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Administrator
+              </span>
+            </div>
+            <Badge
+              variant="outline"
+              className="ml-1 hidden border-emerald-300 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300 md:inline-flex"
+            >
+              <ShieldCheck className="size-3" aria-hidden="true" />
+              Admin
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSettingsOpen(true)}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Open settings"
+            >
+              <Settings className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Settings</span>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="text-muted-foreground hover:text-destructive"
+              aria-label="Sign out of admin panel"
+            >
+              <LogOut className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">
+                {signingOut ? "..." : "Sign Out"}
+              </span>
+            </Button>
           </div>
-          <Badge
+        </div>
+
+        {/* Quick actions row */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
             variant="outline"
-            className="ml-1 hidden border-emerald-300 text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300 md:inline-flex"
-          >
-            <ShieldCheck className="size-3" aria-hidden="true" />
-            Admin
-          </Badge>
-          <Button
-            variant="ghost"
             size="sm"
-            onClick={() => setSettingsOpen(true)}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Open settings"
+            onClick={() => {
+              window.open("/api/announcements/export", "_blank");
+            }}
+            className="gap-1.5"
           >
-            <Settings className="size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Settings</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="text-muted-foreground hover:text-destructive"
-            aria-label="Sign out of admin panel"
-          >
-            <LogOut className="size-4" aria-hidden="true" />
-            <span className="hidden sm:inline">
-              {signingOut ? "..." : "Sign Out"}
-            </span>
+            <Download className="size-3.5" aria-hidden="true" />
+            Export CSV
           </Button>
         </div>
-      </div>
 
-      {/* Quick actions row */}
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            window.open("/api/announcements/export", "_blank");
-          }}
-          className="gap-1.5"
-        >
-          <Download className="size-3.5" aria-hidden="true" />
-          Export CSV
-        </Button>
-      </div>
-
-      {/* Stats overview */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <AdminStatCard
-          label="Announcements"
-          value={announcements.length}
-          icon="Megaphone"
-          accent="gold"
-        />
-        <AdminStatCard
-          label="Officer Records"
-          value={adminYears.reduce((s, y) => s + y.officers.length, 0)}
-          icon="Users"
-          accent="navy"
-        />
-        <AdminStatCard
-          label="Years Tracked"
-          value={adminYears.length}
-          icon="Calendar"
-          accent="navy"
-        />
-        <AdminStatCard
-          label="New Messages"
-          value={pendingMessages.filter((m) => m.status === "new").length}
-          icon="Mail"
-          accent={pendingMessages.some((m) => m.status === "new") ? "gold" : "navy"}
-        />
-      </div>
-
-      <Tabs defaultValue="inbox" className="w-full">
-        <div className="flex items-center justify-between gap-2">
-          <TabsList className="bg-muted/60">
-            <TabsTrigger value="inbox">
-              <AlertCircle className="size-3.5" aria-hidden="true" />
-              Inbox
-              {pendingMessages.filter((m) => m.status === "new").length > 0 && (
-                <Badge
-                  variant="secondary"
-                  className="ml-1 h-4 px-1 text-[10px] leading-none"
-                >
-                  {pendingMessages.filter((m) => m.status === "new").length}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="officers">
-              <ShieldCheck className="size-3.5" aria-hidden="true" />
-              Officers
-            </TabsTrigger>
-            <TabsTrigger value="integrations">
-              <RefreshCw className="size-3.5" aria-hidden="true" />
-              Integrations
-            </TabsTrigger>
-            <TabsTrigger value="activity">
-              <Activity className="size-3.5" aria-hidden="true" />
-              Activity
-            </TabsTrigger>
-          </TabsList>
+        {/* Stats overview */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <AdminStatCard
+            label="Announcements"
+            value={announcements.length}
+            icon="Megaphone"
+            accent="gold"
+          />
+          <AdminStatCard
+            label="Officer Records"
+            value={adminYears.reduce((s, y) => s + y.officers.length, 0)}
+            icon="Users"
+            accent="navy"
+          />
+          <AdminStatCard
+            label="Years Tracked"
+            value={adminYears.length}
+            icon="Calendar"
+            accent="navy"
+          />
+          <AdminStatCard
+            label="New Messages"
+            value={pendingMessages.filter((m) => m.status === "new").length}
+            icon="Mail"
+            accent={
+              pendingMessages.some((m) => m.status === "new") ? "gold" : "navy"
+            }
+          />
         </div>
 
-        <TabsContent value="inbox" className="mt-4">
-          <InboxPanel
-            messages={pendingMessages}
-            onRefresh={refreshMessages}
-          />
-        </TabsContent>
-        <TabsContent value="officers" className="mt-4">
-          <OfficersManager
-            adminYears={adminYears}
-            onRefresh={refreshYears}
-          />
-        </TabsContent>
-        <TabsContent value="integrations" className="mt-4">
-          <IntegrationsPanel />
-        </TabsContent>
-        <TabsContent value="activity" className="mt-4">
-          <ActivityPanel />
-        </TabsContent>
-      </Tabs>
+        <Tabs defaultValue="inbox" className="w-full">
+          <div className="flex items-center justify-between gap-2">
+            <TabsList className="bg-muted/60">
+              <TabsTrigger value="inbox">
+                <AlertCircle className="size-3.5" aria-hidden="true" />
+                Inbox
+                {pendingMessages.filter((m) => m.status === "new").length >
+                  0 && (
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 h-4 px-1 text-[10px] leading-none"
+                  >
+                    {pendingMessages.filter((m) => m.status === "new").length}
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="officers">
+                <ShieldCheck className="size-3.5" aria-hidden="true" />
+                Officers
+              </TabsTrigger>
+              <TabsTrigger value="integrations">
+                <RefreshCw className="size-3.5" aria-hidden="true" />
+                Integrations
+              </TabsTrigger>
+              <TabsTrigger value="activity">
+                <Activity className="size-3.5" aria-hidden="true" />
+                Activity
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+          <TabsContent value="inbox" className="mt-4">
+            <InboxPanel
+              messages={pendingMessages}
+              onRefresh={refreshMessages}
+            />
+          </TabsContent>
+          <TabsContent value="officers" className="mt-4">
+            <OfficersManager adminYears={adminYears} onRefresh={refreshYears} />
+          </TabsContent>
+          <TabsContent value="integrations" className="mt-4">
+            <IntegrationsPanel />
+          </TabsContent>
+          <TabsContent value="activity" className="mt-4">
+            <ActivityPanel />
+          </TabsContent>
+        </Tabs>
+
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      </div>
     </div>
   );
 }

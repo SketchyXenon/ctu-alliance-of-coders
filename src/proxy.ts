@@ -21,8 +21,10 @@ const ALLOWED_ORIGINS = [
 ];
 
 // Allowed image hosts for CSP img-src. Defaults to self + Supabase storage.
+// Supabase uses both .co and .in TLDs (src/lib/db.ts matches both); list both
+// so a prod deploy on the .in host doesn't get its images blocked by CSP.
 // Add more via IMG_ALLOWED_HOSTS env var (comma-separated hosts).
-const DEFAULT_IMG_HOSTS = ["https://*.supabase.co"];
+const DEFAULT_IMG_HOSTS = ["https://*.supabase.co", "https://*.supabase.in"];
 const EXTRA_IMG_HOSTS = (process.env.IMG_ALLOWED_HOSTS || "")
   .split(",")
   .map((s) => s.trim())
@@ -43,13 +45,16 @@ export function proxy(request: NextRequest) {
     response.headers.set("X-Content-Type-Options", "nosniff");
     response.headers.set("X-Frame-Options", "DENY");
     response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-    response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    response.headers.set(
+      "Permissions-Policy",
+      "camera=(), microphone=(), geolocation=()",
+    );
 
     // HSTS only in production (HTTPS).
     if (process.env.NODE_ENV === "production") {
       response.headers.set(
         "Strict-Transport-Security",
-        "max-age=63072000; includeSubDomains; preload"
+        "max-age=63072000; includeSubDomains; preload",
       );
     }
 
@@ -81,7 +86,11 @@ export function proxy(request: NextRequest) {
     response.headers.set("Content-Security-Policy", csp);
 
     // CSRF protection for state-changing requests.
-    if (request.method !== "GET" && request.method !== "HEAD" && request.method !== "OPTIONS") {
+    if (
+      request.method !== "GET" &&
+      request.method !== "HEAD" &&
+      request.method !== "OPTIONS"
+    ) {
       const origin = request.headers.get("origin");
       const secFetchSite = request.headers.get("sec-fetch-site");
 
@@ -101,10 +110,13 @@ export function proxy(request: NextRequest) {
           origin,
           secFetchSite,
         });
-        return new NextResponse(JSON.stringify({ error: "Cross-origin request blocked." }), {
-          status: 403,
-          headers: { "Content-Type": "application/json" },
-        });
+        return new NextResponse(
+          JSON.stringify({ error: "Cross-origin request blocked." }),
+          {
+            status: 403,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
       }
     }
 

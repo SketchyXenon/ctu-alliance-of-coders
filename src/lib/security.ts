@@ -28,12 +28,28 @@ export interface ValidationResult {
 /** Validate a plain-text display field with length and dangerous-pattern checks.
  *  When required is false (default), undefined/null are treated as "not provided"
  *  and return valid (the caller applies a default). Per 03 section 6: fail
- *  safe, but don't over-block optional fields. */
+ *  safe, but don't over-block optional fields.
+ *
+ *  When rejectCRLF is true, carriage returns / line feeds are rejected. Use
+ *  this for fields that become email headers (Subject, From name) — CRLF there
+ *  enables header injection (CWE-93). Per 06 section 5: validate all external
+ *  input. Do NOT set rejectCRLF on fields that legitimately contain newlines
+ *  (e.g. email body, contact message). */
 export function validateText(
   value: unknown,
-  opts: { maxLen?: number; minLen?: number; required?: boolean } = {},
+  opts: {
+    maxLen?: number;
+    minLen?: number;
+    required?: boolean;
+    rejectCRLF?: boolean;
+  } = {},
 ): ValidationResult {
-  const { maxLen = 500, minLen = 0, required = false } = opts;
+  const {
+    maxLen = 500,
+    minLen = 0,
+    required = false,
+    rejectCRLF = false,
+  } = opts;
   // When the field is optional, undefined/null are valid (not provided).
   // The caller is responsible for applying a default value.
   if (value === undefined || value === null) {
@@ -44,6 +60,14 @@ export function validateText(
   }
   if (typeof value !== "string") {
     return { valid: false, error: "Invalid type." };
+  }
+  // CRLF check BEFORE trim (trim only removes leading/trailing whitespace,
+  // not embedded newlines). A06 fix: header injection defense-in-depth.
+  if (rejectCRLF && /[\r\n]/.test(value)) {
+    return {
+      valid: false,
+      error: "Line breaks are not allowed in this field.",
+    };
   }
   const trimmed = value.trim();
   if (required && trimmed.length === 0) {

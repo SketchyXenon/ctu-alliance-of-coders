@@ -30,6 +30,7 @@ export async function GET() {
         role: o.role,
         image: o.image,
         sortOrder: o.sortOrder,
+        reportsToId: o.reportsToId ?? null,
       })),
     }));
     const res = NextResponse.json({ items });
@@ -114,6 +115,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
       role: o.role,
       image: o.image,
       sortOrder: o.sortOrder,
+      reportsToId: o.reportsToId ?? null,
     })),
   };
 

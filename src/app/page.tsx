@@ -5,16 +5,6 @@ import dynamic from "next/dynamic";
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { PageLoader } from "@/components/page-loader";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { useTheme } from "next-themes";
 import { api } from "@/lib/api-client";
 import { usePageStore } from "@/lib/store";
@@ -29,6 +19,15 @@ import { ReadingProgress } from "@/components/reading-progress";
 import { RecentActivity } from "@/components/recent-activity";
 import { SectionTransition } from "@/components/section-transition";
 import { ShortcutHelp } from "@/components/shortcut-help";
+import {
+  AnnouncementPost,
+  AnnouncementNotFound,
+} from "@/components/sections/announcement-post";
+import { ConfirmDialog } from "@/components/confirm-dialog";
+import {
+  parseAnnouncementHash,
+  buildAnnouncementHash,
+} from "@/lib/announcement-nav";
 import type {
   Announcement,
   ContactMessage,
@@ -42,40 +41,44 @@ import type {
 // footprint manageable in the sandbox.
 const HeroSection = dynamic(
   () => import("@/components/sections/hero-section").then((m) => m.HeroSection),
-  { ssr: false }
+  { ssr: false },
 );
 const AnnouncementsSection = dynamic(
-  () => import("@/components/sections/announcements-section").then((m) => m.AnnouncementsSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/announcements-section").then(
+      (m) => m.AnnouncementsSection,
+    ),
+  { ssr: false },
 );
 const OfficersSection = dynamic(
-  () => import("@/components/sections/officers-section").then((m) => m.OfficersSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/officers-section").then(
+      (m) => m.OfficersSection,
+    ),
+  { ssr: false },
 );
 const ContactSection = dynamic(
-  () => import("@/components/sections/contact-section").then((m) => m.ContactSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/contact-section").then(
+      (m) => m.ContactSection,
+    ),
+  { ssr: false },
 );
 const PolicyPageSection = dynamic(
-  () => import("@/components/sections/policy-page").then((m) => m.PolicyPageSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/policy-page").then(
+      (m) => m.PolicyPageSection,
+    ),
+  { ssr: false },
 );
 const FaqSection = dynamic(
   () => import("@/components/sections/faq-section").then((m) => m.FaqSection),
-  { ssr: false }
+  { ssr: false },
 );
 const AdminPanel = dynamic(
   () => import("@/components/sections/admin-panel").then((m) => m.AdminPanel),
-  { ssr: false }
+  { ssr: false },
 );
-
-type ConfirmConfig = {
-  title: string;
-  message: string;
-  confirmLabel: string;
-  destructive: boolean;
-  resolve: (ok: boolean) => void;
-};
 
 export default function Home() {
   const {
@@ -95,25 +98,44 @@ export default function Home() {
     setInitialized,
   } = usePageStore();
 
-  const [confirm, setConfirm] = React.useState<ConfirmConfig | null>(null);
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
+  // Dedicated announcement page view (blog-post feel). When set, the page
+  // renders AnnouncementPost instead of the section list. Synced to the URL
+  // hash (#announcement=<id>) so the view is shareable + back-button friendly.
+  const [activeAnnouncementId, setActiveAnnouncementId] = React.useState<
+    string | null
+  >(null);
+  const [confirmDeleteAnnouncement, setConfirmDeleteAnnouncement] =
+    React.useState<Announcement | null>(null);
 
   // ---- Initial data fetch -----------------------------------------------
   React.useEffect(() => {
     let cancelled = false;
     async function load() {
       setSyncStatus({ ready: false, saving: false, error: null });
-      const { data, error } = await api.get<{ data: SiteData }>("/api/site-data");
+      const { data, error } = await api.get<{ data: SiteData }>(
+        "/api/site-data",
+      );
       if (cancelled) return;
       if (error || !data) {
-        setSyncStatus({ ready: true, saving: false, error: error?.message ?? "Failed to load site data", lastSavedAt: null });
+        setSyncStatus({
+          ready: true,
+          saving: false,
+          error: error?.message ?? "Failed to load site data",
+          lastSavedAt: null,
+        });
         setInitialized(true);
         return;
       }
       setAnnouncements(data.data.announcements);
       setAdminYears(data.data.adminYears);
-      setSyncStatus({ ready: true, saving: false, error: null, lastSavedAt: Date.now() });
+      setSyncStatus({
+        ready: true,
+        saving: false,
+        error: null,
+        lastSavedAt: Date.now(),
+      });
       setInitialized(true);
     }
     void load();
@@ -126,15 +148,22 @@ export default function Home() {
   React.useEffect(() => {
     let cancelled = false;
     async function check() {
-      const { data } = await api.get<{ user: { id: string; email: string; name: string | null; role: string } | null }>(
-        "/api/auth/session"
-      );
+      const { data } = await api.get<{
+        user: {
+          id: string;
+          email: string;
+          name: string | null;
+          role: string;
+        } | null;
+      }>("/api/auth/session");
       if (cancelled) return;
       if (data?.user && data.user.role === "admin") {
         setIsAdmin(true);
         setAdminEmail(data.user.email);
         // Load admin-only inbox.
-        const inbox = await api.get<{ items: ContactMessage[] }>("/api/contact");
+        const inbox = await api.get<{ items: ContactMessage[] }>(
+          "/api/contact",
+        );
         if (!cancelled && inbox.data) {
           setPendingMessages(inbox.data.items);
         }
@@ -153,42 +182,81 @@ export default function Home() {
   }, [setTheme, theme]);
 
   // ---- Navigation handler -----------------------------------------------
-  const handleNav = React.useCallback((section: SectionKey) => {
-    setActiveNav(section);
+  const handleNav = React.useCallback(
+    (section: SectionKey) => {
+      setActiveNav(section);
+      setActiveAnnouncementId(null);
+      if (typeof window !== "undefined") {
+        // Clear any announcement hash so navigation starts fresh.
+        if (window.location.hash) {
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+        }
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    },
+    [setActiveNav],
+  );
+
+  // ---- Announcement dedicated view: URL hash sync ----------------------
+  // On mount + when announcements load, hydrate activeAnnouncementId from
+  // the URL hash so deep links (#announcement=<id>) open the post directly.
+  // Also switch activeNav to "Announcements" so a deep link from email/share
+  // lands on the dedicated view rather than the Home hero.
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const id = parseAnnouncementHash(window.location.hash);
+    if (id) {
+      setActiveAnnouncementId(id);
+      setActiveNav("Announcements");
+    }
+    function onHashChange() {
+      const next = parseAnnouncementHash(window.location.hash);
+      setActiveAnnouncementId(next);
+      if (next) {
+        setActiveNav("Announcements");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleOpenAnnouncement = React.useCallback((ann: Announcement) => {
+    setActiveAnnouncementId(ann.id);
     if (typeof window !== "undefined") {
+      const newHash = buildAnnouncementHash(ann.id);
+      if (window.location.hash !== newHash) {
+        history.pushState(null, "", newHash);
+      }
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [setActiveNav]);
+  }, []);
+
+  const handleCloseAnnouncement = React.useCallback(() => {
+    setActiveAnnouncementId(null);
+    if (typeof window !== "undefined" && window.location.hash) {
+      history.pushState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
 
   // ---- Keyboard shortcuts (1-5 nav, T theme) -----------------------------
   useKeyboardShortcuts(handleNav, toggleTheme, () => setHelpOpen((o) => !o));
   useCommandPaletteShortcut(() => setPaletteOpen((o) => !o));
 
-  // ---- Confirm dialog helper --------------------------------------------
-  function promptConfirm(opts: {
-    title: string;
-    message: string;
-    confirmLabel?: string;
-    destructive?: boolean;
-  }): Promise<boolean> {
-    return new Promise((resolve) => {
-      setConfirm({
-        title: opts.title,
-        message: opts.message,
-        confirmLabel: opts.confirmLabel ?? "Confirm",
-        destructive: opts.destructive ?? true,
-        resolve,
-      });
-    });
-  }
-
-  function resolveConfirm(ok: boolean) {
-    confirm?.resolve(ok);
-    setConfirm(null);
-  }
-
   // ---- Announcement CRUD -------------------------------------------------
-  async function addAnnouncement(ann: Omit<Announcement, "date"> & { date?: string }) {
+  async function addAnnouncement(
+    ann: Omit<Announcement, "date"> & { date?: string },
+  ) {
     setSyncStatus({ saving: true, error: null });
     const payload = {
       title: ann.title,
@@ -197,8 +265,15 @@ export default function Home() {
       image: ann.image,
       pinned: ann.pinned,
     };
-    const { data, error } = await api.post<{ item: Announcement }>("/api/announcements", payload);
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    const { data, error } = await api.post<{ item: Announcement }>(
+      "/api/announcements",
+      payload,
+    );
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error || !data) return;
     setAnnouncements([data.item, ...usePageStore.getState().announcements]);
   }
@@ -207,29 +282,66 @@ export default function Home() {
     setSyncStatus({ saving: true, error: null });
     const { data, error } = await api.patch<{ item: Announcement }>(
       `/api/announcements/${ann.id}`,
-      { title: ann.title, body: ann.body, type: ann.type, image: ann.image, pinned: ann.pinned }
+      {
+        title: ann.title,
+        body: ann.body,
+        type: ann.type,
+        image: ann.image,
+        pinned: ann.pinned,
+      },
     );
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error || !data) return;
     setAnnouncements(
-      usePageStore.getState().announcements.map((a) => (a.id === ann.id ? data.item : a))
+      usePageStore
+        .getState()
+        .announcements.map((a) => (a.id === ann.id ? data.item : a)),
     );
   }
 
-  async function deleteAnnouncement(id: string): Promise<boolean> {
-    const ok = await promptConfirm({
-      title: "Delete announcement",
-      message: "Are you sure you want to permanently delete this announcement? This cannot be undone.",
-      confirmLabel: "Delete",
-      destructive: true,
+  /** Open the strict double-confirm for deleting an announcement. The actual
+   *  DELETE runs in handleConfirmDeleteAnnouncement after the admin types the
+   *  confirmation token. Per 05-ui-ux-design.md section 6: destructive action
+   *  -> modal with explicit confirm + type-to-arm. */
+  function deleteAnnouncement(id: string): Promise<boolean> {
+    const ann = usePageStore.getState().announcements.find((a) => a.id === id);
+    if (!ann) return Promise.resolve(false);
+    setConfirmDeleteAnnouncement(ann);
+    return new Promise<boolean>((resolve) => {
+      // Resolve once the dialog closes (handled by the ConfirmDialog onConfirm).
+      // We stash the resolver so handleConfirmDeleteAnnouncement can signal
+      // success/failure.
+      deleteResolverRef.current = resolve;
     });
-    if (!ok) return false;
+  }
+  const deleteResolverRef = React.useRef<((ok: boolean) => void) | null>(null);
+
+  async function handleConfirmDeleteAnnouncement() {
+    const ann = confirmDeleteAnnouncement;
+    if (!ann) return;
     setSyncStatus({ saving: true, error: null });
-    const { error } = await api.delete(`/api/announcements/${id}`);
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
-    if (error) return false;
-    setAnnouncements(usePageStore.getState().announcements.filter((a) => a.id !== id));
-    return true;
+    const { error } = await api.delete(`/api/announcements/${ann.id}`);
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
+    if (error) {
+      throw new Error(error.message);
+    }
+    setAnnouncements(
+      usePageStore.getState().announcements.filter((a) => a.id !== ann.id),
+    );
+    // If the dedicated view was showing this announcement, go back to the list.
+    if (activeAnnouncementId === ann.id) {
+      handleCloseAnnouncement();
+    }
+    deleteResolverRef.current?.(true);
+    deleteResolverRef.current = null;
   }
 
   // ---- Contact submit ----------------------------------------------------
@@ -241,20 +353,32 @@ export default function Home() {
     category: string;
     message: string;
   }) {
-    const { data, error } = await api.post<{ item: ContactMessage }>("/api/contact", message);
+    // C6 fix: the anonymous response is { ok: true } (no item); only admin
+    // callers receive { item }. Type honestly so a refactor can't silently
+    // read data.item for an anonymous submitter.
+    const { data, error } = await api.post<{
+      ok?: true;
+      item?: ContactMessage;
+    }>("/api/contact", message);
     if (error || !data) {
       throw new Error(error?.message ?? "Failed to send message.");
     }
     // If admin is viewing, surface in inbox immediately.
-    if (isAdmin) {
-      setPendingMessages([data.item, ...usePageStore.getState().pendingMessages]);
+    if (isAdmin && data.item) {
+      setPendingMessages([
+        data.item,
+        ...usePageStore.getState().pendingMessages,
+      ]);
     }
   }
 
   // ---- Hero stats --------------------------------------------------------
   const heroStats: HeroStats[] = React.useMemo(() => {
     const currentYear = adminYears[adminYears.length - 1];
-    const totalOfficerRecords = adminYears.reduce((sum, y) => sum + y.officers.length, 0);
+    const totalOfficerRecords = adminYears.reduce(
+      (sum, y) => sum + y.officers.length,
+      0,
+    );
     return [
       { value: announcements.length, label: "Announcements" },
       { value: currentYear?.officers.length ?? 0, label: "Current Officers" },
@@ -264,7 +388,59 @@ export default function Home() {
   }, [announcements, adminYears]);
 
   // ---- Section routing ---------------------------------------------------
+  // When an announcement is open (via hash or card click), the Announcements
+  // section renders the dedicated post instead of the card list. This gives a
+  // blog-post feel within the single-route constraint (#/announcement=<id>).
+  // The activeAnnouncementId check takes precedence over activeNav so a deep
+  // link works even before the nav state hydrates from the hash.
   function renderSection() {
+    if (activeAnnouncementId) {
+      const ann = announcements.find((a) => a.id === activeAnnouncementId);
+      if (!ann) {
+        // Data may still be loading (initial fetch). Show a minimal loader
+        // instead of "not found" so a deep link doesn't flash a 404.
+        if (!syncStatus.ready) {
+          return (
+            <div className="mx-auto w-full max-w-3xl px-4 py-20 text-center text-sm text-muted-foreground">
+              Loading announcement...
+            </div>
+          );
+        }
+        return <AnnouncementNotFound onBack={handleCloseAnnouncement} />;
+      }
+      const idx = announcements.findIndex((a) => a.id === activeAnnouncementId);
+      return (
+        <AnnouncementPost
+          ann={ann}
+          onBack={handleCloseAnnouncement}
+          isAdmin={isAdmin}
+          onEdit={(a) => {
+            // Edit closes the dedicated view so the editor modal (owned by
+            // AnnouncementsSection) takes over. Re-open isn't automatic — the
+            // admin returns to the list to edit.
+            handleCloseAnnouncement();
+            // Defer to next tick so the section is back in the DOM.
+            setTimeout(() => editRequestRef.current?.(a), 0);
+          }}
+          onDelete={(id) => {
+            void deleteAnnouncement(id);
+          }}
+          onPrev={
+            idx > 0
+              ? () => handleOpenAnnouncement(announcements[idx - 1])
+              : undefined
+          }
+          onNext={
+            idx >= 0 && idx < announcements.length - 1
+              ? () => handleOpenAnnouncement(announcements[idx + 1])
+              : undefined
+          }
+          hasPrev={idx > 0}
+          hasNext={idx >= 0 && idx < announcements.length - 1}
+          position={idx >= 0 ? `${idx + 1} / ${announcements.length}` : null}
+        />
+      );
+    }
     switch (activeNav) {
       case "Home":
         return (
@@ -282,7 +458,9 @@ export default function Home() {
             onAdd={addAnnouncement}
             onUpdate={updateAnnouncement}
             onDelete={deleteAnnouncement}
+            onOpen={handleOpenAnnouncement}
             syncStatus={syncStatus}
+            editRequestRef={editRequestRef}
           />
         );
       case "Officers":
@@ -298,12 +476,21 @@ export default function Home() {
       case "Terms of Use":
       case "Cookie Policy": {
         const policy = getPolicyPage(activeNav);
-        return policy ? <PolicyPageSection policy={policy} /> : <HeroSection stats={heroStats} onNav={handleNav} />;
+        return policy ? (
+          <PolicyPageSection policy={policy} />
+        ) : (
+          <HeroSection stats={heroStats} onNav={handleNav} />
+        );
       }
       default:
         return <HeroSection stats={heroStats} onNav={handleNav} />;
     }
   }
+  // Ref the AnnouncementsSection can populate with its edit handler, so the
+  // dedicated AnnouncementPost's Edit button can trigger it.
+  const editRequestRef = React.useRef<((ann: Announcement) => void) | null>(
+    null,
+  );
 
   // ---- Loading gate ------------------------------------------------------
   if (!initialized) {
@@ -312,6 +499,7 @@ export default function Home() {
 
   // Reading progress is active on content-heavy pages, not on the hero.
   const showReadingProgress =
+    activeAnnouncementId !== null ||
     activeNav === "Announcements" ||
     activeNav === "Officers" ||
     activeNav === "FAQ" ||
@@ -333,7 +521,7 @@ export default function Home() {
       </a>
       <SiteNav />
       <main id="main-content" className="flex-1" tabIndex={-1}>
-        <SectionTransition sectionKey={activeNav}>
+        <SectionTransition sectionKey={activeAnnouncementId ?? activeNav}>
           {renderSection()}
         </SectionTransition>
       </main>
@@ -346,23 +534,33 @@ export default function Home() {
         onNavigate={handleNav}
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
-      <AlertDialog open={confirm !== null} onOpenChange={(o) => !o && resolveConfirm(false)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
-            <AlertDialogDescription>{confirm?.message}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => resolveConfirm(false)}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className={confirm?.destructive ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
-              onClick={() => resolveConfirm(true)}
-            >
-              {confirm?.confirmLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+
+      {/* Announcement delete: strict double-confirm (type the title). */}
+      <ConfirmDialog
+        open={confirmDeleteAnnouncement !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            setConfirmDeleteAnnouncement(null);
+            deleteResolverRef.current?.(false);
+            deleteResolverRef.current = null;
+          }
+        }}
+        mode="destructive"
+        title="Delete announcement"
+        description={
+          confirmDeleteAnnouncement
+            ? `This permanently removes "${confirmDeleteAnnouncement.title}" and cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete announcement"
+        confirmToken={
+          confirmDeleteAnnouncement
+            ? confirmDeleteAnnouncement.title.slice(0, 60)
+            : "DELETE"
+        }
+        confirmTokenHint="the announcement title"
+        onConfirm={handleConfirmDeleteAnnouncement}
+      />
     </div>
   );
 }

@@ -12,16 +12,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +35,7 @@ export function SessionsPanel() {
   const [loading, setLoading] = React.useState(true);
   const [revoking, setRevoking] = React.useState<string | null>(null);
   const [revokingAll, setRevokingAll] = React.useState(false);
+  const [bulkError, setBulkError] = React.useState<string | null>(null);
   // H15: track which session is pending revoke confirmation. null = dialog closed.
   const [confirmRevokeId, setConfirmRevokeId] = React.useState<string | null>(
     null,
@@ -76,12 +68,43 @@ export function SessionsPanel() {
     const others = sessions.filter((s) => !s.isCurrent);
     if (others.length === 0) return;
     setRevokingAll(true);
-    // Revoke sequentially so each completes before the next starts.
-    for (const s of others) {
-      await api.delete(`/api/sessions/${s.id}`);
-    }
+    setBulkError(null);
+    // Revoke in parallel; only drop the sessions that actually deleted.
+    // C1 fix: previously ALL others were removed from local state regardless
+    // of whether each DELETE succeeded — a network blip left dead sessions
+    // visible as "revoked" while they stayed alive server-side. Per 03 §6:
+    // never swallow an exception silently; per 05 §6: status must match reality.
+    const results = await Promise.allSettled(
+      others.map((s) => api.delete(`/api/sessions/${s.id}`)),
+    );
     setRevokingAll(false);
-    setSessions((prev) => prev.filter((s) => s.isCurrent));
+
+    const deletedIds = new Set<string>();
+    let failedCount = 0;
+    results.forEach((r, i) => {
+      const ok = r.status === "fulfilled" && !r.value.error;
+      if (ok) {
+        deletedIds.add(others[i].id);
+      } else {
+        failedCount += 1;
+      }
+    });
+
+    if (deletedIds.size > 0) {
+      setSessions((prev) =>
+        prev.filter((s) => s.isCurrent || !deletedIds.has(s.id)),
+      );
+    }
+    if (failedCount > 0) {
+      // Some revokes failed — reload to reflect true server state, and surface
+      // the failure so the admin knows those sessions may still be active.
+      setBulkError(
+        failedCount === others.length
+          ? "Failed to revoke any sessions. They may still be active."
+          : `Failed to revoke ${failedCount} session(s). They may still be active.`,
+      );
+      void load();
+    }
   }
 
   function formatDateTime(iso: string): string {
@@ -149,6 +172,30 @@ export function SessionsPanel() {
           </Button>
         )}
       </div>
+
+      {/* C1: inline error banner for partial/total bulk-revoke failure.
+          Per 05-ui-ux-design.md §6: persistent system-level state uses an
+          inline banner; per §6 copy: state what happened and what to do next. */}
+      {bulkError && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          <span aria-hidden="true" className="mt-0.5">
+            &middot;
+          </span>
+          <span className="flex-1">{bulkError}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 text-destructive hover:bg-destructive/10"
+            onClick={() => setBulkError(null)}
+            aria-label="Dismiss"
+          >
+            Dismiss
+          </Button>
+        </div>
+      )}
 
       <ul className="space-y-2">
         {sessions.map((session) => {
@@ -222,45 +269,31 @@ export function SessionsPanel() {
         })}
       </ul>
 
-      {/* H15: destructive action confirmation per 05-ui-ux-design.md §6.
-          Revoking a session signs out that device immediately. AlertDialog
-          forces an explicit confirm — does not close on outside click. */}
-      <AlertDialog
+      {/* Strict double confirmation per 05-ui-ux-design.md section 6: revoking
+          a session signs out that device immediately. The admin must type
+          REVOKE to arm the button so a stray click or Enter can't sign out a
+          real user. */}
+      <ConfirmDialog
         open={confirmSession !== null}
         onOpenChange={(open) => {
           if (!open) setConfirmRevokeId(null);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Revoke this session?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmSession
-                ? `Signed in ${timeAgo(confirmSession.createdAt)}. The device will be signed out immediately and will need to sign in again. This action cannot be undone.`
-                : "The device will be signed out immediately and will need to sign in again."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={revoking !== null}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              disabled={revoking !== null}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={(e) => {
-                e.preventDefault();
-                if (confirmSession) {
-                  void handleRevoke(confirmSession.id).then(() =>
-                    setConfirmRevokeId(null),
-                  );
-                }
-              }}
-            >
-              {revoking !== null ? "Revoking..." : "Revoke session"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        mode="destructive"
+        title="Revoke this session?"
+        description={
+          confirmSession
+            ? `Signed in ${timeAgo(confirmSession.createdAt)}. The device will be signed out immediately and will need to sign in again. This action cannot be undone.`
+            : "The device will be signed out immediately and will need to sign in again."
+        }
+        confirmLabel={revoking !== null ? "Revoking..." : "Revoke session"}
+        confirmToken="REVOKE"
+        onConfirm={async () => {
+          if (confirmSession) {
+            await handleRevoke(confirmSession.id);
+            setConfirmRevokeId(null);
+          }
+        }}
+      />
     </div>
   );
 }
