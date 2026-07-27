@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { validateText, rateLimit } from "@/lib/security";
 import { logActivity } from "@/lib/activity";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { sendReplyEmail } from "@/lib/email";
 import { formatDateTime } from "@/lib/security";
 
@@ -34,19 +35,25 @@ export const POST = withPrismaError(async function POST(
   try {
     user = await requireAdmin();
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withCache(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
   }
 
   // Rate limit: 10 replies per admin per hour. SMTP is expensive and
   // outbound email is a high-value target for abuse if a session is stolen.
   const rl = rateLimit(`reply:${user.id}`, 10, 60 * 60_000);
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many replies sent recently. Please wait and try again." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-      },
+    return withCache(
+      NextResponse.json(
+        { error: "Too many replies sent recently. Please wait and try again." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -56,7 +63,10 @@ export const POST = withPrismaError(async function POST(
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   // Validate the reply body (the email content).
@@ -66,18 +76,41 @@ export const POST = withPrismaError(async function POST(
     maxLen: MAX_REPLY_BODY,
   });
   if (!bodyCheck.valid) {
-    return NextResponse.json({ error: bodyCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: bodyCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   // Validate the subject (optional; defaults to "Re: <original>").
-  const subject = body.subject
-    ? String(body.subject).trim().slice(0, MAX_REPLY_SUBJECT)
-    : null;
+  // Per A05-2: run through validateText (XSS blocklist) even though the
+  // subject becomes an email header — defense-in-depth against header
+  // injection via nodemailer's Subject field.
+  // Per A06 fix: rejectCRLF — CR/LF in a header field enables header
+  // injection (CWE-93). Nodemailer typically sanitizes, but we reject
+  // early so the admin gets a clear 400 rather than a silently-mangled email.
+  let subject: string | null = null;
+  if (body.subject) {
+    const subjectCheck = validateText(body.subject, {
+      maxLen: MAX_REPLY_SUBJECT,
+      rejectCRLF: true,
+    });
+    if (!subjectCheck.valid) {
+      return withCache(
+        NextResponse.json({ error: subjectCheck.error }, { status: 400 }),
+        CACHE_NO_STORE,
+      );
+    }
+    subject = String(body.subject).trim();
+  }
 
   // Fetch the original message (re-authorize: confirm it exists).
   const existing = await db.contactMessage.findUnique({ where: { id } });
   if (!existing) {
-    return NextResponse.json({ error: "Message not found." }, { status: 404 });
+    return withCache(
+      NextResponse.json({ error: "Message not found." }, { status: 404 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const replySubject = subject || `Re: ${existing.subject}`;
@@ -98,9 +131,12 @@ export const POST = withPrismaError(async function POST(
   if (!result.ok) {
     // SMTP failed. Do NOT mark the message as resolved. Return the error
     // so the admin can see what went wrong. Per 03 section 6: fail loud.
-    return NextResponse.json(
-      { error: result.error || "Failed to send reply email." },
-      { status: 502 },
+    return withCache(
+      NextResponse.json(
+        { error: result.error || "Failed to send reply email." },
+        { status: 502 },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -119,12 +155,15 @@ export const POST = withPrismaError(async function POST(
     summary: `Replied to message "${existing.subject}" from ${existing.email}`,
   });
 
-  return NextResponse.json({
-    ok: true,
-    messageId: result.messageId,
-    item: {
-      id: updated.id,
-      status: updated.status,
-    },
-  });
+  return withCache(
+    NextResponse.json({
+      ok: true,
+      messageId: result.messageId,
+      item: {
+        id: updated.id,
+        status: updated.status,
+      },
+    }),
+    CACHE_NO_STORE,
+  );
 });

@@ -48,6 +48,7 @@ import { InboxPanel } from "@/components/admin/inbox-panel";
 import { OfficersManager } from "@/components/admin/officers-manager";
 import { IntegrationsPanel } from "@/components/admin/integrations-panel";
 import { ActivityPanel } from "@/components/admin/activity-panel";
+import { AdminUsersPanel } from "@/components/admin/admin-users-panel";
 import { SettingsDialog } from "@/components/admin/settings-dialog";
 
 type AuthState =
@@ -361,6 +362,10 @@ export function AdminPanel() {
                 <Activity className="size-3.5" aria-hidden="true" />
                 Activity
               </TabsTrigger>
+              <TabsTrigger value="users">
+                <Users className="size-3.5" aria-hidden="true" />
+                Admin Users
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -378,6 +383,9 @@ export function AdminPanel() {
           </TabsContent>
           <TabsContent value="activity" className="mt-4">
             <ActivityPanel />
+          </TabsContent>
+          <TabsContent value="users" className="mt-4">
+            <AdminUsersPanel />
           </TabsContent>
         </Tabs>
 

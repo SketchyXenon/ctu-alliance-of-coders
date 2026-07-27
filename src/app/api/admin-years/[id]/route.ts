@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
 import { validateText, rateLimit } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { logActivity } from "@/lib/activity";
 import type { AdminYear } from "@/lib/types";
 
@@ -13,17 +14,25 @@ export const PATCH = withPrismaError(
     try {
       user = await requireAdmin();
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCache(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const rl = rateLimit(`year-update:${user.id}`, 20, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-        },
+      return withCache(
+        NextResponse.json(
+          { error: "Too many requests." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+            },
+          },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
@@ -32,15 +41,18 @@ export const PATCH = withPrismaError(
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json(
-        { error: "Invalid JSON body." },
-        { status: 400 },
+      return withCache(
+        NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+        CACHE_NO_STORE,
       );
     }
 
     const existing = await db.adminYear.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: "Year not found." }, { status: 404 });
+      return withCache(
+        NextResponse.json({ error: "Year not found." }, { status: 404 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const data: Record<string, unknown> = {};
@@ -52,23 +64,32 @@ export const PATCH = withPrismaError(
         maxLen: 30,
       });
       if (!c.valid)
-        return NextResponse.json({ error: c.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: c.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.year = String(body.year).trim();
       changed.push("year");
     }
     if (body.theme !== undefined) {
       const c = validateText(body.theme, { required: false, maxLen: 200 });
       if (!c.valid)
-        return NextResponse.json({ error: c.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: c.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.theme = String(body.theme).trim();
       changed.push("theme");
     }
     if (body.sortOrder !== undefined) {
       const sortNum = Number(body.sortOrder);
       if (!Number.isInteger(sortNum) || sortNum < 0) {
-        return NextResponse.json(
-          { error: "sortOrder must be a non-negative integer." },
-          { status: 400 },
+        return withCache(
+          NextResponse.json(
+            { error: "sortOrder must be a non-negative integer." },
+            { status: 400 },
+          ),
+          CACHE_NO_STORE,
         );
       }
       data.sortOrder = sortNum;
@@ -84,7 +105,7 @@ export const PATCH = withPrismaError(
         sortOrder: existing.sortOrder,
         officers: [],
       };
-      return NextResponse.json({ item });
+      return withCache(NextResponse.json({ item }), CACHE_NO_STORE);
     }
 
     const updated = await db.adminYear.update({
@@ -119,7 +140,7 @@ export const PATCH = withPrismaError(
         reportsToId: o.reportsToId ?? null,
       })),
     };
-    return NextResponse.json({ item });
+    return withCache(NextResponse.json({ item }), CACHE_NO_STORE);
   },
 );
 
@@ -133,24 +154,35 @@ export const DELETE = withPrismaError(
     try {
       user = await requireAdmin();
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCache(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const rl = rateLimit(`year-delete:${user.id}`, 20, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-        },
+      return withCache(
+        NextResponse.json(
+          { error: "Too many requests." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+            },
+          },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
     const { id } = await params;
     const existing = await db.adminYear.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json({ error: "Year not found." }, { status: 404 });
+      return withCache(
+        NextResponse.json({ error: "Year not found." }, { status: 404 }),
+        CACHE_NO_STORE,
+      );
     }
     await db.adminYear.delete({ where: { id } });
 
@@ -162,6 +194,6 @@ export const DELETE = withPrismaError(
       summary: `Deleted year: ${existing.year}`,
     });
 
-    return NextResponse.json({ ok: true });
+    return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
   },
 );

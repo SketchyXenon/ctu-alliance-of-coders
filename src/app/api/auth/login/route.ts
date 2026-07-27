@@ -6,11 +6,15 @@ import {
   rateLimit,
   getClientIp,
   maskEmail,
+  isLoginLocked,
+  recordLoginFailure,
+  clearLoginFailures,
 } from "@/lib/security";
 import { validatePassword } from "@/lib/validation";
 import { logActivity } from "@/lib/activity";
 import { logger } from "@/lib/logger";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 
 // Dummy hash used to keep verification timing uniform for non-existent users
 // (mitigates user enumeration via timing). Must use the salt:hash format that
@@ -26,7 +30,10 @@ export const DUMMY_HASH =
 // regression test in tests/login-enumeration.test.ts can pin the shape.
 export const LOGIN_FAILURE_MESSAGE = "Invalid email or password.";
 export function loginFailureResponse() {
-  return NextResponse.json({ error: LOGIN_FAILURE_MESSAGE }, { status: 401 });
+  return withCache(
+    NextResponse.json({ error: LOGIN_FAILURE_MESSAGE }, { status: 401 }),
+    CACHE_NO_STORE,
+  );
 }
 
 /** POST /api/auth/login - email + password, sets session cookie.
@@ -39,14 +46,17 @@ export const POST = withPrismaError(async function POST(request: Request) {
   if (!ipLimit.allowed) {
     // Per A06-2: identical message for IP and email rate limits — prevents
     // an attacker from distinguishing which limit was hit.
-    return NextResponse.json(
-      { error: "Too many login attempts. Please try again later." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)),
+    return withCache(
+      NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(ipLimit.retryAfterMs / 1000)),
+          },
         },
-      },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -54,7 +64,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const emailCheck = validateEmail(body.email);
@@ -67,18 +80,40 @@ export const POST = withPrismaError(async function POST(request: Request) {
   const email = String(body.email).trim().toLowerCase();
   const password = passCheck.value;
 
+  // Account lockout: if this email has had >= 5 failures recently, reject
+  // before even running the password check. Per 06 §7: tighter limits on auth.
+  // Uses the same generic message as the rate limit (no lockout oracle).
+  const lock = isLoginLocked(email);
+  if (lock.locked) {
+    return withCache(
+      NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(lock.retryAfterMs / 1000)),
+          },
+        },
+      ),
+      CACHE_NO_STORE,
+    );
+  }
+
   // Email-keyed rate limit: 10 per hour per email.
   const emailLimit = rateLimit(`login-email:${email}`, 10, 60 * 60_000);
   if (!emailLimit.allowed) {
     // Per A06-2: identical message to the IP rate limit.
-    return NextResponse.json(
-      { error: "Too many login attempts. Please try again later." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
+    return withCache(
+      NextResponse.json(
+        { error: "Too many login attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
+          },
         },
-      },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -90,6 +125,9 @@ export const POST = withPrismaError(async function POST(request: Request) {
     : await verifyPassword(password, DUMMY_HASH);
 
   if (!user || !ok) {
+    // Record the failure for the lockout counter (per-email, not per-IP, so a
+    // distributed attack still gets locked out per-account).
+    recordLoginFailure(email);
     // M5: mask email in warn log; full email stays in the access-controlled
     // audit trail (logActivity) only. Per 06-security-architecture.md section 11.
     logger.warn("Failed login attempt", { email: maskEmail(email), ip });
@@ -98,6 +136,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
 
   // Role check: return same 401 as invalid credentials (no role oracle).
   if (user.role !== "admin") {
+    recordLoginFailure(email);
     logger.warn("Non-admin login attempt", {
       email: maskEmail(email),
       ip,
@@ -105,6 +144,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
     });
     return loginFailureResponse();
   }
+
+  // Success: clear the failure counter so a user who forgot-then-remembered
+  // their password isn't one failure from a fresh lockout.
+  clearLoginFailures(email);
 
   await createSession(user.id);
   await logActivity({
@@ -114,7 +157,15 @@ export const POST = withPrismaError(async function POST(request: Request) {
     summary: `Admin signed in: ${user.email}`,
   });
 
-  return NextResponse.json({
-    user: { id: user.id, email: user.email, name: user.name, role: user.role },
-  });
+  return withCache(
+    NextResponse.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    }),
+    CACHE_NO_STORE,
+  );
 });

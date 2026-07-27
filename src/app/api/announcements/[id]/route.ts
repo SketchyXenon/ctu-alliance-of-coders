@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { validateText, rateLimit } from "@/lib/security";
 import { validateImageUrl } from "@/lib/validation";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { logActivity } from "@/lib/activity";
 import {
   serializeLinks,
@@ -22,17 +23,25 @@ export const PATCH = withPrismaError(
     try {
       user = await requireAdmin();
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCache(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const rl = rateLimit(`ann-update:${user.id}`, 20, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-        },
+      return withCache(
+        NextResponse.json(
+          { error: "Too many requests." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+            },
+          },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
@@ -41,17 +50,20 @@ export const PATCH = withPrismaError(
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json(
-        { error: "Invalid JSON body." },
-        { status: 400 },
+      return withCache(
+        NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+        CACHE_NO_STORE,
       );
     }
 
     const existing = await db.announcement.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json(
-        { error: "Announcement not found." },
-        { status: 404 },
+      return withCache(
+        NextResponse.json(
+          { error: "Announcement not found." },
+          { status: 404 },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
@@ -63,7 +75,10 @@ export const PATCH = withPrismaError(
         maxLen: 200,
       });
       if (!c.valid)
-        return NextResponse.json({ error: c.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: c.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.title = String(body.title).trim();
     }
     if (body.body !== undefined) {
@@ -73,20 +88,29 @@ export const PATCH = withPrismaError(
         maxLen: MAX_BODY,
       });
       if (!c.valid)
-        return NextResponse.json({ error: c.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: c.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.body = String(body.body).trim();
     }
     if (body.type !== undefined) {
       if (!ANNOUNCEMENT_TYPES.includes(body.type as AnnouncementType)) {
-        return NextResponse.json({ error: "Invalid type." }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: "Invalid type." }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       }
       data.type = String(body.type);
     }
     if (body.pinned !== undefined) {
       if (typeof body.pinned !== "boolean") {
-        return NextResponse.json(
-          { error: "pinned must be a boolean." },
-          { status: 400 },
+        return withCache(
+          NextResponse.json(
+            { error: "pinned must be a boolean." },
+            { status: 400 },
+          ),
+          CACHE_NO_STORE,
         );
       }
       data.pinned = body.pinned;
@@ -95,14 +119,20 @@ export const PATCH = withPrismaError(
       // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
       const imgCheck = validateImageUrl(body.image);
       if (!imgCheck.valid)
-        return NextResponse.json({ error: imgCheck.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: imgCheck.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.image = imgCheck.normalized;
     }
     if (body.links !== undefined) {
       // Validate links array (06 section 5: validate all external input).
       const linksCheck = validateAnnouncementLinks(body.links);
       if (!linksCheck.valid) {
-        return NextResponse.json({ error: linksCheck.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: linksCheck.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       }
       data.links = serializeLinks(linksCheck.normalized);
     }
@@ -119,7 +149,7 @@ export const PATCH = withPrismaError(
         pinned: existing.pinned,
         date: existing.date,
       };
-      return NextResponse.json({ item });
+      return withCache(NextResponse.json({ item }), CACHE_NO_STORE);
     }
 
     const updated = await db.announcement.update({ where: { id }, data });
@@ -142,7 +172,7 @@ export const PATCH = withPrismaError(
       summary: `Updated announcement: ${updated.title}`,
     });
 
-    return NextResponse.json({ item });
+    return withCache(NextResponse.json({ item }), CACHE_NO_STORE);
   },
 );
 
@@ -156,26 +186,37 @@ export const DELETE = withPrismaError(
     try {
       user = await requireAdmin();
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCache(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const rl = rateLimit(`ann-delete:${user.id}`, 20, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-        },
+      return withCache(
+        NextResponse.json(
+          { error: "Too many requests." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+            },
+          },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
     const { id } = await params;
     const existing = await db.announcement.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json(
-        { error: "Announcement not found." },
-        { status: 404 },
+      return withCache(
+        NextResponse.json(
+          { error: "Announcement not found." },
+          { status: 404 },
+        ),
+        CACHE_NO_STORE,
       );
     }
     await db.announcement.delete({ where: { id } });
@@ -188,6 +229,6 @@ export const DELETE = withPrismaError(
       summary: `Deleted announcement: ${existing.title}`,
     });
 
-    return NextResponse.json({ ok: true });
+    return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
   },
 );

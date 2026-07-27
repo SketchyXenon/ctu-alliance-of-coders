@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { validateText, rateLimit } from "@/lib/security";
 import { validateImageUrl } from "@/lib/validation";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { logActivity } from "@/lib/activity";
 import { wouldCreateCycle } from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
@@ -14,17 +15,23 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     user = await requireAdmin();
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withCache(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const rl = rateLimit(`officer-create:${user.id}`, 20, 60_000);
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-      },
+    return withCache(
+      NextResponse.json(
+        { error: "Too many requests." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -32,30 +39,48 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const yearId = String(body.yearId ?? "");
   if (!yearId) {
-    return NextResponse.json({ error: "yearId is required." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "yearId is required." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const year = await db.adminYear.findUnique({ where: { id: yearId } });
   if (!year) {
-    return NextResponse.json({ error: "Year not found." }, { status: 404 });
+    return withCache(
+      NextResponse.json({ error: "Year not found." }, { status: 404 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const nameCheck = validateText(body.name, { required: false, maxLen: 80 });
   if (!nameCheck.valid)
-    return NextResponse.json({ error: nameCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: nameCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   const roleCheck = validateText(body.role, { required: false, maxLen: 80 });
   if (!roleCheck.valid)
-    return NextResponse.json({ error: roleCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: roleCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
   const imageCheck = validateImageUrl(body.image);
   if (!imageCheck.valid)
-    return NextResponse.json({ error: imageCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: imageCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   // Validate reportsToId (org-chart parent): same year + no cycle. Per 06
   // section 3: re-authorize every object access server-side; a parent id from
@@ -70,9 +95,12 @@ export const POST = withPrismaError(async function POST(request: Request) {
     const raw = String(body.reportsToId);
     const parent = await db.officer.findUnique({ where: { id: raw } });
     if (!parent || parent.yearId !== yearId) {
-      return NextResponse.json(
-        { error: "Parent officer must belong to the same year." },
-        { status: 400 },
+      return withCache(
+        NextResponse.json(
+          { error: "Parent officer must belong to the same year." },
+          { status: 400 },
+        ),
+        CACHE_NO_STORE,
       );
     }
     // A new officer has no id yet, so it can't form a cycle by being assigned
@@ -83,12 +111,15 @@ export const POST = withPrismaError(async function POST(request: Request) {
       select: { id: true, reportsToId: true },
     });
     if (wouldCreateCycle(raw, parent.reportsToId, siblings)) {
-      return NextResponse.json(
-        {
-          error:
-            "That parent would create a reporting cycle. Choose a different parent.",
-        },
-        { status: 400 },
+      return withCache(
+        NextResponse.json(
+          {
+            error:
+              "That parent would create a reporting cycle. Choose a different parent.",
+          },
+          { status: 400 },
+        ),
+        CACHE_NO_STORE,
       );
     }
     reportsToId = raw;
@@ -129,5 +160,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
     summary: `Added officer: ${created.name} (${created.role})`,
   });
 
-  return NextResponse.json({ item }, { status: 201 });
+  return withCache(
+    NextResponse.json({ item }, { status: 201 }),
+    CACHE_NO_STORE,
+  );
 });

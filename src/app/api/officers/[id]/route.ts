@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { validateText, rateLimit } from "@/lib/security";
 import { validateImageUrl } from "@/lib/validation";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { logActivity } from "@/lib/activity";
 import { wouldCreateCycle } from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
@@ -15,17 +16,25 @@ export const PATCH = withPrismaError(
     try {
       user = await requireAdmin();
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCache(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const rl = rateLimit(`officer-update:${user.id}`, 20, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-        },
+      return withCache(
+        NextResponse.json(
+          { error: "Too many requests." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+            },
+          },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
@@ -34,17 +43,17 @@ export const PATCH = withPrismaError(
     try {
       body = await request.json();
     } catch {
-      return NextResponse.json(
-        { error: "Invalid JSON body." },
-        { status: 400 },
+      return withCache(
+        NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+        CACHE_NO_STORE,
       );
     }
 
     const existing = await db.officer.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json(
-        { error: "Officer not found." },
-        { status: 404 },
+      return withCache(
+        NextResponse.json({ error: "Officer not found." }, { status: 404 }),
+        CACHE_NO_STORE,
       );
     }
 
@@ -52,28 +61,40 @@ export const PATCH = withPrismaError(
     if (body.name !== undefined) {
       const c = validateText(body.name, { required: false, maxLen: 80 });
       if (!c.valid)
-        return NextResponse.json({ error: c.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: c.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.name = String(body.name).trim() || "Vacant Slot";
     }
     if (body.role !== undefined) {
       const c = validateText(body.role, { required: false, maxLen: 80 });
       if (!c.valid)
-        return NextResponse.json({ error: c.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: c.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.role = String(body.role).trim() || "Open Position";
     }
     if (body.image !== undefined) {
       // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
       const imgCheck = validateImageUrl(body.image);
       if (!imgCheck.valid)
-        return NextResponse.json({ error: imgCheck.error }, { status: 400 });
+        return withCache(
+          NextResponse.json({ error: imgCheck.error }, { status: 400 }),
+          CACHE_NO_STORE,
+        );
       data.image = imgCheck.normalized;
     }
     if (body.sortOrder !== undefined) {
       const sortNum = Number(body.sortOrder);
       if (!Number.isInteger(sortNum) || sortNum < 0) {
-        return NextResponse.json(
-          { error: "sortOrder must be a non-negative integer." },
-          { status: 400 },
+        return withCache(
+          NextResponse.json(
+            { error: "sortOrder must be a non-negative integer." },
+            { status: 400 },
+          ),
+          CACHE_NO_STORE,
         );
       }
       data.sortOrder = sortNum;
@@ -89,9 +110,12 @@ export const PATCH = withPrismaError(
         // section 6: cycle check before the write.
         const parent = await db.officer.findUnique({ where: { id: raw } });
         if (!parent || parent.yearId !== existing.yearId) {
-          return NextResponse.json(
-            { error: "Parent officer must belong to the same year." },
-            { status: 400 },
+          return withCache(
+            NextResponse.json(
+              { error: "Parent officer must belong to the same year." },
+              { status: 400 },
+            ),
+            CACHE_NO_STORE,
           );
         }
         const siblings = await db.officer.findMany({
@@ -99,12 +123,15 @@ export const PATCH = withPrismaError(
           select: { id: true, reportsToId: true },
         });
         if (wouldCreateCycle(id, raw, siblings)) {
-          return NextResponse.json(
-            {
-              error:
-                "That parent would create a reporting cycle. Choose a different parent.",
-            },
-            { status: 400 },
+          return withCache(
+            NextResponse.json(
+              {
+                error:
+                  "That parent would create a reporting cycle. Choose a different parent.",
+              },
+              { status: 400 },
+            ),
+            CACHE_NO_STORE,
           );
         }
       }
@@ -121,7 +148,7 @@ export const PATCH = withPrismaError(
         sortOrder: existing.sortOrder,
         reportsToId: existing.reportsToId ?? null,
       };
-      return NextResponse.json({ item });
+      return withCache(NextResponse.json({ item }), CACHE_NO_STORE);
     }
 
     const updated = await db.officer.update({ where: { id }, data });
@@ -142,7 +169,7 @@ export const PATCH = withPrismaError(
       summary: `Updated officer: ${updated.name} (${updated.role})`,
     });
 
-    return NextResponse.json({ item });
+    return withCache(NextResponse.json({ item }), CACHE_NO_STORE);
   },
 );
 
@@ -156,26 +183,34 @@ export const DELETE = withPrismaError(
     try {
       user = await requireAdmin();
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return withCache(
+        NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+        CACHE_NO_STORE,
+      );
     }
 
     const rl = rateLimit(`officer-delete:${user.id}`, 20, 60_000);
     if (!rl.allowed) {
-      return NextResponse.json(
-        { error: "Too many requests." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-        },
+      return withCache(
+        NextResponse.json(
+          { error: "Too many requests." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)),
+            },
+          },
+        ),
+        CACHE_NO_STORE,
       );
     }
 
     const { id } = await params;
     const existing = await db.officer.findUnique({ where: { id } });
     if (!existing) {
-      return NextResponse.json(
-        { error: "Officer not found." },
-        { status: 404 },
+      return withCache(
+        NextResponse.json({ error: "Officer not found." }, { status: 404 }),
+        CACHE_NO_STORE,
       );
     }
     await db.officer.delete({ where: { id } });
@@ -188,6 +223,6 @@ export const DELETE = withPrismaError(
       summary: `Removed officer: ${existing.name} (${existing.role})`,
     });
 
-    return NextResponse.json({ ok: true });
+    return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
   },
 );

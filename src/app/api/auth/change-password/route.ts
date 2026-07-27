@@ -13,6 +13,7 @@ import { validatePassword } from "@/lib/validation";
 import { logActivity } from "@/lib/activity";
 import { logger } from "@/lib/logger";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { cookies } from "next/headers";
 
 const MIN_PASSWORD = 8;
@@ -35,17 +36,23 @@ const MAX_PASSWORD = 128;
 export const POST = withPrismaError(async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withCache(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const rl = rateLimit(`change-password:${user.id}`, 3, 10 * 60_000);
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many attempts. Please wait." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-      },
+    return withCache(
+      NextResponse.json(
+        { error: "Too many attempts. Please wait." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -53,7 +60,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   // Validate current and new passwords WITHOUT display-field XSS blocklists
@@ -63,29 +73,41 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: MAX_PASSWORD,
   });
   if (!currentCheck.valid || !currentCheck.value) {
-    return NextResponse.json({ error: currentCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: currentCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
   const newCheck = validatePassword(body.newPassword, {
     minLen: MIN_PASSWORD,
     maxLen: MAX_PASSWORD,
   });
   if (!newCheck.valid || !newCheck.value) {
-    return NextResponse.json({ error: newCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: newCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const currentPassword = currentCheck.value;
   const newPassword = newCheck.value;
 
   if (currentPassword === newPassword) {
-    return NextResponse.json(
-      { error: "New password must differ from current." },
-      { status: 400 },
+    return withCache(
+      NextResponse.json(
+        { error: "New password must differ from current." },
+        { status: 400 },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
   const adminUser = await db.adminUser.findUnique({ where: { id: user.id } });
   if (!adminUser) {
-    return NextResponse.json({ error: "User not found." }, { status: 404 });
+    return withCache(
+      NextResponse.json({ error: "User not found." }, { status: 404 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const passwordOk = await verifyPassword(
@@ -94,9 +116,12 @@ export const POST = withPrismaError(async function POST(request: Request) {
   );
   if (!passwordOk) {
     logger.warn("Failed password change", { userId: user.id });
-    return NextResponse.json(
-      { error: "Current password is incorrect." },
-      { status: 403 },
+    return withCache(
+      NextResponse.json(
+        { error: "Current password is incorrect." },
+        { status: 403 },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -132,12 +157,15 @@ export const POST = withPrismaError(async function POST(request: Request) {
         logger.warn("Session expired during password change", {
           userId: user.id,
         });
-        return NextResponse.json(
-          {
-            error:
-              "Your session has expired. Please log in again with your new password.",
-          },
-          { status: 401 },
+        return withCache(
+          NextResponse.json(
+            {
+              error:
+                "Your session has expired. Please log in again with your new password.",
+            },
+            { status: 401 },
+          ),
+          CACHE_NO_STORE,
         );
       }
       throw e;
@@ -151,5 +179,5 @@ export const POST = withPrismaError(async function POST(request: Request) {
     summary: "Changed admin password",
   });
 
-  return NextResponse.json({ ok: true });
+  return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
 });

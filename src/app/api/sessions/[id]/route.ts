@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
 import { withPrismaError } from "@/lib/route-helpers";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { sessionDisplayId } from "../route";
 
 /**
@@ -19,7 +20,10 @@ export const DELETE = withPrismaError(async function DELETE(
 ) {
   const user = await getCurrentUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withCache(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const { id } = await params;
@@ -28,9 +32,12 @@ export const DELETE = withPrismaError(async function DELETE(
 
   // Compare surrogate ids so the raw token never leaves the server.
   if (currentSessionId && sessionDisplayId(currentSessionId) === id) {
-    return NextResponse.json(
-      { error: "Use sign out to end your current session." },
-      { status: 400 },
+    return withCache(
+      NextResponse.json(
+        { error: "Use sign out to end your current session." },
+        { status: 400 },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -43,7 +50,10 @@ export const DELETE = withPrismaError(async function DELETE(
   const target = userSessions.find((s) => sessionDisplayId(s.id) === id);
 
   if (!target) {
-    return NextResponse.json({ error: "Session not found." }, { status: 404 });
+    return withCache(
+      NextResponse.json({ error: "Session not found." }, { status: 404 }),
+      CACHE_NO_STORE,
+    );
   }
 
   await db.adminSession.delete({ where: { id: target.id } });
@@ -56,5 +66,5 @@ export const DELETE = withPrismaError(async function DELETE(
     summary: "Revoked a session",
   });
 
-  return NextResponse.json({ ok: true });
+  return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
 });

@@ -111,6 +111,84 @@ export function generateToken(bytes = 32): string {
 }
 
 /**
+ * Failed-login lockout tracker.
+ *
+ * Complements the IP + email rate limits: those throttle request VOLUME, this
+ * locks an account after N FAILED attempts regardless of source IP (so a
+ * distributed credential-stuffing attack still gets locked out per-account).
+ * Per 06-security-architecture.md section 7: "tighter limits on
+ * authentication and computationally expensive routes."
+ *
+ * Trade-off: in-memory => single-instance only. For multi-instance prod, back
+ * this with Redis/Upstash (same caveat as rateLimit). Entries are swept with
+ * the same eviction pass as rateLimitStore.
+ */
+interface LockoutEntry {
+  failures: number;
+  lockedUntil: number;
+  lastTouched: number;
+}
+const lockoutStore = new Map<string, LockoutEntry>();
+const LOCKOUT_THRESHOLD = 5; // 5 failed attempts triggers a lock
+const LOCKOUT_DURATION_MS = 15 * 60_000; // 15 minutes
+
+/** Record a failed login attempt for an email. Call AFTER a login failure. */
+export function recordLoginFailure(email: string): {
+  locked: boolean;
+  lockedForMs: number;
+} {
+  const now = Date.now();
+  const key = email.toLowerCase();
+  const entry = lockoutStore.get(key) ?? {
+    failures: 0,
+    lockedUntil: 0,
+    lastTouched: now,
+  };
+  // If the lockout has expired, reset the counter.
+  if (entry.lockedUntil && entry.lockedUntil < now) {
+    entry.failures = 0;
+    entry.lockedUntil = 0;
+  }
+  entry.failures += 1;
+  entry.lastTouched = now;
+  if (entry.failures >= LOCKOUT_THRESHOLD) {
+    entry.lockedUntil = now + LOCKOUT_DURATION_MS;
+    lockoutStore.set(key, entry);
+    return { locked: true, lockedForMs: LOCKOUT_DURATION_MS };
+  }
+  lockoutStore.set(key, entry);
+  return { locked: false, lockedForMs: 0 };
+}
+
+/** Check if an email is currently locked. Call BEFORE attempting a login. */
+export function isLoginLocked(email: string): {
+  locked: boolean;
+  retryAfterMs: number;
+} {
+  const key = email.toLowerCase();
+  const entry = lockoutStore.get(key);
+  if (!entry || !entry.lockedUntil) return { locked: false, retryAfterMs: 0 };
+  const now = Date.now();
+  if (entry.lockedUntil <= now) {
+    // Lockout expired; clear it so the next failure starts fresh.
+    lockoutStore.delete(key);
+    return { locked: false, retryAfterMs: 0 };
+  }
+  return { locked: true, retryAfterMs: entry.lockedUntil - now };
+}
+
+/** Clear the lockout for an email. Call on a SUCCESSFUL login (so a user who
+ *  forgot their password, then remembered it, isn't still one failure from a
+ *  lockout). */
+export function clearLoginFailures(email: string): void {
+  lockoutStore.delete(email.toLowerCase());
+}
+
+// Expose the threshold + duration for tests + the login route to reference.
+export const LOGIN_LOCKOUT_THRESHOLD = LOCKOUT_THRESHOLD;
+export const LOGIN_LOCKOUT_DURATION_MS = LOCKOUT_DURATION_MS;
+
+/**
  * In-memory sliding-window rate limiter.
  * Per 06-security-architecture.md section 7: rate limit auth and expensive
  * endpoints, return 429 with Retry-After. Singleton for app-wide use.

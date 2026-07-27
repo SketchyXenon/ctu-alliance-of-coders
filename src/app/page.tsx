@@ -24,6 +24,7 @@ import {
   AnnouncementNotFound,
 } from "@/components/sections/announcement-post";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { BotCheckpoint } from "@/components/bot-checkpoint";
 import {
   parseAnnouncementHash,
   buildAnnouncementHash,
@@ -492,11 +493,6 @@ export default function Home() {
     null,
   );
 
-  // ---- Loading gate ------------------------------------------------------
-  if (!initialized) {
-    return <PageLoader />;
-  }
-
   // Reading progress is active on content-heavy pages, not on the hero.
   const showReadingProgress =
     activeAnnouncementId !== null ||
@@ -508,8 +504,14 @@ export default function Home() {
     activeNav === "Terms of Use" ||
     activeNav === "Cookie Policy";
 
-  // ---- Render ------------------------------------------------------------
-  return (
+  // ---- Loading gate ------------------------------------------------------
+  // BotCheckpoint wraps the entire app: it shows the Turnstile challenge on
+  // the initial load (only when Turnstile is configured + the visitor hasn't
+  // already been verified). Once passed, the signed bot-ok cookie means a
+  // refresh doesn't re-challenge. Per 05-ui-ux §6 + 06 §5/§8.
+  const appTree = !initialized ? (
+    <PageLoader />
+  ) : (
     <div className="flex min-h-screen flex-col bg-background">
       <ReadingProgress active={showReadingProgress} />
       {/* Skip-to-content link for keyboard/screen-reader users (WCAG 2.4.1) */}
@@ -563,4 +565,6 @@ export default function Home() {
       />
     </div>
   );
+
+  return <BotCheckpoint>{appTree}</BotCheckpoint>;
 }
