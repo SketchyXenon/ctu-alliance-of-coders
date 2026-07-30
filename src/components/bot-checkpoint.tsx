@@ -273,11 +273,17 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       return;
     }
 
-    // Recoverable failure (timeout-or-duplicate): the token was valid but got
-    // consumed/expired. Reset the widget ONCE to get a fresh token instead of
-    // showing a terminal error. The submitAttempts cap above bounds this so it
-    // can never infinite-loop. Per 02 §6 (graceful degradation).
-    if (data?.retryable && widgetIdRef.current && window.turnstile) {
+    // Any non-fallback failure (retryable timeout-or-duplicate, HTTP 400 from
+    // a bad clearance token on a non-Cloudflare-Zone host, or a genuine
+    // success:false): reset the widget to get a fresh token. The
+    // submitAttempts cap (checked above) bounds this so it can never
+    // infinite-loop — after MAX_ATTEMPTS, requestFallback sends
+    // forceFallback:true to get the PoW path. Per 02 §6 (graceful degradation)
+    // + 06 §1 (fail closed, then degrade). This fixes the production issue
+    // where a 400 (widget couldn't complete clearance redemption because the
+    // site is on Vercel, not a Cloudflare Zone) left the user stuck on
+    // "Verification unavailable" after a single attempt.
+    if (widgetIdRef.current && window.turnstile) {
       try {
         window.turnstile.reset(widgetIdRef.current);
         return; // the reset re-fires callback with a fresh token
@@ -286,9 +292,9 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       }
     }
 
-    // No fallback offered (e.g., IP exceeded challenge-issue limit, or a
-    // network error). ANTI-LOOP: do NOT call reset(). A failed verify is
-    // terminal with a retry button.
+    // Can't reset (widget gone or turnstile undefined): terminal error with a
+    // manual retry button. ANTI-LOOP: this path is only reached when the widget
+    // itself is unavailable, so a reset isn't possible.
     setError(
       apiErr?.message || data?.error || "Verification failed. Please retry.",
     );
