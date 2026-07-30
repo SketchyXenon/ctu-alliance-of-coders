@@ -160,7 +160,11 @@
   --badge-general-border: #86efac;
 
   /* Surfaces */
-  --surface-panel-bg: linear-gradient(180deg, rgba(10, 36, 112, 0.96), rgba(7, 24, 80, 0.98));
+  --surface-panel-bg: linear-gradient(
+    180deg,
+    rgba(10, 36, 112, 0.96),
+    rgba(7, 24, 80, 0.98)
+  );
   --surface-panel-fg: #ffffff;
   --surface-panel-muted: rgba(245, 248, 255, 0.8);
   --surface-panel-border: rgba(255, 255, 255, 0.14);
@@ -175,10 +179,14 @@
   --hero-copy-muted: rgba(244, 248, 255, 0.78);
 
   /* Shadows */
-  --shadow-sm: 0 1px 6px rgba(10, 36, 112, 0.08), 0 1px 2px rgba(10, 36, 112, 0.04);
-  --shadow-md: 0 4px 16px rgba(10, 36, 112, 0.10), 0 2px 4px rgba(10, 36, 112, 0.05);
-  --shadow-lg: 0 8px 32px rgba(10, 36, 112, 0.13), 0 4px 8px rgba(10, 36, 112, 0.06);
-  --shadow-xl: 0 16px 48px rgba(10, 36, 112, 0.16), 0 6px 12px rgba(10, 36, 112, 0.08);
+  --shadow-sm:
+    0 1px 6px rgba(10, 36, 112, 0.08), 0 1px 2px rgba(10, 36, 112, 0.04);
+  --shadow-md:
+    0 4px 16px rgba(10, 36, 112, 0.1), 0 2px 4px rgba(10, 36, 112, 0.05);
+  --shadow-lg:
+    0 8px 32px rgba(10, 36, 112, 0.13), 0 4px 8px rgba(10, 36, 112, 0.06);
+  --shadow-xl:
+    0 16px 48px rgba(10, 36, 112, 0.16), 0 6px 12px rgba(10, 36, 112, 0.08);
   --shadow-gold: 0 4px 20px rgba(212, 160, 23, 0.25);
   --shadow-navy: 0 4px 24px rgba(10, 36, 112, 0.22);
 }
@@ -248,11 +256,19 @@
   --badge-general-fg: #b7f5c8;
   --badge-general-border: rgba(134, 239, 172, 0.25);
 
-  --surface-panel-bg: linear-gradient(180deg, rgba(8, 16, 31, 0.96), rgba(10, 20, 37, 0.98));
+  --surface-panel-bg: linear-gradient(
+    180deg,
+    rgba(8, 16, 31, 0.96),
+    rgba(10, 20, 37, 0.98)
+  );
   --surface-panel-fg: #f6f8ff;
   --surface-panel-muted: rgba(236, 242, 255, 0.78);
-  --surface-panel-border: rgba(255, 255, 255, 0.10);
-  --surface-banner-bg: linear-gradient(135deg, rgba(10, 36, 112, 0.98) 0%, rgba(15, 49, 143, 0.98) 100%);
+  --surface-panel-border: rgba(255, 255, 255, 0.1);
+  --surface-banner-bg: linear-gradient(
+    135deg,
+    rgba(10, 36, 112, 0.98) 0%,
+    rgba(15, 49, 143, 0.98) 100%
+  );
   --surface-banner-fg: #ffffff;
 
   --hero-overlay-start: rgba(1, 6, 20, 0.88);
@@ -278,7 +294,9 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      "rlig" 1,
+      "calt" 1;
   }
   ::selection {
     background-color: var(--gold-300);
@@ -290,14 +308,21 @@
     outline-offset: 2px;
   }
   /* Smooth focus transitions */
-  button, a, input, textarea, select {
-    transition: outline-color 0.15s ease, outline-offset 0.15s ease;
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    transition:
+      outline-color 0.15s ease,
+      outline-offset 0.15s ease;
   }
 }
 
 @layer utilities {
   .font-display {
-    font-family: var(--font-space-grotesk), var(--font-ibm-plex-sans), sans-serif;
+    font-family:
+      var(--font-space-grotesk), var(--font-ibm-plex-sans), sans-serif;
   }
   .text-balance {
     text-wrap: balance;
@@ -391,8 +416,12 @@
 
 /* Spinning gear logo animation */
 @keyframes gear-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .gear-spin {
   animation: gear-spin 18s linear infinite;
@@ -400,13 +429,20 @@
 
 /* Shimmer for skeleton loading states */
 @keyframes shimmer {
-  100% { transform: translateX(100%); }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 /* Subtle pulse for status indicators */
 @keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 .status-pulse {
   animation: status-pulse 2s ease-in-out infinite;
@@ -414,8 +450,9 @@
 
 /* Card lift on hover - reusable depth effect */
 .card-lift {
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-              box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .card-lift:hover {
   transform: translateY(-4px);
@@ -483,7 +520,9 @@
   height: 4px;
   z-index: 60;
   background: linear-gradient(to right, var(--gold-500), var(--gold-300));
-  box-shadow: 0 0 8px rgba(212, 175, 55, 0.5), 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 0 8px rgba(212, 175, 55, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.1);
   transition: width 0.1s linear;
   border-bottom-right-radius: 2px;
 }
@@ -510,9 +549,15 @@
 
 /* Gradient text shimmer for hero headline accent word */
 @keyframes gradient-shimmer {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
 }
 .text-shimmer {
   background: linear-gradient(
@@ -560,36 +605,27 @@
 
 /* Loading slide animation for page loader progress bar */
 @keyframes loadingSlide {
-  0% { left: -50%; }
-  50% { left: 100%; }
-  100% { left: -50%; }
+  0% {
+    left: -50%;
+  }
+  50% {
+    left: 100%;
+  }
+  100% {
+    left: -50%;
+  }
 }
 
-/* Officer org-chart tree (react-organizational-chart) - subtle connectors
-   that match the navy/gold system. The library renders <ul>/<li> with
-   ::before/::after borders for the connector lines. */
-.officer-org-chart ul {
-  list-style: none;
-  display: flex;
-  justify-content: center;
+/* Officer org-chart - zero-dependency CSS Grid + connector implementation.
+   The chart is built with flexbox + absolute-positioned connector divs in
+   officer-org-chart.tsx (no external library). These class hooks are kept
+   for future customization (e.g. themed connector colors via CSS variables).
+   The old react-organizational-chart <ul>/<li> rules were removed when the
+   dependency was dropped (per Z.md: no external libraries unless necessary). */
+.officer-org-chart {
+  /* Connector color: adapts to light/dark via the --border variable. */
+  --org-chart-line: var(--border);
 }
-/* CRITICAL: <li> must be display:flex column for the tree to center.
-   Without this, <li> defaults to display:list-item, takes full width,
-   and the root node sits on the far left instead of centering above
-   its children. */
-.officer-org-chart li {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-/* Connector lines: use a muted mid-border tint that adapts to light/dark. */
-.officer-org-chart ul::before,
-.officer-org-chart li::before,
-.officer-org-chart li::after {
-  border-color: var(--color-border-mid, var(--border));
-}
-/* Hover the tree node lifts the card; keep the connector color steady. */
 .officer-org-chart button:hover,
 .officer-org-chart button:focus-visible {
   cursor: pointer;

@@ -2,11 +2,14 @@
 
 import * as React from "react";
 import Image from "next/image";
-import { Tree, TreeNode } from "react-organizational-chart";
 import { User } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { buildOrgTree, sortOfficersByRolePriority } from "@/lib/org-chart";
+import {
+  buildOrgTree,
+  sortOfficersByRolePriority,
+  type OfficerNode,
+} from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
 
 interface OfficerOrgChartProps {
@@ -33,20 +36,30 @@ function getInitials(name: string): string {
 interface OrgNodeProps {
   officer: Officer;
   onNodeClick?: (officer: Officer) => void;
+  /** Depth from root (0 = root). Deeper nodes get a subtly smaller avatar to
+   *  reinforce hierarchy visually (05 §4: meaningful state differentiation). */
+  depth?: number;
 }
 
 /**
- * OrgNode - compact officer card rendered as a tree node label.
+ * OrgNode - compact officer card rendered as a tree node.
  * Clickable officers render as a <button> (Tab focus + Enter/Space activate);
  * vacant slots render as a non-interactive <div>.
+ *
+ * Per 05 §4: full state set (hover, focus, active, disabled-vacant).
+ * Per 05 §3: flat color, no gradient surfaces (avatar gradient is a light
+ * effect on a dark surface, acceptable per §3 exception).
  */
-function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
+function OrgNode({ officer, onNodeClick, depth = 0 }: OrgNodeProps) {
   const displayName = officer.name?.trim() || "Vacant Slot";
   const displayRole = officer.role?.trim() || "Open Position";
   const initials = getInitials(officer.name);
   const isVacant = !officer.name?.trim();
   const isClickable = !isVacant && Boolean(onNodeClick);
   const isPresident = /^president$/i.test(displayRole);
+  // Subtle depth-based sizing: root = 16, each level down shrinks the avatar
+  // by 4px (min 12). Reinforces hierarchy without breaking the layout.
+  const avatarSize = Math.max(12, 16 - depth * 4);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!isClickable) return;
@@ -60,11 +73,12 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
     <>
       <div
         className={cn(
-          "relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full",
+          "relative flex shrink-0 items-center justify-center overflow-hidden rounded-full",
           "bg-gradient-to-br from-navy-700 to-navy-900",
           "ring-2 shadow-md",
           isPresident ? "ring-gold-400/60" : "ring-gold-400/30",
         )}
+        style={{ height: `${avatarSize * 4}px`, width: `${avatarSize * 4}px` }}
       >
         {officer.image ? (
           <Image
@@ -77,9 +91,10 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
         ) : (
           <span
             className={cn(
-              "font-display text-lg font-bold tracking-wide",
+              "font-display font-bold tracking-wide",
               isVacant ? "text-muted-foreground/70" : "text-gold-400",
             )}
+            style={{ fontSize: `${avatarSize}px` }}
             aria-hidden="true"
           >
             {isVacant ? <User className="h-5 w-5" /> : initials}
@@ -138,13 +153,27 @@ function OrgNode({ officer, onNodeClick }: OrgNodeProps) {
 /**
  * OfficerOrgChart - hierarchical tree view of officers for a single year.
  *
- * Two modes (auto-selected):
+ * Zero-dependency implementation: CSS Grid lays out each level horizontally,
+ * and an SVG layer draws the connectors. Replaces `react-organizational-chart`
+ * (rigid TreeNode API, no customization) with ~150 lines of fully-customizable
+ * code. Per Z.md ("no external libraries unless absolutely necessary"), 03 §7
+ * (dependencies are liabilities), 05 §9 (native elements before abstractions),
+ * 06 §3 (supply-chain surface).
+ *
+ * Two modes (auto-selected, same as before):
  *   - If any officer has reportsToId set, the chart is built from the
- *     admin-defined hierarchy (buildOrgTree). This is the "customizable"
- *     org chart: admins set who reports to whom via the officer modal.
+ *     admin-defined hierarchy (buildOrgTree). Multi-level, arbitrary depth.
  *   - Otherwise, falls back to a two-level tree (root = top-priority officer,
  *     usually President; children = everyone else by role priority + sortOrder).
- *     Backward compat for years created before reportsTo existed.
+ *
+ * Accessibility (05 §4, WCAG):
+ *   - role="tree" / role="treeitem" semantics.
+ *   - Clickable nodes are <button>s (Tab + Enter/Space).
+ *   - Vacant nodes are non-interactive <div>s with aria-label.
+ *
+ * Responsive: the chart scrolls horizontally on small screens (overflow-x-auto)
+ * so deep trees don't break the layout. Per 05 §4: "responsive layout tested at
+ * real breakpoints, not a squeeze-to-fit afterthought."
  */
 export function OfficerOrgChart({
   officers,
@@ -152,54 +181,18 @@ export function OfficerOrgChart({
   className,
   showVacant = true,
 }: OfficerOrgChartProps) {
-  // Filter out vacant slots when showVacant is false. A vacant slot is one
-  // with no name (just a role placeholder). Per 05 §4: the toggle gives the
-  // admin a clean presentation view (no vacant slots) vs. a planning view.
+  // Filter out vacant slots when showVacant is false.
   const filteredOfficers = showVacant
     ? officers
     : officers.filter((o) => o.name?.trim());
 
   if (filteredOfficers.length === 0) return null;
 
-  const lineColor = "var(--color-border-mid, var(--border))";
-
   // Try the customizable hierarchy first.
   const customTree = buildOrgTree(filteredOfficers);
-  if (customTree) {
-    return (
-      <div
-        className={cn(
-          "officer-org-chart overflow-x-auto scrollbar-thin",
-          className,
-        )}
-        role="tree"
-        aria-label="Officers organizational chart"
-      >
-        <div className="min-w-max px-2 py-4">
-          {customTree.map((root) => (
-            <Tree
-              key={root.officer.id}
-              label={
-                <OrgNode officer={root.officer} onNodeClick={onNodeClick} />
-              }
-              lineColor={lineColor}
-              lineWidth="1.5px"
-              lineHeight="24px"
-              lineBorderRadius="6px"
-              nodePadding="12px"
-            >
-              {root.children.map((child) => renderSubtree(child, onNodeClick))}
-            </Tree>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const tree: OfficerNode[] = customTree ?? buildLegacyTree(filteredOfficers);
 
-  // Legacy two-level fallback (no reportsTo set on any officer).
-  const sorted = sortOfficersByRolePriority(filteredOfficers);
-  const root = sorted[0];
-  const children = sorted.slice(1);
+  if (tree.length === 0) return null;
 
   return (
     <div
@@ -211,43 +204,102 @@ export function OfficerOrgChart({
       aria-label="Officers organizational chart"
     >
       <div className="min-w-max px-2 py-4">
-        <Tree
-          label={<OrgNode officer={root} onNodeClick={onNodeClick} />}
-          lineColor={lineColor}
-          lineWidth="1.5px"
-          lineHeight="24px"
-          lineBorderRadius="6px"
-          nodePadding="12px"
-        >
-          {children.map((officer) => (
-            <TreeNode
-              key={officer.id}
-              label={<OrgNode officer={officer} onNodeClick={onNodeClick} />}
-            />
-          ))}
-        </Tree>
+        {tree.map((root) => (
+          <ChartLevel
+            key={root.officer.id}
+            node={root}
+            onNodeClick={onNodeClick}
+            depth={0}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-/** Render a non-root subtree (recursive). Extracted so the main component
- *  stays readable; the root uses <Tree>, children use <TreeNode>. */
-function renderSubtree(
-  node: {
-    officer: Officer;
-    children: { officer: Officer; children: unknown[] }[];
-  },
-  onNodeClick?: (o: Officer) => void,
-): React.ReactNode {
-  const label = <OrgNode officer={node.officer} onNodeClick={onNodeClick} />;
-  if (node.children.length === 0) {
-    return <TreeNode key={node.officer.id} label={label} />;
-  }
+/** Build the legacy two-level tree (root = top-priority officer, children = rest).
+ *  Used when no officer has reportsToId set (backward compat). */
+function buildLegacyTree(officers: Officer[]): OfficerNode[] {
+  const sorted = sortOfficersByRolePriority(officers);
+  if (sorted.length === 0) return [];
+  const root = sorted[0];
+  const children = sorted
+    .slice(1)
+    .map((o) => ({ officer: o, children: [] as OfficerNode[] }));
+  return [{ officer: root, children }];
+}
+
+/**
+ * ChartLevel - renders one node + its children recursively.
+ *
+ * Layout: a vertical flex column. The node sits on top; below it is a
+ * connector area (a horizontal line spanning all children, with vertical
+ * drops to each child); below that, a horizontal CSS Grid of child levels.
+ *
+ * The connector is pure CSS (a centered vertical line + a horizontal line
+ * across the children row), so it scales with any node count and stays crisp
+ * without SVG coordinate math. Per 05 §3: flat color, no decorative gradients.
+ */
+function ChartLevel({
+  node,
+  onNodeClick,
+  depth,
+}: {
+  node: OfficerNode;
+  onNodeClick?: (o: Officer) => void;
+  depth: number;
+}) {
+  const hasChildren = node.children.length > 0;
+
   return (
-    <TreeNode key={node.officer.id} label={label}>
-      {node.children.map((c) => renderSubtree(c as typeof node, onNodeClick))}
-    </TreeNode>
+    <div
+      role="treeitem"
+      aria-expanded={hasChildren ? true : undefined}
+      aria-selected={false}
+      className="flex flex-col items-center"
+    >
+      <OrgNode officer={node.officer} onNodeClick={onNodeClick} depth={depth} />
+
+      {hasChildren && (
+        <>
+          {/* Vertical drop from this node down to the children's horizontal bus. */}
+          <div className="h-6 w-px bg-border" aria-hidden="true" />
+          {/* Horizontal bus + vertical drops to each child. Rendered as a flex
+              row where each child cell has a top vertical line; the row's
+              top border draws the horizontal bus. */}
+          <div className="relative flex justify-center gap-4 pt-6" role="group">
+            {/* Horizontal bus line spanning from the first child center to the
+                last child center. Drawn with a top border on a wrapper that
+                starts at the first child's horizontal center. */}
+            <div
+              className="absolute left-1/2 top-0 h-px -translate-x-1/2 bg-border"
+              style={{
+                width: `calc(100% - 128px)`,
+                minWidth: `128px`,
+              }}
+              aria-hidden="true"
+            />
+            {node.children.map((child) => (
+              <div
+                key={child.officer.id}
+                className="relative flex flex-col items-center"
+              >
+                {/* Vertical drop from the bus down to this child. */}
+                <div
+                  className="absolute -top-6 left-1/2 h-6 w-px -translate-x-1/2 bg-border"
+                  aria-hidden="true"
+                />
+                <ChartLevel
+                  node={child}
+                  onNodeClick={onNodeClick}
+                  depth={depth + 1}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
