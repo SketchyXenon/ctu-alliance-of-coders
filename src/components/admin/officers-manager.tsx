@@ -1,7 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { Copy, Pencil, Plus, RefreshCw, Trash2, Users } from "lucide-react";
+import {
+  Copy,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  Users,
+  List,
+  Network,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OfficerOrgChart } from "@/components/officer-org-chart";
 import {
   Dialog,
   DialogContent,
@@ -29,6 +39,7 @@ import {
   type OfficerFormDraft,
 } from "@/components/admin/officer-form-dialog";
 import { api } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 import type { AdminYear, Officer } from "@/lib/types";
 
 interface OfficersManagerProps {
@@ -287,6 +298,11 @@ function YearCard({
   const [duplicating, setDuplicating] = React.useState(false);
   const [deletingYear, setDeletingYear] = React.useState(false);
   const [confirmYearDelete, setConfirmYearDelete] = React.useState(false);
+  // View mode for the officer list: "list" (editable rows) or "chart"
+  // (editable React Flow org chart). The chart lets admins drag handles to
+  // set reporting lines visually — much more intuitive than the dropdown
+  // picker in the form dialog. Per 05 §9: the right abstraction for the job.
+  const [yearView, setYearView] = React.useState<"list" | "chart">("list");
 
   const dialogOpen = formState !== null;
 
@@ -375,16 +391,120 @@ function YearCard({
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            {year.officers.map((o) => (
-              <OfficerRow
-                key={o.id}
-                officer={o}
-                onEdit={(officer) => setFormState({ officer })}
-                onDelete={onDeleteOfficer}
+          <>
+            {/* View toggle: List (editable rows) vs Chart (editable org chart).
+                Per 05 §4: full state set (pressed state on the active toggle). */}
+            <div
+              role="group"
+              aria-label={`Officer view mode for ${year.year}`}
+              className="mb-3 flex items-center gap-1 rounded-lg border border-border/60 bg-muted/30 p-1 w-fit"
+            >
+              <button
+                type="button"
+                onClick={() => setYearView("list")}
+                aria-pressed={yearView === "list"}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50",
+                  yearView === "list"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <List className="h-3.5 w-3.5" aria-hidden="true" />
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => setYearView("chart")}
+                aria-pressed={yearView === "chart"}
+                className={cn(
+                  "inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400/50",
+                  yearView === "chart"
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Network className="h-3.5 w-3.5" aria-hidden="true" />
+                Org Chart
+              </button>
+            </div>
+
+            {yearView === "list" ? (
+              <div className="space-y-2">
+                {year.officers.map((o) => (
+                  <OfficerRow
+                    key={o.id}
+                    officer={o}
+                    onEdit={(officer) => setFormState({ officer })}
+                    onDelete={onDeleteOfficer}
+                  />
+                ))}
+              </div>
+            ) : (
+              <OfficerOrgChart
+                officers={year.officers}
+                showVacant
+                editable
+                onConnect={async (parentId, childId) => {
+                  // Admin drew a parent->child edge. PATCH the child's
+                  // reportsToId. The server validates cycles + same-year
+                  // (wouldCreateCycle) and enforces requireAdmin (06 §3).
+                  try {
+                    const { error } = await api.patch(
+                      `/api/officers/${childId}`,
+                      {
+                        reportsToId: parentId,
+                      },
+                    );
+                    if (error) {
+                      toast.error("Could not set reporting line", {
+                        description: error.message,
+                      });
+                      return;
+                    }
+                    toast.success("Reporting line set", {
+                      description: "The org chart has been updated.",
+                    });
+                    onRefresh();
+                  } catch (e) {
+                    toast.error("Could not set reporting line", {
+                      description:
+                        e instanceof Error ? e.message : "Unknown error",
+                    });
+                  }
+                }}
+                onEdgeDelete={async (childId) => {
+                  // Admin deleted an edge. Clear the child's reportsToId
+                  // (makes it a root).
+                  try {
+                    const { error } = await api.patch(
+                      `/api/officers/${childId}`,
+                      {
+                        reportsToId: null,
+                      },
+                    );
+                    if (error) {
+                      toast.error("Could not remove reporting line", {
+                        description: error.message,
+                      });
+                      return;
+                    }
+                    toast.success("Reporting line removed", {
+                      description: "The officer is now a root.",
+                    });
+                    onRefresh();
+                  } catch (e) {
+                    toast.error("Could not remove reporting line", {
+                      description:
+                        e instanceof Error ? e.message : "Unknown error",
+                    });
+                  }
+                }}
               />
-            ))}
-          </div>
+            )}
+          </>
         )}
       </CardContent>
 
