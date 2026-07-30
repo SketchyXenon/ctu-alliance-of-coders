@@ -273,6 +273,7 @@ function YearCard({
   onDeleteOfficer,
   onDuplicateYear,
   onDeleteYear,
+  onRefresh,
 }: {
   year: AdminYear;
   onPatchYear: (
@@ -288,6 +289,9 @@ function YearCard({
   ) => Promise<void>;
   onDeleteOfficer: (id: string) => Promise<void>;
   onDuplicateYear: (year: AdminYear) => Promise<void>;
+  /** Refresh the admin data after an org-chart edit (edge draw/delete) so the
+   *  chart re-layouts with the new reportsToId relationships. */
+  onRefresh: () => void;
   onDeleteYear: (id: string) => Promise<void>;
 }) {
   // OfficerFormDialog state: null = closed; { officer: Officer | null } = open
@@ -862,6 +866,7 @@ export function OfficersManager({
               onDeleteOfficer={handleDeleteOfficer}
               onDuplicateYear={handleDuplicateYear}
               onDeleteYear={handleDeleteYear}
+              onRefresh={onRefresh}
             />
           ))}
         </div>

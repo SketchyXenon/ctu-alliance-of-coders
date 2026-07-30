@@ -22,7 +22,11 @@ import "@xyflow/react/dist/style.css";
 import { User, Pencil } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { buildOrgTree, sortOfficersByRolePriority, type OfficerNode } from "@/lib/org-chart";
+import {
+  buildOrgTree,
+  sortOfficersByRolePriority,
+  type OfficerNode,
+} from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -79,7 +83,7 @@ function getInitials(name: string): string {
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   const first = parts[0]?.[0] ?? "";
-  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  const second = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
   return (first + second).toUpperCase().slice(0, 2);
 }
 
@@ -132,7 +136,7 @@ function OfficerCardNode({ data }: NodeProps) {
             "shadow-sm transition-all duration-200",
             "hover:-translate-y-0.5 hover:border-gold-300/70 hover:shadow-md",
             "focus-visible:outline-none focus-visible:border-gold-400 focus-visible:ring-2 focus-visible:ring-gold-400/40",
-            "active:translate-y-0"
+            "active:translate-y-0",
           )}
         >
           <OfficerAvatar
@@ -147,7 +151,7 @@ function OfficerCardNode({ data }: NodeProps) {
         <div
           className={cn(
             "flex w-[140px] flex-col items-center rounded-lg border-2 border-dashed border-border/60 bg-card/60 px-2 py-3",
-            "opacity-90"
+            "opacity-90",
           )}
           aria-label={`${displayRole} - vacant`}
         >
@@ -192,7 +196,7 @@ function OfficerAvatar({
           "relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full",
           "bg-gradient-to-br from-navy-700 to-navy-900",
           "ring-2 shadow-md",
-          isPresident ? "ring-gold-400/60" : "ring-gold-400/30"
+          isPresident ? "ring-gold-400/60" : "ring-gold-400/30",
         )}
       >
         {officer.image ? (
@@ -207,7 +211,7 @@ function OfficerAvatar({
           <span
             className={cn(
               "font-display text-lg font-bold tracking-wide",
-              isVacant ? "text-muted-foreground/70" : "text-gold-400"
+              isVacant ? "text-muted-foreground/70" : "text-gold-400",
             )}
             aria-hidden="true"
           >
@@ -219,7 +223,7 @@ function OfficerAvatar({
         <span
           className={cn(
             "font-display text-sm font-semibold leading-tight text-foreground text-balance",
-            isVacant && "text-muted-foreground"
+            isVacant && "text-muted-foreground",
           )}
         >
           {displayName}
@@ -242,7 +246,11 @@ const NODE_HEIGHT = 150;
 /** Run dagre to compute x/y positions for each node in the hierarchy.
  *  Direction "TB" = top-to-bottom (standard org chart). Returns positioned
  *  nodes; edges are passed through (React Flow routes them to handles). */
-function layoutWithDagre(nodes: Node[], edges: Edge[], direction: "TB" | "LR" = "TB"): Node[] {
+function layoutWithDagre(
+  nodes: Node[],
+  edges: Edge[],
+  direction: "TB" | "LR" = "TB",
+): Node[] {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
   g.setGraph({
@@ -281,7 +289,7 @@ function layoutWithDagre(nodes: Node[], edges: Edge[], direction: "TB" | "LR" = 
  *    right-angle connectors that match an org chart's visual language). */
 function buildFlowData(
   tree: OfficerNode[],
-  onNodeClick?: (o: Officer) => void
+  onNodeClick?: (o: Officer) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = [];
   const edges: Edge[] = [];
@@ -315,7 +323,9 @@ function buildLegacyTree(officers: Officer[]): OfficerNode[] {
   const sorted = sortOfficersByRolePriority(officers);
   if (sorted.length === 0) return [];
   const root = sorted[0];
-  const children = sorted.slice(1).map((o) => ({ officer: o, children: [] as OfficerNode[] }));
+  const children = sorted
+    .slice(1)
+    .map((o) => ({ officer: o, children: [] as OfficerNode[] }));
   return [{ officer: root, children }];
 }
 
@@ -371,7 +381,7 @@ export function OfficerOrgChart({
       if (params.source === params.target) return; // no self-loop
       void onConnect?.(params.source, params.target);
     },
-    [onConnect]
+    [onConnect],
   );
 
   // Handle edge deletion (admin selects an edge + presses Delete, or clicks
@@ -388,17 +398,19 @@ export function OfficerOrgChart({
         }
       }
     },
-    [onEdgeDelete]
+    [onEdgeDelete],
   );
 
   if (nodes.length === 0) return null;
 
-  return (s
+  return (
     <div
       className={cn(
         "officer-org-chart relative h-[600px] w-full overflow-hidden rounded-lg border bg-card/30",
-        editable ? "border-gold-400/50 ring-1 ring-gold-400/20" : "border-border/40",
-        className
+        editable
+          ? "border-gold-400/50 ring-1 ring-gold-400/20"
+          : "border-border/40",
+        className,
       )}
       role="tree"
       aria-label="Officers organizational chart"
@@ -414,6 +426,10 @@ export function OfficerOrgChart({
           </span>
         </div>
       )}
+      {/* Edit-mode toggles: admins can drag nodes + draw edges + select edges
+          for deletion. View-only mode locks everything down. Edge delete on
+          select + Delete key (edit mode only). Per 05 §9: React Flow's
+          built-in drag + connect is the right abstraction. */}
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -423,24 +439,33 @@ export function OfficerOrgChart({
         minZoom={0.2}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
-        // Edit-mode toggles: admins can drag nodes + draw edges + select
-        // edges for deletion. View-only mode locks everything down.
         nodesDraggable={editable}
         nodesConnectable={editable}
         elementsSelectable={editable}
         edgesFocusable={editable}
         onConnect={editable ? handleConnect : undefined}
         onEdgesChange={editable ? handleEdgesChange : undefined}
-        // Edge delete on select + Delete key (edit mode only).
         deleteKeyCode={editable ? ["Backspace", "Delete"] : []}
         panOnDrag
         zoomOnScroll
         zoomOnPinch
         panOnScroll={false}
-        connectionLineStyle={{ stroke: "var(--color-gold-400, #eab308)", strokeWidth: 2, strokeDasharray: "4 4" }}
-        defaultEdgeOptions={{ type: "smoothstep", style: { stroke: "var(--border)", strokeWidth: 1.5 } }}
+        connectionLineStyle={{
+          stroke: "var(--color-gold-400, #eab308)",
+          strokeWidth: 2,
+          strokeDasharray: "4 4",
+        }}
+        defaultEdgeOptions={{
+          type: "smoothstep",
+          style: { stroke: "var(--border)", strokeWidth: 1.5 },
+        }}
       >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} className="!bg-muted/40" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={16}
+          size={1}
+          className="!bg-muted/40"
+        />
         <Controls
           className="!rounded-md !border !border-border/60 !bg-card !shadow-md"
           showInteractive={false}
