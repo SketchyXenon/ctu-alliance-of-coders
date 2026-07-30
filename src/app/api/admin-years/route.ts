@@ -5,6 +5,7 @@ import { validateText, rateLimit } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
 import { logActivity } from "@/lib/activity";
 import { logger } from "@/lib/logger";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import type { AdminYear } from "@/lib/types";
 
 /** GET /api/admin-years - public, with officers. Cached for 60s.
@@ -55,18 +56,24 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     user = await requireAdmin();
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withCache(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
   }
 
   // S8: rate limit was missing on this endpoint.
   const rl = rateLimit(`year-create:${user.id}`, 10, 60_000);
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests. Please slow down." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-      },
+    return withCache(
+      NextResponse.json(
+        { error: "Too many requests. Please slow down." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -74,7 +81,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const yearCheck = validateText(body.year, {
@@ -83,11 +93,17 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: 30,
   });
   if (!yearCheck.valid)
-    return NextResponse.json({ error: yearCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: yearCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const themeCheck = validateText(body.theme, { required: false, maxLen: 200 });
   if (!themeCheck.valid)
-    return NextResponse.json({ error: themeCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: themeCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   // Transaction: get max sortOrder + create atomically (fixes TOCTOU on sort-order).
   const created = await db.$transaction(async (tx) => {
@@ -127,5 +143,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
     summary: `Created year: ${created.year}`,
   });
 
-  return NextResponse.json({ item }, { status: 201 });
+  return withCache(
+    NextResponse.json({ item }, { status: 201 }),
+    CACHE_NO_STORE,
+  );
 });

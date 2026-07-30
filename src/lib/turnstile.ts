@@ -1,25 +1,43 @@
-// Cloudflare Turnstile server-side verification.
-// Per 06-security-architecture.md section 2 (don't build custom crypto/auth
-// primitives — use vetted libraries): we call Cloudflare's siteverify
-// endpoint, NOT a hand-rolled check. Per 06 section 5: validate all external
-// input — the token from the client is untrusted until Cloudflare confirms it.
+// Cloudflare Turnstile server-side verification + proof-of-work fallback.
 //
-// Per 05-ui-ux-design.md: the bot checkpoint is shown on the initial page
-// load. Once verified, the server sets a signed HttpOnly cookie so a refresh
-// does NOT re-challenge the user (the user's request to /api/verify-bot is
-// server-validated; subsequent loads read the cookie).
+// Per 06-security-architecture.md:
+//   section 1 — fail closed; don't build custom crypto (use vetted libs +
+//     Web Crypto for the PoW hash, not a hand-rolled hash).
+//   section 2 — secrets stay server-side; the bot-ok cookie is HMAC-signed.
+//   section 3 — never trust the client; the cookie is the server-side gate.
+//   section 5 — the client token is untrusted until Cloudflare confirms it.
+//   section 7 — rate-limit auth-adjacent + expensive endpoints.
+//   section 8 — secrets in env, validated at startup.
 //
-// Graceful degradation: when TURNSTILE_SECRET_KEY is unset (dev), verification
-// is skipped (returns ok=true) so the app stays usable locally. In prod,
-// instrumentation.ts fails fast if the key is missing.
+// Per 02-system-design.md section 6: graceful degradation — when Cloudflare
+// is unreachable, fall back to a proof-of-work challenge instead of hard-
+// blocking legit users (and instead of failing open). The PoW raises the
+// cost for bots (CPU-bound) while staying sub-100ms for a real browser.
+//
+// Per 03-software-engineering.md section 6: fail fast and loud on
+// misconfiguration (prod-missing secret -> boot-time error in env.ts).
 
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual, randomBytes } from "crypto";
 
-const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
-const COOKIE_NAME = "aoc_bot_ok";
+const TURNSTILE_VERIFY_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+export const COOKIE_NAME = "aoc_bot_ok";
 /** Cookie lifetime: 2 hours. Long enough to not annoy a browsing user, short
  *  enough that a stale "verified" can't be abused indefinitely. */
 export const COOKIE_TTL_MS = 1000 * 60 * 60 * 2;
+
+/** Proof-of-work difficulty: number of leading zero BITS required in the
+ *  SHA-256 digest. 16 bits = ~65k attempts avg, ~10-50ms in a browser.
+ *  High enough to cost a bot farm real CPU, low enough to not annoy users.
+ *  Per 06 section 7: a challenge is a bot-resistance layer, not a crypto
+ *  guarantee. */
+export const POW_DIFFICULTY_BITS = 16;
+/** PoW challenge lifetime: 5 minutes. Short enough to bound replay, long
+ *  enough for a slow browser to solve. */
+export const POW_CHALLENGE_TTL_MS = 5 * 60_000;
+/** Max challenges issued per IP per minute. Prevents challenge flooding. */
+const POW_ISSUE_LIMIT = 10;
+const POW_ISSUE_WINDOW_MS = 60_000;
 
 export interface TurnstileConfig {
   siteKey: string | null;
@@ -34,7 +52,8 @@ export function getTurnstileConfig(): TurnstileConfig {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || null;
   const secretKey = process.env.TURNSTILE_SECRET_KEY || null;
   // The cookie signing key reuses the Turnstile secret if present, else a
-  // dev-only fixed value. In prod both keys must be set.
+  // dev-only fixed value. In prod env.ts fails fast if the secret is missing,
+  // so this fallback only ever applies in dev.
   const cookieSigningKey = secretKey || "dev-only-unsigned-bot-cookie-key";
   const enabled = Boolean(siteKey && secretKey);
   return { siteKey, secretKey, cookieSigningKey, enabled };
@@ -44,6 +63,9 @@ export interface VerifyResult {
   ok: boolean;
   /** Reason for failure (logged server-side, never sent to client verbatim). */
   reason?: string;
+  /** True when failure was caused by Cloudflare being unreachable (network/
+   *  timeout/5xx). The caller can offer the PoW fallback in this case. */
+  serviceDown?: boolean;
 }
 
 /**
@@ -59,13 +81,18 @@ export async function verifyTurnstileToken(
   token: string | null | undefined,
   remoteIp: string | null,
   config: TurnstileConfig,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
 ): Promise<VerifyResult> {
   if (!config.enabled) {
     // Dev / unconfigured: skip verification so the app stays usable.
     return { ok: true, reason: "turnstile-disabled" };
   }
-  if (!token || typeof token !== "string" || token.length < 10 || token.length > 4096) {
+  if (
+    !token ||
+    typeof token !== "string" ||
+    token.length < 10 ||
+    token.length > 4096
+  ) {
     return { ok: false, reason: "missing-or-invalid-token" };
   }
   try {
@@ -81,30 +108,151 @@ export async function verifyTurnstileToken(
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
-      return { ok: false, reason: `siteverify-http-${res.status}` };
+      // 5xx from Cloudflare = service degraded, not a bad token. Signal the
+      // caller so it can offer the PoW fallback instead of hard-blocking.
+      return {
+        ok: false,
+        reason: `siteverify-http-${res.status}`,
+        serviceDown: res.status >= 500,
+      };
     }
-    const data = (await res.json()) as { success?: boolean; "error-codes"?: string[] };
+    const data = (await res.json()) as {
+      success?: boolean;
+      "error-codes"?: string[];
+    };
     if (data.success === true) {
       return { ok: true };
     }
-    return { ok: false, reason: `siteverify-failed:${(data["error-codes"] || []).join(",")}` };
+    return {
+      ok: false,
+      reason: `siteverify-failed:${(data["error-codes"] || []).join(",")}`,
+    };
   } catch (e) {
-    // Network / timeout: fail CLOSED. A bot shouldn't get through because
-    // Cloudflare was briefly unreachable. Per 06 section 1: fail closed.
+    // Network / timeout: fail CLOSED (a bot shouldn't get through because
+    // Cloudflare was briefly unreachable), but mark serviceDown so the caller
+    // can route to the PoW fallback. Per 06 section 1: fail closed. Per 02
+    // section 6: graceful degradation where possible.
     const msg = e instanceof Error ? e.message : String(e);
-    return { ok: false, reason: `siteverify-error:${msg.slice(0, 80)}` };
+    return {
+      ok: false,
+      reason: `siteverify-error:${msg.slice(0, 80)}`,
+      serviceDown: true,
+    };
   }
 }
 
+// ---------------------------------------------------------------------------
+// Proof-of-work fallback (used when Turnstile is unreachable).
+//
+// Per 02 section 6: "Graceful degradation — a partial result beats a hard
+// failure where one is possible." A PoW is not as strong as Turnstile's
+// browser fingerprinting, but it raises the cost for bots (CPU-bound at
+// scale) and keeps the site usable during a Cloudflare outage. The bot-ok
+// cookie is issued the same way as the Turnstile path, so downstream
+// enforcement is identical.
+// ---------------------------------------------------------------------------
+
+interface PowChallengeEntry {
+  challenge: string;
+  expiresAt: number;
+  consumed: boolean;
+}
+const powStore = new Map<string, PowChallengeEntry>();
+const powIssueTimes = new Map<string, number[]>();
+
+/** Sweep stale PoW entries to bound memory (S3-style eviction). */
+function sweepPowStore(now: number): void {
+  for (const [k, v] of powStore) {
+    if (v.expiresAt < now) powStore.delete(k);
+  }
+}
+
+export interface PowChallenge {
+  challenge: string;
+  difficulty: number;
+  expiresAt: number;
+}
+
+/**
+ * Issue a single-use PoW challenge. Rate-limited per IP to prevent flooding.
+ * Returns null if the IP has exceeded the issue limit (caller -> 429).
+ */
+export function issuePowChallenge(ip: string | null): PowChallenge | null {
+  const now = Date.now();
+  sweepPowStore(now);
+  const key = ip || "unknown";
+  const times = (powIssueTimes.get(key) || []).filter(
+    (t) => now - t < POW_ISSUE_WINDOW_MS,
+  );
+  if (times.length >= POW_ISSUE_LIMIT) return null;
+  times.push(now);
+  powIssueTimes.set(key, times);
+
+  const challenge = randomBytes(16).toString("hex");
+  const expiresAt = now + POW_CHALLENGE_TTL_MS;
+  powStore.set(challenge, { challenge, expiresAt, consumed: false });
+  return { challenge, difficulty: POW_DIFFICULTY_BITS, expiresAt };
+}
+
+/** Check whether a digest hex has the required leading zero bits. */
+export function hasPoWPrefix(
+  digestHex: string,
+  difficultyBits: number,
+): boolean {
+  const fullBytes = Math.floor(difficultyBits / 8);
+  const remBits = difficultyBits % 8;
+  for (let i = 0; i < fullBytes; i++) {
+    if (digestHex[i * 2] !== "0" || digestHex[i * 2 + 1] !== "0") return false;
+  }
+  if (remBits > 0) {
+    const nibble = parseInt(digestHex[fullBytes * 2], 16);
+    // Top `remBits` bits must be zero => nibble < (16 >> remBits).
+    if (nibble >= 16 >> remBits) return false;
+  }
+  return true;
+}
+
+/**
+ * Verify a PoW solution. The client must find a nonce such that
+ * SHA-256(challenge + ":" + nonce) starts with `difficulty` zero bits.
+ * Single-use: a challenge is consumed on a successful verify.
+ *
+ * Uses Node's async crypto (not fetch), so no network dependency.
+ */
+export async function verifyPowSolution(
+  challenge: string,
+  nonce: string,
+  difficulty: number,
+): Promise<boolean> {
+  if (!/^[0-9a-f]{32}$/.test(challenge)) return false;
+  if (!/^[0-9a-z_-]{1,64}$/i.test(nonce)) return false;
+  const entry = powStore.get(challenge);
+  if (!entry || entry.consumed || entry.expiresAt < Date.now()) return false;
+  const { createHash } = await import("crypto");
+  const digest = createHash("sha256")
+    .update(`${challenge}:${nonce}`)
+    .digest("hex");
+  if (!hasPoWPrefix(digest, difficulty)) return false;
+  entry.consumed = true;
+  return true;
+}
+
+// ---------------------------------------------------------------------------
+// Signed bot-ok cookie (shared by Turnstile + PoW paths).
+// ---------------------------------------------------------------------------
+
 /**
  * Sign a bot-ok cookie value. The cookie proves the visitor passed Turnstile
- * within the last COOKIE_TTL_MS. Format: `<expiresAt>.<hmac>`.
+ * (or PoW fallback) within the last COOKIE_TTL_MS. Format: `<expiresAt>.<hmac>`.
  *
  * The HMAC is keyed by the Turnstile secret so a client can't forge it.
  * Per 06 section 8: secrets stay server-side; the cookie value is verifiable
  * but not forgeable.
  */
-export function signBotCookie(expiresAt: number, config: TurnstileConfig): string {
+export function signBotCookie(
+  expiresAt: number,
+  config: TurnstileConfig,
+): string {
   const hmac = createHmac("sha256", config.cookieSigningKey)
     .update(String(expiresAt))
     .digest("hex");
@@ -116,7 +264,10 @@ export function signBotCookie(expiresAt: number, config: TurnstileConfig): strin
  * AND the cookie has not expired. Per 06 section 1: fail closed — a malformed
  * or expired cookie is treated as "not verified".
  */
-export function verifyBotCookie(cookieValue: string | null | undefined, config: TurnstileConfig): boolean {
+export function verifyBotCookie(
+  cookieValue: string | null | undefined,
+  config: TurnstileConfig,
+): boolean {
   if (!cookieValue || typeof cookieValue !== "string") return false;
   if (!config.enabled) {
     // Dev: any cookie presence is enough (verification was skipped anyway).
@@ -141,3 +292,35 @@ export function verifyBotCookie(cookieValue: string | null | undefined, config: 
 }
 
 export const BOT_COOKIE_NAME = COOKIE_NAME;
+
+/**
+ * Require a valid bot-ok cookie. Used by public write endpoints (contact form)
+ * to enforce the bot gate server-side, not just client-side. Per 06 section 3:
+ * never trust the client — the BotCheckpoint component is client-only, so a
+ * bot using curl/requests bypasses it entirely unless the server re-checks.
+ *
+ * Returns an error NextResponse (403) if the cookie is missing/invalid, or
+ * null if the caller may proceed. When Turnstile is disabled (dev), returns
+ * null (the gate is advisory in dev).
+ *
+ * Per 06 section 1: fail closed — a missing or tampered cookie is treated as
+ * "not verified", not as "verified".
+ */
+export async function requireBotOk(): Promise<null | {
+  status: number;
+  body: { error: string };
+}> {
+  const config = getTurnstileConfig();
+  if (!config.enabled) return null; // dev: gate is advisory
+  const { cookies } = await import("next/headers");
+  const store = await cookies();
+  const cookie = store.get(BOT_COOKIE_NAME)?.value;
+  if (verifyBotCookie(cookie, config)) return null;
+  return {
+    status: 403,
+    body: {
+      error:
+        "Please complete the bot verification challenge before submitting.",
+    },
+  };
+}

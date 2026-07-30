@@ -52,87 +52,84 @@ export function HeroSection({ stats, onNav }: HeroSectionProps) {
         <div className="absolute inset-0 bg-gradient-to-br from-navy-950/70 via-navy-900/50 to-navy-800/70" />
       </div>
 
-      <div className="relative mx-auto w-full max-w-5xl px-6 py-16 sm:px-8 lg:py-24">
-        {/* Single-column layout: the hero's signature is the typography (gold
-            "Coders" accent + display h1). The logo was removed to concentrate
-            the ambition on the type, per 05-ui-ux-design.md section 1: "One
-            bold idea, well executed, reads as more premium than five competing
-            ones." The content is left-aligned for a confident editorial feel. */}
-        <motion.div
-          variants={container}
-          initial="hidden"
-          animate="show"
-          className="flex flex-col items-start gap-7 sm:gap-8"
-        >
-          <motion.div variants={item} className="flex items-center gap-3">
-            <span aria-hidden="true" className="h-px w-8 bg-gold-400 sm:w-10" />
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-300 sm:text-sm">
-              Cebu Technological University &middot; Danao Campus
-            </span>
-          </motion.div>
-
-          <motion.h1
-            id="hero-title"
-            variants={item}
-            className="font-display text-5xl font-bold leading-[1.02] tracking-tight text-balance sm:text-6xl lg:text-7xl"
+      <div className="relative mx-auto w-full max-w-7xl px-6 py-16 sm:px-8 lg:py-24">
+        <div className="flex flex-col items-center">
+          {/* Text content column */}
+          <motion.div
+            variants={container}
+            initial="hidden"
+            animate="show"
+            className="flex flex-1 flex-col items-start gap-7 sm:gap-8"
           >
-            Alliance of <span className="text-gold-400">Coders</span>
-          </motion.h1>
-
-          <motion.p
-            variants={item}
-            className="max-w-xl text-lg leading-relaxed text-navy-100/90 sm:text-xl"
-          >
-            A community of developers, innovators, and tech leaders at CTU
-            Danao.
-          </motion.p>
-
-          <motion.div variants={item} className="flex flex-wrap gap-3 pt-1">
-            <HeroButton
-              variant="primary"
-              icon={<Megaphone className="size-4" aria-hidden="true" />}
-              onClick={() => onNav("Announcements")}
-            >
-              View Announcements
-            </HeroButton>
-            <HeroButton
-              variant="outline"
-              icon={<Users className="size-4" aria-hidden="true" />}
-              onClick={() => onNav("Officers")}
-            >
-              Meet Our Officers
-            </HeroButton>
-            <HeroButton
-              variant="outline"
-              icon={<MessageSquare className="size-4" aria-hidden="true" />}
-              onClick={() => onNav("Contact")}
-            >
-              Send Feedback
-            </HeroButton>
-          </motion.div>
-
-          {stats.length > 0 && (
-            <motion.div
-              variants={item}
-              role="list"
-              aria-label="Organization statistics"
-              className="mt-4 grid w-full grid-cols-2 gap-x-4 gap-y-6 border-t border-white/10 pt-8 sm:mt-6 sm:max-w-2xl sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-white/10"
-            >
-              {stats.map(({ value, label }) => (
-                <div
-                  key={label}
-                  role="listitem"
-                  className="sm:px-4 sm:first:pl-0"
-                >
-                  <AnimatedStat value={value} />
-                  <div className="mt-1 text-xs uppercase tracking-wider text-navy-100/80 sm:text-sm">
-                    {label}
-                  </div>
-                </div>
-              ))}
+            <motion.div variants={item} className="flex items-center gap-3">
+              <span className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-300 sm:text-sm">
+                Cebu Technological University &middot; Danao Campus
+              </span>
             </motion.div>
-          )}
-        </motion.div>
+
+            <motion.h1
+              id="hero-title"
+              variants={item}
+              className="font-display text-5xl font-bold leading-[1.02] tracking-tight text-balance sm:text-6xl lg:text-7xl"
+            >
+              Alliance of <span className="text-gold-400">Coders</span>
+            </motion.h1>
+
+            <motion.p
+              variants={item}
+              className="max-w-xl text-lg leading-relaxed text-navy-100/90 sm:text-xl"
+            >
+              A community of developers, innovators, and tech leaders at CTU
+              Danao.
+            </motion.p>
+
+            <motion.div variants={item} className="flex flex-wrap gap-3 pt-1">
+              <HeroButton
+                variant="primary"
+                icon={<Megaphone className="size-4" aria-hidden="true" />}
+                onClick={() => onNav("Announcements")}
+              >
+                View Announcements
+              </HeroButton>
+              <HeroButton
+                variant="outline"
+                icon={<Users className="size-4" aria-hidden="true" />}
+                onClick={() => onNav("Officers")}
+              >
+                Meet Our Officers
+              </HeroButton>
+              <HeroButton
+                variant="outline"
+                icon={<MessageSquare className="size-4" aria-hidden="true" />}
+                onClick={() => onNav("Contact")}
+              >
+                Send Feedback
+              </HeroButton>
+            </motion.div>
+
+            {stats.length > 0 && (
+              <motion.div
+                variants={item}
+                role="list"
+                aria-label="Organization statistics"
+                className="mt-4 grid w-full grid-cols-2 gap-x-4 gap-y-6 border-t border-white/10 pt-8 sm:mt-6 sm:max-w-2xl sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-white/10"
+              >
+                {stats.map(({ value, label }) => (
+                  <div
+                    key={label}
+                    role="listitem"
+                    className="sm:px-4 sm:first:pl-0"
+                  >
+                    <AnimatedStat value={value} />
+                    <div className="mt-1 text-xs uppercase tracking-wider text-navy-100/80 sm:text-sm">
+                      {label}
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </motion.div>
+        </div>
       </div>
     </section>
   );

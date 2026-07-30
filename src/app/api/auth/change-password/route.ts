@@ -145,30 +145,34 @@ export const POST = withPrismaError(async function POST(request: Request) {
   });
 
   // Rotate the current session id (separate — sets a cookie, can't be inside
-  // the DB transaction cleanly). If the session was concurrently revoked,
-  // rotateSession throws SessionNotFoundError: the password + revocation above
-  // already succeeded (security maintained), so we tell the user to re-login
-  // rather than returning 200 with a stale cookie (A2 fail-closed fix).
+  // the DB transaction cleanly). If rotateSession throws (SessionNotFoundError
+  // OR a transient Prisma error), the password + revocation above already
+  // succeeded (security maintained), so we tell the user to re-login rather
+  // than returning 200 with a stale cookie (A2 fail-closed fix) or letting
+  // withPrismaError surface a misleading 500 after a successful password
+  // change (audit finding: A10 mishandled exceptional conditions). Per 06 §1:
+  // fail closed; per 03 §6: never swallow an exception silently — log it.
   if (currentSessionId) {
     try {
       await rotateSession(currentSessionId);
     } catch (e) {
-      if (e instanceof SessionNotFoundError) {
-        logger.warn("Session expired during password change", {
-          userId: user.id,
-        });
-        return withCache(
-          NextResponse.json(
-            {
-              error:
-                "Your session has expired. Please log in again with your new password.",
-            },
-            { status: 401 },
-          ),
-          CACHE_NO_STORE,
-        );
-      }
-      throw e;
+      const isMissing = e instanceof SessionNotFoundError;
+      logger.warn(
+        isMissing
+          ? "Session expired during password change"
+          : "Session rotation failed after password change",
+        { userId: user.id, error: isMissing ? undefined : String(e) },
+      );
+      return withCache(
+        NextResponse.json(
+          {
+            error:
+              "Your password was changed, but your session could not be refreshed. Please log in again with your new password.",
+          },
+          { status: 401 },
+        ),
+        CACHE_NO_STORE,
+      );
     }
   }
 

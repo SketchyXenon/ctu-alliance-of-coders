@@ -354,22 +354,15 @@ export default function Home() {
     category: string;
     message: string;
   }) {
-    // C6 fix: the anonymous response is { ok: true } (no item); only admin
-    // callers receive { item }. Type honestly so a refactor can't silently
-    // read data.item for an anonymous submitter.
-    const { data, error } = await api.post<{
-      ok?: true;
-      item?: ContactMessage;
-    }>("/api/contact", message);
+    // Admins are blocked from the contact form (server returns 403 + the
+    // client hides the form). The response for an anonymous submitter is
+    // { ok: true } (no item / no PII), per the H1 dedup hardening.
+    const { data, error } = await api.post<{ ok?: true }>(
+      "/api/contact",
+      message,
+    );
     if (error || !data) {
       throw new Error(error?.message ?? "Failed to send message.");
-    }
-    // If admin is viewing, surface in inbox immediately.
-    if (isAdmin && data.item) {
-      setPendingMessages([
-        data.item,
-        ...usePageStore.getState().pendingMessages,
-      ]);
     }
   }
 
@@ -467,7 +460,7 @@ export default function Home() {
       case "Officers":
         return <OfficersSection adminYears={adminYears} />;
       case "Contact":
-        return <ContactSection onSubmit={submitContact} />;
+        return <ContactSection onSubmit={submitContact} isAdmin={isAdmin} />;
       case "FAQ":
         return <FaqSection />;
       case "Admin Panel":

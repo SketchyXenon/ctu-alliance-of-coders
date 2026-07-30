@@ -11,6 +11,8 @@ import {
   getClientIp,
 } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
+import { requireBotOk } from "@/lib/turnstile";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { CONTACT_TOPICS } from "@/lib/constants";
 import type {
   ContactMessage,
@@ -46,12 +48,15 @@ export function buildDedupResponse(
   admin: Pick<AdminUser, "id" | "role"> | null,
 ): NextResponse {
   if (admin && admin.role === "admin") {
-    return NextResponse.json({
-      item: toContactMessageDTO(existing),
-      deduplicated: true,
-    });
+    return withCache(
+      NextResponse.json({
+        item: toContactMessageDTO(existing),
+        deduplicated: true,
+      }),
+      CACHE_NO_STORE,
+    );
   }
-  return NextResponse.json({ ok: true });
+  return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
 }
 
 /** GET /api/contact - admin only, list all messages newest first.
@@ -73,7 +78,14 @@ export const GET = withPrismaError(async function GET() {
   return res;
 });
 
-/** POST /api/contact - public submit. Rate-limited per IP and per email. */
+/** POST /api/contact - public submit. Rate-limited per IP and per email.
+ *  Authenticated admins are rejected (403): the contact form is a public
+ *  intake channel, not a self-message path. Admins must log out first.
+ *  Defense-in-depth: the client also hides the form for admins, but the
+ *  server check is authoritative per 06 section 3 (never trust the client).
+ *  Ordering: the IP rate limit runs BEFORE getCurrentUser() so an
+ *  unauthenticated attacker can't amplify DB load via the session lookup
+ *  (06 section 7: rate limiting first). */
 export const POST = withPrismaError(async function POST(request: Request) {
   const ip = getClientIp(request.headers);
 
@@ -93,11 +105,41 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  // Server-side bot-gate enforcement. The BotCheckpoint component is client-
+  // only, so a bot using curl/requests bypasses it; this re-checks the signed
+  // bot-ok cookie. Per 06 section 3: never trust the client. No-op in dev
+  // (Turnstile disabled). Runs after the rate limit so cookie-less spam is
+  // still bounded by the IP limit.
+  const botGate = await requireBotOk();
+  if (botGate) {
+    return withCache(
+      NextResponse.json(botGate.body, { status: botGate.status }),
+      CACHE_NO_STORE,
+    );
+  }
+
+  // Admins are rejected after the rate limit passes (defense in depth).
+  const admin = await getCurrentUser();
+  if (admin && admin.role === "admin") {
+    return withCache(
+      NextResponse.json(
+        {
+          error: "Admins cannot submit contact messages. Please log out first.",
+        },
+        { status: 403 },
+      ),
+      CACHE_NO_STORE,
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const nameCheck = validateText(body.name, {
@@ -106,11 +148,17 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: 80,
   });
   if (!nameCheck.valid)
-    return NextResponse.json({ error: nameCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: nameCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const emailCheck = validateEmail(body.email);
   if (!emailCheck.valid)
-    return NextResponse.json({ error: emailCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: emailCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const subjectCheck = validateText(body.subject, {
     required: true,
@@ -118,7 +166,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: 120,
   });
   if (!subjectCheck.valid)
-    return NextResponse.json({ error: subjectCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: subjectCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const messageCheck = validateText(body.message, {
     required: true,
@@ -126,11 +177,17 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: MAX_MESSAGE,
   });
   if (!messageCheck.valid)
-    return NextResponse.json({ error: messageCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: messageCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const category = String(body.category ?? "General Inquiry");
   if (!CONTACT_TOPICS.some((t) => t.value === category)) {
-    return NextResponse.json({ error: "Invalid category." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid category." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const normalizedEmail = String(body.email).trim().toLowerCase();
@@ -140,35 +197,47 @@ export const POST = withPrismaError(async function POST(request: Request) {
     30 * 60_000,
   );
   if (!emailLimit.allowed) {
-    return NextResponse.json(
-      {
-        error:
-          "Too many submissions from this email. Please wait and try again.",
-      },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
+    return withCache(
+      NextResponse.json(
+        {
+          error:
+            "Too many submissions from this email. Please wait and try again.",
         },
-      },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(emailLimit.retryAfterMs / 1000)),
+          },
+        },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
-  const clientId =
+  // Validate clientId if provided (A01-1 fix: defense-in-depth — run through
+  // the XSS blocklist even though clientId isn't rendered in the UI today).
+  const clientIdInput =
     typeof body.clientId === "string" && body.clientId
       ? String(body.clientId).slice(0, 128)
       : generateToken(16);
+  const clientIdCheck = validateText(clientIdInput, { maxLen: 128 });
+  if (!clientIdCheck.valid) {
+    return withCache(
+      NextResponse.json({ error: clientIdCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
+  }
+  const clientId = clientIdInput;
 
   // Idempotency: try create, catch P2002 (unique on clientId) -> return existing.
   // H1 fix: never return PII to an anonymous caller, even on a dedup hit.
   // A leaked clientId (log/referrer) would otherwise let an attacker read
-  // another submitter's name/email/subject/message. Only an authenticated
-  // admin receives the full DTO; anonymous callers get a bare ack.
-  let created;
+  // another submitter's name/email/subject/message. Anonymous callers always
+  // get a bare ack here (admins are rejected at the top of POST).
   try {
     // withDbRetry: retry on transient connection failures (serverless cold
     // start, Supabase pooler warmup). Per 02 section 6: retries with backoff.
-    created = await withDbRetry(() =>
+    await withDbRetry(() =>
       db.contactMessage.create({
         data: {
           clientId,
@@ -201,14 +270,11 @@ export const POST = withPrismaError(async function POST(request: Request) {
     throw error;
   }
 
-  // H1 fix: only return the full DTO to an authenticated admin (the public
-  // form does not consume the response body; the admin inbox does).
-  const admin = await getCurrentUser();
-  if (admin && admin.role === "admin") {
-    return NextResponse.json(
-      { item: toContactMessageDTO(created) },
-      { status: 201 },
-    );
-  }
-  return NextResponse.json({ ok: true }, { status: 201 });
+  // Admins are rejected at the top of POST, so the caller here is always
+  // anonymous -> bare ack, no PII. (buildDedupResponse stays exported for the
+  // dedup path + tests/contact-dedup.test.ts.)
+  return withCache(
+    NextResponse.json({ ok: true }, { status: 201 }),
+    CACHE_NO_STORE,
+  );
 });

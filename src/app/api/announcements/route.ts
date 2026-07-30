@@ -11,6 +11,7 @@ import {
   parseLinks,
   validateAnnouncementLinks,
 } from "@/lib/announcements";
+import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import type { Announcement, AnnouncementType } from "@/lib/types";
 import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
 
@@ -59,17 +60,23 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     user = await requireAdmin();
   } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return withCache(
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const rl = rateLimit(`ann-create:${user.id}`, 10, 60_000);
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Too many requests. Please slow down." },
-      {
-        status: 429,
-        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
-      },
+    return withCache(
+      NextResponse.json(
+        { error: "Too many requests. Please slow down." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
@@ -77,7 +84,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: "Invalid JSON body." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const titleCheck = validateText(body.title, {
@@ -86,7 +96,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: 200,
   });
   if (!titleCheck.valid)
-    return NextResponse.json({ error: titleCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: titleCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const bodyCheck = validateText(body.body, {
     required: true,
@@ -94,26 +107,38 @@ export const POST = withPrismaError(async function POST(request: Request) {
     maxLen: MAX_BODY,
   });
   if (!bodyCheck.valid)
-    return NextResponse.json({ error: bodyCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: bodyCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
 
   const type = String(body.type ?? "general");
   if (!ANNOUNCEMENT_TYPES.includes(type as AnnouncementType)) {
-    return NextResponse.json(
-      { error: "Invalid announcement type." },
-      { status: 400 },
+    return withCache(
+      NextResponse.json(
+        { error: "Invalid announcement type." },
+        { status: 400 },
+      ),
+      CACHE_NO_STORE,
     );
   }
 
   // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
   const imageCheck = validateImageUrl(body.image);
   if (!imageCheck.valid) {
-    return NextResponse.json({ error: imageCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: imageCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   // Validate links array (06 section 5: validate all external input).
   const linksCheck = validateAnnouncementLinks(body.links);
   if (!linksCheck.valid) {
-    return NextResponse.json({ error: linksCheck.error }, { status: 400 });
+    return withCache(
+      NextResponse.json({ error: linksCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
 
   const id = `ann-${crypto.randomUUID()}`;
@@ -150,5 +175,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
     summary: `Created announcement: ${created.title}`,
   });
 
-  return NextResponse.json({ item }, { status: 201 });
+  return withCache(
+    NextResponse.json({ item }, { status: 201 }),
+    CACHE_NO_STORE,
+  );
 });

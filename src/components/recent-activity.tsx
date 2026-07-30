@@ -40,7 +40,7 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
       [...announcements]
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 4),
-    [announcements]
+    [announcements],
   );
 
   if (recent.length === 0) return null;
@@ -51,7 +51,11 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
   };
   const item = {
     hidden: { opacity: 0, y: 12 },
-    show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const } },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: { duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
+    },
   };
 
   return (
@@ -62,7 +66,6 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <span className="h-px w-6 bg-gold-500" aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-600 dark:text-gold-400 font-display">
               Stay Updated
             </span>
@@ -103,20 +106,23 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
               className={cn(
                 "group flex items-start gap-4 rounded-xl border border-border bg-card p-4 text-left",
                 "transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-gold-300/60",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               )}
             >
               <span
                 className={cn(
                   "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
-                  badge.className
+                  badge.className,
                 )}
               >
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </span>
               <div className="min-w-0 flex-1">
                 <div className="mb-1 flex items-center gap-2">
-                  <Badge variant="outline" className={cn("text-[10px]", badge.className)}>
+                  <Badge
+                    variant="outline"
+                    className={cn("text-[10px]", badge.className)}
+                  >
                     {badge.label}
                   </Badge>
                   <time

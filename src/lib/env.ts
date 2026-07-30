@@ -61,10 +61,18 @@ export function getEnv(): Env {
       missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
     if (!parsed.data.SUPABASE_SERVICE_ROLE_KEY)
       missing.push("SUPABASE_SERVICE_ROLE_KEY");
+    // Turnstile: prod MUST have both keys, else the bot gate silently
+    // disables (fail-open) and the cookie signing key falls back to a
+    // hardcoded predictable value -> forgeable cookies. Per 06 section 8:
+    // secrets in env, validated at startup. Per 06 section 1: fail closed.
+    if (!parsed.data.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
+      missing.push("NEXT_PUBLIC_TURNSTILE_SITE_KEY");
+    if (!parsed.data.TURNSTILE_SECRET_KEY) missing.push("TURNSTILE_SECRET_KEY");
     if (missing.length > 0) {
       throw new Error(
-        `Production requires Supabase env vars for image storage:\n` +
-          missing.map((m) => `  - ${m}`).join("\n"),
+        `Production requires these env vars:\n` +
+          missing.map((m) => `  - ${m}`).join("\n") +
+          `\n(Supabase for image storage, Turnstile for bot protection.)`,
       );
     }
   }
