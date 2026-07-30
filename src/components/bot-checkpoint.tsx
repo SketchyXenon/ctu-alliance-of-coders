@@ -200,19 +200,19 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       "error-callback": () => {
         errorAttemptsRef.current += 1;
         if (errorAttemptsRef.current >= MAX_TURNSTILE_ATTEMPTS) {
-          // Terminal: stop trying Turnstile. Degrade to PoW if available.
+          // Terminal: the widget itself failed repeatedly (not the server
+          // verify). This is usually a misconfigured sitekey or a COEP/CSP
+          // block. Degrade to PoW if we have a challenge pre-seeded; else show
+          // a clear error. Per 06 §1 (fail closed) + 02 §6 (graceful
+          // degradation) + 06 §11 (surface, don't silently degrade).
           if (powChallenge) {
             setStatus("pow");
           } else {
-            setError(
-              "The verification widget failed repeatedly. Please retry.",
-            );
-            setStatus("error");
+            // No pre-seeded challenge — request one from the server.
+            void requestFallback("");
           }
         }
-        // Below the cap: show a transient hint but DO NOT reset. The widget
-        // stays in its error state until the user clicks retry (which
-        // re-mounts the component tree via the error-state button).
+        // Below the cap: show a transient hint but DO NOT reset (anti-loop).
       },
       "expired-callback": () => {
         // Expired is non-fatal: just hint the user. Do NOT reset (loop). The
@@ -239,16 +239,13 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
     submitAttemptsRef.current += 1;
     if (submitAttemptsRef.current > MAX_TURNSTILE_ATTEMPTS) {
       submittingRef.current = false;
-      // Hard cap on auto-submits: stop and surface a clear error. We do NOT
-      // force the PoW fallback here anymore — that re-introduced the "always
-      // redirects to PoW" symptom: a misconfigured secret or a persistently
-      // bad token would fail 3 times, then the client silently degraded to
-      // PoW, masking the real problem. The server now offers PoW itself when
-      // Cloudflare is genuinely unreachable (serviceDown), so this cap only
-      // needs to stop the loop and let the user retry. Per 06 §1 (fail closed)
-      // + §11 (surface, don't silently degrade).
-      setError("Verification kept failing. Please retry, or refresh the page.");
-      setStatus("error");
+      // Hard cap reached: request the PoW fallback from the server rather than
+      // looping forever. This is the graceful-degradation path for a persistent
+      // Turnstile failure (misconfigured secret, hostname mismatch, etc.) that
+      // the USER can't fix — they shouldn't be permanently locked out. The
+      // server still rate-limits PoW (10/min) + the challenge is single-use,
+      // so this doesn't weaken the bot gate. Per 02 §6 + 06 §1.
+      void requestFallback(token);
       return;
     }
     setVerifying(true);
@@ -256,6 +253,7 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
     const { data, error: apiErr } = await api.post<{
       ok: boolean;
       fallback?: "pow";
+      retryable?: boolean;
       powChallenge?: PowChallenge;
       error?: string;
     }>("/api/verify-bot", { mode: "turnstile", token });
@@ -268,14 +266,24 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       return;
     }
 
-    // Failure. The server returns 200 ok:false (not 403) so the body survives
-    // the api-client. Check for the PoW fallback FIRST — the server offers it
-    // on any Turnstile failure (bad token, expired, service down) so the user
-    // is never hard-blocked. Per 02 section 6: graceful degradation.
+    // PoW fallback offered by the server (serviceDown, or we requested it).
     if (data?.fallback === "pow" && data.powChallenge) {
       setPowChallenge(data.powChallenge);
       setStatus("pow");
       return;
+    }
+
+    // Recoverable failure (timeout-or-duplicate): the token was valid but got
+    // consumed/expired. Reset the widget ONCE to get a fresh token instead of
+    // showing a terminal error. The submitAttempts cap above bounds this so it
+    // can never infinite-loop. Per 02 §6 (graceful degradation).
+    if (data?.retryable && widgetIdRef.current && window.turnstile) {
+      try {
+        window.turnstile.reset(widgetIdRef.current);
+        return; // the reset re-fires callback with a fresh token
+      } catch {
+        // reset failed — fall through to the error state.
+      }
     }
 
     // No fallback offered (e.g., IP exceeded challenge-issue limit, or a
@@ -283,6 +291,41 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
     // terminal with a retry button.
     setError(
       apiErr?.message || data?.error || "Verification failed. Please retry.",
+    );
+    setStatus("error");
+  }
+
+  /** Request the PoW fallback from the server after repeated Turnstile
+   *  failures. Sends the last token + forceFallback:true so the server knows
+   *  to issue a PoW challenge even on a genuine token failure. Per 02 §6. */
+  async function requestFallback(lastToken: string) {
+    setVerifying(true);
+    setError(null);
+    const { data, error: apiErr } = await api.post<{
+      ok: boolean;
+      fallback?: "pow";
+      powChallenge?: PowChallenge;
+      error?: string;
+    }>("/api/verify-bot", {
+      mode: "turnstile",
+      token: lastToken,
+      forceFallback: true,
+    });
+    setVerifying(false);
+    submittingRef.current = false;
+    if (!apiErr && data?.ok) {
+      setStatus("passed");
+      return;
+    }
+    if (data?.fallback === "pow" && data.powChallenge) {
+      setPowChallenge(data.powChallenge);
+      setStatus("pow");
+      return;
+    }
+    setError(
+      apiErr?.message ||
+        data?.error ||
+        "Verification unavailable. Please retry.",
     );
     setStatus("error");
   }

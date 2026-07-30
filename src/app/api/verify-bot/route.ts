@@ -116,31 +116,36 @@ export const POST = withPrismaError(async function POST(request: Request) {
       reason: result.reason,
       ip,
       serviceDown: result.serviceDown,
+      retryable: result.retryable,
     });
     // 200 ok:false (NOT 403) for business-level verification failures so the
     // response body survives the api-client (which discards non-2xx bodies).
-    // The client reads `fallback` + `error` to decide the next step.
+    // The client reads `retryable` + `fallback` + `error` to decide the next
+    // step.
     //
-    // PoW fallback policy (the main culprit behind "always redirects to PoW"):
-    //   The previous version offered PoW on ANY Turnstile failure. That meant a
-    //   genuine token rejection (bad/expired/duplicate token, OR a misconfigured
-    //   secret returning success:false) was silently swallowed and the user was
-    //   routed to PoW every time — making it LOOK like "the token was never
-    //   validated." That also weakened the bot gate: a bot that fails Turnstile
-    //   just solved the easier PoW.
-    //
-    //   Correct policy per 06-security-architecture.md section 1 (fail closed)
-    //   + section 11 (log + surface, don't silently degrade):
-    //     - serviceDown (network/5xx -> Cloudflare unreachable): offer PoW. This
-    //       is the graceful-degradation path (02 section 6) for a real outage.
-    //     - Genuine token failure (success:false / 4xx): NO PoW. Return a clear
-    //       error so the user can retry and the operator can see the logged
-    //       reason (invalid-input-secret, timeout-or-duplicate, etc.). A legit
-    //       user retries and succeeds; a bot is blocked. Fail closed.
+    // Failure-handling policy (per 06 §1 fail-closed + 02 §6 graceful
+    // degradation + 06 §11 surface don't silently degrade):
+    //   - serviceDown (network/5xx -> Cloudflare unreachable): offer PoW
+    //     immediately. This is the graceful-degradation path for a real outage.
+    //   - retryable (timeout-or-duplicate): tell the client to reset the
+    //     widget and let the user re-verify. A fresh token will likely work.
+    //     NO PoW — the token was valid, just stale; a retry is the right fix.
+    //   - Persistent genuine failure (invalid-input-secret, invalid-input-
+    //     response, bad-request): these indicate a CONFIG issue (wrong secret,
+    //     hostname mismatch) the USER can't fix. After the client has retried
+    //     a few times (tracked client-side via submitAttempts), the client
+    //     requests PoW by sending `forceFallback: true`. The server issues a
+    //     PoW challenge so the user isn't permanently locked out by a
+    //     misconfiguration. Per 02 §6: graceful degradation — a partial result
+    //     (PoW) beats a hard failure when the strong path is broken.
     const payload: Record<string, unknown> = {
       ok: false,
       error: "Bot verification failed. Please try again.",
     };
+    if (result.retryable) {
+      payload.retryable = true;
+      payload.error = "Verification timed out. Please try again.";
+    }
     if (result.serviceDown) {
       const ch = issuePowChallenge(ip);
       if (ch) {
@@ -150,6 +155,18 @@ export const POST = withPrismaError(async function POST(request: Request) {
           "The verification service is unreachable. Running a backup check instead.";
       } else {
         payload.error = "Too many challenges. Please wait a minute.";
+      }
+    }
+    // Client-requested graceful degradation: after repeated genuine failures
+    // (the client tracks the count), the user explicitly asks for the PoW
+    // fallback so they aren't permanently blocked by a config issue. The PoW
+    // is rate-limited (10/min) + single-use, so this doesn't weaken the gate.
+    if (body.forceFallback === true && !result.serviceDown) {
+      const ch = issuePowChallenge(ip);
+      if (ch) {
+        payload.fallback = "pow";
+        payload.powChallenge = ch;
+        payload.error = "Switching to a backup verification method.";
       }
     }
     return withCache(NextResponse.json(payload), CACHE_NO_STORE);

@@ -66,6 +66,12 @@ export interface VerifyResult {
   /** True when failure was caused by Cloudflare being unreachable (network/
    *  timeout/5xx). The caller can offer the PoW fallback in this case. */
   serviceDown?: boolean;
+  /** True when the failure is RECOVERABLE — a fresh token would likely
+   *  succeed. Currently: `timeout-or-duplicate` (the token was consumed or
+   *  expired before siteverify ran, e.g. a double-callback or a slow submit).
+   *  The caller should reset the widget and let the user re-verify rather
+   *  than showing a terminal error. Per 02 §6 (graceful degradation). */
+  retryable?: boolean;
 }
 
 /** Match a single IPv4 or IPv6 literal. Cloudflare's siteverify `remoteip` is
@@ -149,7 +155,13 @@ export async function verifyTurnstileToken(
     // detail with enough context to investigate. The reason stays server-side
     // (never echoed to the client verbatim).
     const codes = (data["error-codes"] || []).join(",") || "no-error-codes";
-    return { ok: false, reason: `siteverify-failed:${codes}` };
+    // timeout-or-duplicate is RECOVERABLE: the token was valid but got
+    // consumed/expired before siteverify ran (double-callback, slow submit,
+    // strict-mode double-mount). A fresh token from a widget reset would
+    // succeed. Marking it retryable lets the client auto-reset instead of
+    // showing a terminal error. Per 02 §6 (graceful degradation).
+    const retryable = codes.includes("timeout-or-duplicate");
+    return { ok: false, reason: `siteverify-failed:${codes}`, retryable };
   } catch (e) {
     // Network / timeout: fail CLOSED (a bot shouldn't get through because
     // Cloudflare was briefly unreachable), but mark serviceDown so the caller
