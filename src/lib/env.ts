@@ -19,8 +19,10 @@ const envSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  // Cloudflare Turnstile (bot checkpoint). Optional in dev; in prod, both
-  // keys should be set so the bot gate is active. See src/lib/turnstile.ts.
+  // Cloudflare Turnstile was removed — bot protection is now handled by
+  // Vercel Firewall at the edge (no client-side gate, no server secrets).
+  // Per 06 §3: the edge firewall is the bot gate; server routes keep per-IP
+  // rate limiting as defense in depth.
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
   NODE_ENV: z
@@ -61,18 +63,11 @@ export function getEnv(): Env {
       missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
     if (!parsed.data.SUPABASE_SERVICE_ROLE_KEY)
       missing.push("SUPABASE_SERVICE_ROLE_KEY");
-    // Turnstile: prod MUST have both keys, else the bot gate silently
-    // disables (fail-open) and the cookie signing key falls back to a
-    // hardcoded predictable value -> forgeable cookies. Per 06 section 8:
-    // secrets in env, validated at startup. Per 06 section 1: fail closed.
-    if (!parsed.data.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
-      missing.push("NEXT_PUBLIC_TURNSTILE_SITE_KEY");
-    if (!parsed.data.TURNSTILE_SECRET_KEY) missing.push("TURNSTILE_SECRET_KEY");
     if (missing.length > 0) {
       throw new Error(
         `Production requires these env vars:\n` +
           missing.map((m) => `  - ${m}`).join("\n") +
-          `\n(Supabase for image storage, Turnstile for bot protection.)`,
+          `\n(Supabase for image storage. Bot protection is handled by Vercel Firewall.)`,
       );
     }
   }

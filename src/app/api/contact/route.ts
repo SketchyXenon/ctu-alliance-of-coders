@@ -11,7 +11,6 @@ import {
   getClientIp,
 } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
-import { requireBotOk } from "@/lib/turnstile";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { CONTACT_TOPICS } from "@/lib/constants";
 import type {
@@ -105,20 +104,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Server-side bot-gate enforcement. The BotCheckpoint component is client-
-  // only, so a bot using curl/requests bypasses it; this re-checks the signed
-  // bot-ok cookie. Per 06 section 3: never trust the client. No-op in dev
-  // (Turnstile disabled). Runs after the rate limit so cookie-less spam is
-  // still bounded by the IP limit.
-  const botGate = await requireBotOk();
-  if (botGate) {
-    return withCache(
-      NextResponse.json(botGate.body, { status: botGate.status }),
-      CACHE_NO_STORE,
-    );
-  }
-
   // Admins are rejected after the rate limit passes (defense in depth).
+  // Bot protection is handled by Vercel Firewall at the edge (no client-side
+  // gate needed). Per 06 §3: the edge firewall is the bot gate; this route
+  // still enforces per-IP rate limiting (above) as defense in depth.
   const admin = await getCurrentUser();
   if (admin && admin.role === "admin") {
     return withCache(

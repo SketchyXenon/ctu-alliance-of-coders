@@ -30,13 +30,6 @@ const EXTRA_IMG_HOSTS = (process.env.IMG_ALLOWED_HOSTS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 
-// Cloudflare Turnstile hosts. The widget loads its api.js + renders an
-// iframe + posts the token to siteverify, so all three CSP directives must
-// allow challenges.cloudflare.com. Without this, the bot-checkpoint widget
-// is blocked by CSP in prod (06 section 9: security headers must not break
-// legitimate functionality).
-const TURNSTILE_HOST = "https://challenges.cloudflare.com";
-
 /**
  * Build the full security-header set applied to EVERY response (including the
  * CSRF-blocked 403). Centralized so the blocked path can't drift from the
@@ -48,30 +41,15 @@ const TURNSTILE_HOST = "https://challenges.cloudflare.com";
  *  - Referrer-Policy: strict-origin-when-cross-origin
  *  - Permissions-Policy                          (lock down powerful APIs)
  *  - Strict-Transport-Security (prod only, HTTPS)
- *  - Cross-Origin-Opener-Policy: same-origin     (COOP — isolate browsing context,
- *                                                  blocks cross-origin window references)
- *  - Cross-Origin-Resource-Policy: same-origin   (CORP — block cross-origin reads
- *                                                  of our responses)
- *  - Cross-Origin-Embedder-Policy: unsafe-none  (COEP — disables cross-origin
- *                                                  isolation so the Cloudflare
- *                                                  Turnstile iframe can load
- *                                                  its cross-origin subresources.
- *                                                  COOP+CORP still isolate our
- *                                                  own responses; full COEP
- *                                                  isolation breaks Turnstile.)
+ *  - Cross-Origin-Opener-Policy: same-origin     (COOP — isolate browsing context)
+ *  - Cross-Origin-Resource-Policy: same-origin   (CORP — block cross-origin reads)
+ *  - Cross-Origin-Embedder-Policy: require-corp  (COEP — full cross-origin isolation.
+ *                                                  Safe now that the Cloudflare
+ *                                                  Turnstile iframe is gone; hardens
+ *                                                  against Spectre-style side channels
+ *                                                  via SharedArrayBuffer. Per 06 §9.)
  *  - X-DNS-Prefetch-Control: off                 (no DNS prefetch info leak)
  *  - Content-Security-Policy                     (strict, see buildCsp)
- *
- * Trade-off note (06 section 9 "always state trade-offs"): full cross-origin
- * isolation (COOP+COEP=require-corp or credentialless) would harden against
- * Spectre-style side channels via SharedArrayBuffer, BUT it blocks the
- * Cloudflare Turnstile widget, whose iframe loads cross-origin subresources
- * that do not always send CORP headers. That blocking caused the production
- * "always throws Verification error" loop: the widget's error-callback fired
- * on every render -> reset() -> error -> infinite loop. We keep COOP+CORP
- * (which isolate our own responses without breaking third-party embeds) and
- * set COEP=unsafe-none so Turnstile can run. CSP frame-src is already
- * scoped to challenges.cloudflare.com, so the iframe surface is minimal.
  */
 function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   res.headers.set("X-Content-Type-Options", "nosniff");
@@ -83,10 +61,11 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   );
   res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
-  // unsafe-none disables cross-origin isolation so the Turnstile iframe can
-  // load. COOP+CORP still apply to our own responses. See the trade-off note
-  // above. Per 06 section 9 + 02 section 9 (state the trade-off).
-  res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
+  // Full cross-origin isolation (COOP+COEP=require-corp). Now safe since the
+  // Cloudflare Turnstile iframe (which needed unsafe-none to load its
+  // cross-origin subresources) has been removed. Hardens against Spectre-style
+  // side channels. Per 06 section 9.
+  res.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
   res.headers.set("X-DNS-Prefetch-Control", "off");
 
   if (process.env.NODE_ENV === "production") {
@@ -101,10 +80,9 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
 
 /**
  * Build the Content-Security-Policy. Per 06 section 9: strict default-src,
- * explicit per-directive allowlists. Turnstile requires:
- *   - script-src  https://challenges.cloudflare.com (api.js)
- *   - frame-src   https://challenges.cloudflare.com (widget iframe)
- *   - connect-src https://challenges.cloudflare.com (token callback fetch)
+ * explicit per-directive allowlists. No third-party script/frame/connect hosts
+ * are needed now that Cloudflare Turnstile is removed (bot protection is
+ * handled by Vercel Firewall at the edge).
  *
  * img-src is restricted to self + explicit allowlist (S7) rather than the
  * overly-permissive "https:" which enabled tracking pixels / cache timing.
@@ -113,8 +91,8 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
  */
 function buildCsp(isDev: boolean): string {
   const scriptSrc = isDev
-    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_HOST}`
-    : `script-src 'self' 'unsafe-inline' ${TURNSTILE_HOST}`;
+    ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
+    : `script-src 'self' 'unsafe-inline'`;
   const imgSrc = [
     "img-src 'self' data: blob:",
     ...DEFAULT_IMG_HOSTS,
@@ -126,13 +104,7 @@ function buildCsp(isDev: boolean): string {
     `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`,
     "font-src 'self' https://fonts.gstatic.com",
     imgSrc,
-    // connect-src: self + Turnstile siteverify endpoint. The client
-    // BotCheckpoint POSTs to /api/verify-bot (same-origin), but the Turnstile
-    // widget itself calls siteverify from the iframe (frame-src covers that).
-    `connect-src 'self' ${TURNSTILE_HOST}`,
-    // frame-src: Turnstile widget iframe. Without this, the widget's iframe
-    // is blocked by default-src 'self'.
-    `frame-src ${TURNSTILE_HOST}`,
+    `connect-src 'self'`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",

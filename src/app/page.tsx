@@ -24,7 +24,6 @@ import {
   AnnouncementNotFound,
 } from "@/components/sections/announcement-post";
 import { ConfirmDialog } from "@/components/confirm-dialog";
-import { BotCheckpoint } from "@/components/bot-checkpoint";
 import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import {
   parseAnnouncementHash,
@@ -499,10 +498,8 @@ export default function Home() {
     activeNav === "Cookie Policy";
 
   // ---- Loading gate ------------------------------------------------------
-  // BotCheckpoint wraps the entire app: it shows the Turnstile challenge on
-  // the initial load (only when Turnstile is configured + the visitor hasn't
-  // already been verified). Once passed, the signed bot-ok cookie means a
-  // refresh doesn't re-challenge. Per 05-ui-ux §6 + 06 §5/§8.
+  // Bot protection is handled by Vercel Firewall (edge-level, no client gate
+  // needed). The app renders directly once client state initializes.
   const appTree = !initialized ? (
     <PageLoader />
   ) : (
@@ -563,5 +560,5 @@ export default function Home() {
     </div>
   );
 
-  return <BotCheckpoint>{appTree}</BotCheckpoint>;
+  return appTree;
 }
