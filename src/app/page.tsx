@@ -25,6 +25,7 @@ import {
 } from "@/components/sections/announcement-post";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { BotCheckpoint } from "@/components/bot-checkpoint";
+import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import {
   parseAnnouncementHash,
   buildAnnouncementHash,
@@ -523,6 +524,9 @@ export default function Home() {
       <SiteFooter />
       <BackToTop />
       <CookieConsent />
+      {/* Anonymous page-view beacon. Honors Do-Not-Track, no cookies, daily
+          visitor hash on the server. See src/components/analytics-beacon.tsx. */}
+      <AnalyticsBeacon />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}

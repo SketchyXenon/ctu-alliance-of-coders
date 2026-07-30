@@ -132,3 +132,22 @@ model ActivityLog {
   @@index([entity])
   @@map("activity_logs")
 }
+
+// Privacy-first page-view analytics. Per 06 section 8 (data minimization):
+// daily visitor hash (SHA-256 of IP + day), NEVER raw IP. No cookies, no PII.
+// Per Z.md: no external analytics SDK.
+model PageView {
+  id          String   @id @default(uuid()) @db.Uuid
+  visitorHash String?  @map("visitor_hash")
+  path        String
+  referrer    String?
+  device      String?
+  country     String?
+  sessionId   String?  @map("session_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([path])
+  @@index([visitorHash])
+  @@map("page_views")
+}

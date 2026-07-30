@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   Activity,
   AlertCircle,
+  BarChart3,
   Calendar,
   Download,
   LayoutDashboard,
@@ -49,6 +50,7 @@ import { OfficersManager } from "@/components/admin/officers-manager";
 import { IntegrationsPanel } from "@/components/admin/integrations-panel";
 import { ActivityPanel } from "@/components/admin/activity-panel";
 import { AdminUsersPanel } from "@/components/admin/admin-users-panel";
+import { AnalyticsPanel } from "@/components/admin/analytics-panel";
 import { SettingsDialog } from "@/components/admin/settings-dialog";
 
 type AuthState =
@@ -362,6 +364,10 @@ export function AdminPanel() {
                 <Activity className="size-3.5" aria-hidden="true" />
                 Activity
               </TabsTrigger>
+              <TabsTrigger value="analytics">
+                <BarChart3 className="size-3.5" aria-hidden="true" />
+                Analytics
+              </TabsTrigger>
               <TabsTrigger value="users">
                 <Users className="size-3.5" aria-hidden="true" />
                 Admin Users
@@ -383,6 +389,9 @@ export function AdminPanel() {
           </TabsContent>
           <TabsContent value="activity" className="mt-4">
             <ActivityPanel />
+          </TabsContent>
+          <TabsContent value="analytics" className="mt-4">
+            <AnalyticsPanel />
           </TabsContent>
           <TabsContent value="users" className="mt-4">
             <AdminUsersPanel />

@@ -118,3 +118,34 @@ model ActivityLog {
   @@index([createdAt])
   @@index([entity])
 }
+
+// Privacy-first page-view analytics. Per 06-security-architecture.md section 8
+// (data minimization): we store a DAILY visitor hash (SHA-256 of IP + day),
+// NEVER the raw IP. No cookies, no PII. The hash lets us count unique visitors
+// per day without re-identifying a person across days. Per Z.md: no external
+// analytics SDK — a ~60-line client beacon + this table. Per 05-ui-ux-design.md
+// section 6: the beacon uses sendBeacon (non-blocking, survives navigation).
+model PageView {
+  id        String   @id @default(cuid())
+  // SHA-256(ip + dateSalt): identifies a visitor within one day, not across
+  // days. Nullable so a request with no forwarded IP still records a view.
+  visitorHash String?
+  path       String
+  // Referrer DOMAIN only (strips query/path) to avoid storing inbound URLs
+  // that may carry PII. Nullable for direct visits.
+  referrer   String?
+  // Coarse device class derived from User-Agent (mobile/tablet/desktop/bot).
+  device     String?
+  // ISO country code from the cf-ipcountry / x-vercel-ip-country header
+  // (set by the edge gateway). Nullable when no header is present.
+  country    String?
+  // Anonymous per-session id generated client-side (random, in-memory only —
+  // not persisted to a cookie) so we can group a single visit's views without
+  // tracking a user across sessions.
+  sessionId  String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+  @@index([visitorHash])
+}

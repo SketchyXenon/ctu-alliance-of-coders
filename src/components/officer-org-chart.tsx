@@ -413,7 +413,11 @@ export function OfficerOrgChart({
   // minification; inline styles bypass the compiler and reach the DOM intact.
   // Values reference the project's theme tokens so they adapt to light/dark.
   // Per 05-ui-ux-design.md section 3 (flat, theme-aware color) + section 5.
-  const chartThemeVars: React.CSSProperties = {
+  // Typed as Record<string, string> then cast: React.CSSProperties doesn't
+  // list vendor/library CSS custom properties, so a direct object literal
+  // fails the known-properties check. The cast is the standard pattern for
+  // setting custom properties via inline style.
+  const chartThemeVars = {
     "--xy-controls-button-background-color": "var(--card)",
     "--xy-controls-button-background-color-hover": "var(--muted)",
     "--xy-controls-button-border-color": "var(--border)",
@@ -422,7 +426,7 @@ export function OfficerOrgChart({
     "--xy-controls-box-shadow": "var(--shadow-md)",
     "--xy-minimap-background-color": "var(--card)",
     "--xy-minimap-mask-background-color": "rgba(127, 127, 127, 0.12)",
-  };
+  } as React.CSSProperties;
 
   return (
     <div
