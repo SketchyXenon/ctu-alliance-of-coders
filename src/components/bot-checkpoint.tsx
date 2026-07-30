@@ -266,23 +266,23 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       return;
     }
 
-    // PoW fallback offered by the server (serviceDown, or we requested it).
+    // PoW fallback offered by the server. The server offers this IMMEDIATELY
+    // (no retries needed) when Turnstile is broken (HTTP 400 — the site is on
+    // a non-Cloudflare-Zone host like Vercel, so clearance redemption 404s and
+    // the widget produces a dummy token) OR when Cloudflare is down (5xx). It
+    // also offers it when the client requests it via forceFallback after
+    // repeated genuine failures. Per 02 §6 (graceful degradation).
     if (data?.fallback === "pow" && data.powChallenge) {
       setPowChallenge(data.powChallenge);
       setStatus("pow");
       return;
     }
 
-    // Any non-fallback failure (retryable timeout-or-duplicate, HTTP 400 from
-    // a bad clearance token on a non-Cloudflare-Zone host, or a genuine
-    // success:false): reset the widget to get a fresh token. The
-    // submitAttempts cap (checked above) bounds this so it can never
-    // infinite-loop — after MAX_ATTEMPTS, requestFallback sends
-    // forceFallback:true to get the PoW path. Per 02 §6 (graceful degradation)
-    // + 06 §1 (fail closed, then degrade). This fixes the production issue
-    // where a 400 (widget couldn't complete clearance redemption because the
-    // site is on Vercel, not a Cloudflare Zone) left the user stuck on
-    // "Verification unavailable" after a single attempt.
+    // Non-fallback, non-broken failure (retryable timeout-or-duplicate, or a
+    // genuine success:false that the server didn't offer PoW for): reset the
+    // widget to get a fresh token. The submitAttempts cap (checked above)
+    // bounds this so it can never infinite-loop — after MAX_ATTEMPTS,
+    // requestFallback sends forceFallback:true to get the PoW path. Per 02 §6.
     if (widgetIdRef.current && window.turnstile) {
       try {
         window.turnstile.reset(widgetIdRef.current);

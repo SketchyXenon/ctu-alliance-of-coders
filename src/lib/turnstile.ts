@@ -72,6 +72,14 @@ export interface VerifyResult {
    *  The caller should reset the widget and let the user re-verify rather
    *  than showing a terminal error. Per 02 §6 (graceful degradation). */
   retryable?: boolean;
+  /** True when Turnstile is fundamentally BROKEN on this host — the widget
+   *  can't complete clearance redemption (e.g. the site is on Vercel, not a
+   *  Cloudflare Zone, so /cdn-cgi/challenge-platform 404s) and produces a
+   *  dummy token that siteverify rejects with HTTP 400. This is NOT a
+   *  transient error — retrying the widget will fail the same way every time.
+   *  The caller should skip retries and go STRAIGHT to the PoW fallback so
+   *  the user isn't delayed. Per 02 §6 (graceful degradation) + 06 §1. */
+  broken?: boolean;
 }
 
 /** Match a single IPv4 or IPv6 literal. Cloudflare's siteverify `remoteip` is
@@ -134,12 +142,33 @@ export async function verifyTurnstileToken(
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
-      // 5xx from Cloudflare = service degraded, not a bad token. Signal the
-      // caller so it can offer the PoW fallback instead of hard-blocking.
+      // Read the body EVEN on non-2xx so we capture Cloudflare's error-codes
+      // for diagnostics. The previous code discarded the 400 body entirely,
+      // which hid the real reason (the operator saw a generic "siteverify-
+      // http-400" with no error-codes). Per 06 §11: log enough context to
+      // investigate.
+      let codes = "no-error-codes";
+      try {
+        const errData = (await res.json()) as { "error-codes"?: string[] };
+        codes = (errData["error-codes"] || []).join(",") || "no-error-codes";
+      } catch {
+        // body wasn't JSON — keep the generic code.
+      }
+      // 5xx from Cloudflare = service degraded (transient). Mark serviceDown
+      // so the caller offers the PoW fallback.
+      const serviceDown = res.status >= 500;
+      // 400 = the request/token was malformed. On Vercel (not a Cloudflare
+      // Zone), the widget can't complete clearance redemption
+      // (/cdn-cgi/challenge-platform 404s), so it produces a dummy token that
+      // siteverify rejects with 400. This is NOT transient — retrying the
+      // widget will fail identically every time. Mark `broken` so the client
+      // skips retries and goes STRAIGHT to PoW. Per 02 §6 + 06 §1.
+      const broken = res.status === 400;
       return {
         ok: false,
-        reason: `siteverify-http-${res.status}`,
-        serviceDown: res.status >= 500,
+        reason: `siteverify-http-${res.status}:${codes}`,
+        serviceDown,
+        broken,
       };
     }
     const data = (await res.json()) as {

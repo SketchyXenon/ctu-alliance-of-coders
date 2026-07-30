@@ -117,27 +117,26 @@ export const POST = withPrismaError(async function POST(request: Request) {
       ip,
       serviceDown: result.serviceDown,
       retryable: result.retryable,
+      broken: result.broken,
     });
     // 200 ok:false (NOT 403) for business-level verification failures so the
     // response body survives the api-client (which discards non-2xx bodies).
-    // The client reads `retryable` + `fallback` + `error` to decide the next
-    // step.
+    // The client reads `broken` + `retryable` + `fallback` + `error` to decide
+    // the next step.
     //
     // Failure-handling policy (per 06 §1 fail-closed + 02 §6 graceful
     // degradation + 06 §11 surface don't silently degrade):
+    //   - broken (HTTP 400 — Turnstile can't work on this host, e.g. Vercel
+    //     is not a Cloudflare Zone so clearance redemption 404s): offer PoW
+    //     IMMEDIATELY. Retrying the widget will fail identically every time,
+    //     so don't waste the user's time with 3 retries. Per 02 §6.
     //   - serviceDown (network/5xx -> Cloudflare unreachable): offer PoW
-    //     immediately. This is the graceful-degradation path for a real outage.
+    //     immediately. Graceful-degradation path for a real outage.
     //   - retryable (timeout-or-duplicate): tell the client to reset the
     //     widget and let the user re-verify. A fresh token will likely work.
-    //     NO PoW — the token was valid, just stale; a retry is the right fix.
-    //   - Persistent genuine failure (invalid-input-secret, invalid-input-
-    //     response, bad-request): these indicate a CONFIG issue (wrong secret,
-    //     hostname mismatch) the USER can't fix. After the client has retried
-    //     a few times (tracked client-side via submitAttempts), the client
-    //     requests PoW by sending `forceFallback: true`. The server issues a
-    //     PoW challenge so the user isn't permanently locked out by a
-    //     misconfiguration. Per 02 §6: graceful degradation — a partial result
-    //     (PoW) beats a hard failure when the strong path is broken.
+    //   - Persistent genuine failure (invalid-input-secret, etc.): after the
+    //     client retries (tracked client-side), it sends forceFallback:true
+    //     and the server issues a PoW challenge.
     const payload: Record<string, unknown> = {
       ok: false,
       error: "Bot verification failed. Please try again.",
@@ -146,22 +145,24 @@ export const POST = withPrismaError(async function POST(request: Request) {
       payload.retryable = true;
       payload.error = "Verification timed out. Please try again.";
     }
-    if (result.serviceDown) {
+    // Offer PoW immediately when Turnstile is broken or Cloudflare is down.
+    // These are not transient — the widget won't recover on retry.
+    if (result.broken || result.serviceDown) {
       const ch = issuePowChallenge(ip);
       if (ch) {
         payload.fallback = "pow";
         payload.powChallenge = ch;
-        payload.error =
-          "The verification service is unreachable. Running a backup check instead.";
+        payload.error = result.broken
+          ? "Switching to a backup verification method."
+          : "The verification service is unreachable. Running a backup check instead.";
       } else {
         payload.error = "Too many challenges. Please wait a minute.";
       }
     }
     // Client-requested graceful degradation: after repeated genuine failures
     // (the client tracks the count), the user explicitly asks for the PoW
-    // fallback so they aren't permanently blocked by a config issue. The PoW
-    // is rate-limited (10/min) + single-use, so this doesn't weaken the gate.
-    if (body.forceFallback === true && !result.serviceDown) {
+    // fallback. Per 02 §6.
+    if (body.forceFallback === true && !payload.fallback) {
       const ch = issuePowChallenge(ip);
       if (ch) {
         payload.fallback = "pow";
