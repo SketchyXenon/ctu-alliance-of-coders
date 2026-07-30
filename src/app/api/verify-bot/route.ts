@@ -93,14 +93,14 @@ export const POST = withPrismaError(async function POST(request: Request) {
     const ok = await verifyPowSolution(challenge, nonce, POW_DIFFICULTY_BITS);
     if (!ok) {
       logger.warn("PoW verification failed", { ip });
+      // 200 ok:false (not 403) so the client api-client passes the body
+      // through. The client reads `error` to show a message. Per the
+      // anti-loop design, the user clicks retry to get a fresh challenge.
       return withCache(
-        NextResponse.json(
-          {
-            ok: false,
-            error: "Proof-of-work invalid or expired. Please retry.",
-          },
-          { status: 403 },
-        ),
+        NextResponse.json({
+          ok: false,
+          error: "Proof-of-work invalid or expired. Please retry.",
+        }),
         CACHE_NO_STORE,
       );
     }
@@ -117,26 +117,34 @@ export const POST = withPrismaError(async function POST(request: Request) {
       ip,
       serviceDown: result.serviceDown,
     });
-    // If Cloudflare was unreachable, tell the client to fall back to PoW.
-    // The client still has to solve a real challenge, so this is not a bypass.
+    // 200 ok:false (NOT 403) for business-level verification failures. This is
+    // the critical fix: the client's api-client discards the response body on
+    // non-2xx (returns data:null), so a 403 would strip the `fallback` +
+    // `powChallenge` fields -> the PoW graceful-degradation path never
+    // triggered -> user stuck on "Verification unavailable". Returning 200
+    // with ok:false lets the body through. 429 (rate limit) and 400 (bad JSON)
+    // stay as HTTP errors since those ARE transport-level failures.
+    // Per 06 section 1: fail closed (ok:false, no cookie). Per 02 section 6:
+    // graceful degradation (offer PoW fallback so a Cloudflare outage or a
+    // bad token doesn't hard-block the user).
     const payload: Record<string, unknown> = {
       ok: false,
       error: "Bot verification failed. Please try again.",
     };
-    if (result.serviceDown) {
-      const ch = issuePowChallenge(ip);
-      if (ch) {
-        payload.fallback = "pow";
-        payload.powChallenge = ch;
-      } else {
-        // IP exceeded the challenge-issue limit.
-        payload.error = "Too many challenges. Please wait a minute.";
-      }
+    // Offer the PoW fallback whenever Turnstile fails AND is enabled — not
+    // just on serviceDown. A bad/expired/duplicate token (success:false) also
+    // leaves the user stuck; PoW is the graceful-degradation path that keeps
+    // the site usable. The PoW itself is rate-limited (10/min per IP) + the
+    // challenge is single-use, so this doesn't weaken the bot gate.
+    const ch = issuePowChallenge(ip);
+    if (ch) {
+      payload.fallback = "pow";
+      payload.powChallenge = ch;
+    } else {
+      // IP exceeded the challenge-issue limit.
+      payload.error = "Too many challenges. Please wait a minute.";
     }
-    return withCache(
-      NextResponse.json(payload, { status: 403 }),
-      CACHE_NO_STORE,
-    );
+    return withCache(NextResponse.json(payload), CACHE_NO_STORE);
   }
 
   return await issueBotOkCookie(config);

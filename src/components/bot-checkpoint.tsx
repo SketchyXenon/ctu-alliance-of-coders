@@ -96,6 +96,12 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
   // re-subscribing the widget on every render.
   const errorAttemptsRef = React.useRef(0);
   const submitAttemptsRef = React.useRef(0);
+  // Double-submit guard: Turnstile tokens are single-use. If the callback
+  // fires twice (widget re-render, React strict-mode double-mount in dev),
+  // the second submit would send an already-consumed token -> Cloudflare
+  // returns success:false -> spurious error. This ref ensures only one
+  // submit is in-flight at a time.
+  const submittingRef = React.useRef(false);
 
   // ---- Initial cookie check ------------------------------------------------
   React.useEffect(() => {
@@ -223,8 +229,16 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
 
   // ---- Turnstile submit ----------------------------------------------------
   async function submitTurnstileToken(token: string) {
+    // Double-submit guard: tokens are single-use. If the callback fires again
+    // while a submit is in-flight, drop the duplicate (the in-flight submit
+    // will resolve the state). This prevents a spurious second POST with an
+    // already-consumed token -> Cloudflare success:false -> false error.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+
     submitAttemptsRef.current += 1;
     if (submitAttemptsRef.current > MAX_TURNSTILE_ATTEMPTS) {
+      submittingRef.current = false;
       // Hard cap: stop auto-submitting. Degrade to PoW or error.
       if (powChallenge) {
         setStatus("pow");
@@ -243,32 +257,31 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       error?: string;
     }>("/api/verify-bot", { mode: "turnstile", token });
     setVerifying(false);
-    if (apiErr || !data?.ok) {
-      // If the server signalled service-down, switch to the PoW fallback.
-      if (data?.fallback === "pow" && data.powChallenge) {
-        setPowChallenge(data.powChallenge);
-        setStatus("pow");
-        return;
-      }
-      // ANTI-LOOP: do NOT call reset() here. A failed verify is terminal with
-      // a retry button. reset() would generate a new token -> callback ->
-      // submit -> fail -> reset -> loop. Set the error message; the user
-      // clicks retry to re-mount the widget fresh.
-      setError(
-        apiErr?.message || data?.error || "Verification failed. Please retry.",
-      );
-      // If we still have attempts left AND no PoW fallback, go to the error
-      // state so the user can deliberately retry (not auto-loop).
-      if (!powChallenge) {
-        setStatus("error");
-      } else if (submitAttemptsRef.current >= MAX_TURNSTILE_ATTEMPTS) {
-        setStatus("pow");
-      } else {
-        setStatus("error");
-      }
+    submittingRef.current = false;
+
+    // Success: render children.
+    if (!apiErr && data?.ok) {
+      setStatus("passed");
       return;
     }
-    setStatus("passed");
+
+    // Failure. The server returns 200 ok:false (not 403) so the body survives
+    // the api-client. Check for the PoW fallback FIRST — the server offers it
+    // on any Turnstile failure (bad token, expired, service down) so the user
+    // is never hard-blocked. Per 02 section 6: graceful degradation.
+    if (data?.fallback === "pow" && data.powChallenge) {
+      setPowChallenge(data.powChallenge);
+      setStatus("pow");
+      return;
+    }
+
+    // No fallback offered (e.g., IP exceeded challenge-issue limit, or a
+    // network error). ANTI-LOOP: do NOT call reset(). A failed verify is
+    // terminal with a retry button.
+    setError(
+      apiErr?.message || data?.error || "Verification failed. Please retry.",
+    );
+    setStatus("error");
   }
 
   // ---- PoW fallback (runs when Turnstile script/siteverify is unreachable) -
@@ -316,9 +329,10 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
   }
 
   function retry() {
-    // Reset all attempt counters + state for a clean re-mount.
+    // Reset all attempt counters + guards + state for a clean re-mount.
     errorAttemptsRef.current = 0;
     submitAttemptsRef.current = 0;
+    submittingRef.current = false;
     setError(null);
     setPowProgress(0);
     setStatus("checking");
