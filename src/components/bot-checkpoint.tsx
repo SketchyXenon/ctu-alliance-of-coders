@@ -10,26 +10,35 @@ import { GearLogo } from "@/components/gear-logo";
  *
  * Flow:
  *   1. On mount, GET /api/verify-bot. If the visitor already has a valid
- *      signed bot-ok cookie, render children (no challenge). This is the
- *      "don't re-challenge on refresh" path.
+ *      signed bot-ok cookie, render children (no challenge).
  *   2. If Turnstile is configured, render the Turnstile widget. On callback,
  *      POST the token to /api/verify-bot. On success, render children.
  *   3. If the Turnstile SCRIPT fails to load, OR siteverify returns a
- *      service-down signal (network/5xx), fall back to the PoW path: solve
- *      the server-issued hashcash challenge client-side, then POST the
- *      solution. On success, render children.
+ *      service-down signal (network/5xx), fall back to the PoW path.
  *   4. If Turnstile is NOT configured (dev), render children immediately.
  *
- * Fail-closed policy (06 section 1): a network error on the GET check or a
- * script-load failure does NOT let the user through. The user sees a retry
- * button. Only the dev/disabled case is fail-open. The PoW fallback is the
- * graceful-degradation path (02 section 6) for a Cloudflare outage.
+ * ANTI-LOOP DESIGN (the critical bug this fixes):
+ *   - The Turnstile `error-callback` and `expired-callback` do NOT call
+ *     `reset()` anymore. Calling reset() re-renders the widget, which
+ *     re-fires error-callback -> infinite loop ("always throws Verification
+ *     error"). Instead, errors are TERMINAL: a retry counter caps attempts,
+ *     and after MAX_ATTEMPTS the UI switches to the PoW fallback (graceful
+ *     degradation) or the error state.
+ *   - `submitTurnstileToken` failure does NOT call `reset()` either. A failed
+ *     server verify is terminal (with a retry button), not an auto-retry.
+ *     Auto-retry + reset() was the second loop vector.
+ *   - A hard attempt cap (MAX_ATTEMPTS) bounds the total Turnstile attempts
+ *     per page load so a misconfigured sitekey or a persistently-failing
+ *     widget can never spin forever.
  *
- * Per 05-ui-ux-design.md section 6: the checkpoint is a full-screen modal
- * that blocks interaction until resolved. Per 06 section 5: the token is
- * untrusted until server-verified; per section 8: the cookie is server-signed
- * so it can't be forged. Per 06 section 3: the server enforces the cookie
- * independently on public write endpoints (requireBotOk).
+ * Fail-closed policy (06 section 1): a network error on the GET check or a
+ * script-load failure does NOT let the user through. The PoW fallback is the
+ * graceful-degradation path (02 section 6) for a Cloudflare outage or a
+ * widget blocked by COEP/CSP.
+ *
+ * Per 05-ui-ux-design.md section 6: full-screen modal blocking interaction.
+ * Per 06 section 5: token untrusted until server-verified. Per 06 section 3:
+ * server enforces the cookie independently (requireBotOk).
  */
 
 interface BotCheckpointProps {
@@ -43,6 +52,11 @@ interface PowChallenge {
   difficulty: number;
   expiresAt: number;
 }
+
+/** Hard cap on Turnstile widget attempts per page load. Bounds the loop so a
+ *  misconfigured sitekey or a widget blocked by COEP/CSP can never spin
+ *  forever. After this, the UI falls back to PoW (or error if no challenge). */
+const MAX_TURNSTILE_ATTEMPTS = 3;
 
 declare global {
   interface Window {
@@ -78,6 +92,10 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const widgetIdRef = React.useRef<string | null>(null);
   const scriptLoadedRef = React.useRef(false);
+  // Attempt counters (anti-loop). Refs so callbacks read fresh values without
+  // re-subscribing the widget on every render.
+  const errorAttemptsRef = React.useRef(0);
+  const submitAttemptsRef = React.useRef(0);
 
   // ---- Initial cookie check ------------------------------------------------
   React.useEffect(() => {
@@ -131,7 +149,8 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
     };
     // Fail CLOSED: a script-load failure means Turnstile can't run. Switch to
     // the PoW fallback if we have a challenge, else show an error. We do NOT
-    // set status to "passed" (the old fail-open bug). (06 section 1; 02 §6.)
+    // set status to "passed" (fail-open) and do NOT retry the script load
+    // automatically (that would loop). (06 section 1; 02 §6.)
     script.onerror = () => {
       if (powChallenge) {
         setStatus("pow");
@@ -167,28 +186,32 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
       callback: (token) => {
         void submitTurnstileToken(token);
       },
-      // Reset the widget on error/expired so the user can retry (full state
-      // set per 05 section 4). The old code only set an error message and
-      // left the widget stuck.
+      // ANTI-LOOP: error/expired callbacks do NOT call reset(). reset()
+      // re-renders the widget -> error fires again -> infinite loop ("always
+      // throws Verification error"). Instead, count attempts and fall back to
+      // PoW (or error) after MAX_TURNSTILE_ATTEMPTS. Per 06 §1 fail-closed +
+      // 02 §6 graceful degradation.
       "error-callback": () => {
-        setError("Verification error. Please retry.");
-        if (widgetIdRef.current && window.turnstile) {
-          try {
-            window.turnstile.reset(widgetIdRef.current);
-          } catch {
-            /* noop */
+        errorAttemptsRef.current += 1;
+        if (errorAttemptsRef.current >= MAX_TURNSTILE_ATTEMPTS) {
+          // Terminal: stop trying Turnstile. Degrade to PoW if available.
+          if (powChallenge) {
+            setStatus("pow");
+          } else {
+            setError(
+              "The verification widget failed repeatedly. Please retry.",
+            );
+            setStatus("error");
           }
         }
+        // Below the cap: show a transient hint but DO NOT reset. The widget
+        // stays in its error state until the user clicks retry (which
+        // re-mounts the component tree via the error-state button).
       },
       "expired-callback": () => {
-        setError("Verification expired. Please retry.");
-        if (widgetIdRef.current && window.turnstile) {
-          try {
-            window.turnstile.reset(widgetIdRef.current);
-          } catch {
-            /* noop */
-          }
-        }
+        // Expired is non-fatal: just hint the user. Do NOT reset (loop). The
+        // user can click retry to re-mount.
+        setError("Verification expired. Click retry to continue.");
       },
       theme:
         typeof document !== "undefined" &&
@@ -200,6 +223,17 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
 
   // ---- Turnstile submit ----------------------------------------------------
   async function submitTurnstileToken(token: string) {
+    submitAttemptsRef.current += 1;
+    if (submitAttemptsRef.current > MAX_TURNSTILE_ATTEMPTS) {
+      // Hard cap: stop auto-submitting. Degrade to PoW or error.
+      if (powChallenge) {
+        setStatus("pow");
+      } else {
+        setError("Verification kept failing. Please retry.");
+        setStatus("error");
+      }
+      return;
+    }
     setVerifying(true);
     setError(null);
     const { data, error: apiErr } = await api.post<{
@@ -216,15 +250,21 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
         setStatus("pow");
         return;
       }
+      // ANTI-LOOP: do NOT call reset() here. A failed verify is terminal with
+      // a retry button. reset() would generate a new token -> callback ->
+      // submit -> fail -> reset -> loop. Set the error message; the user
+      // clicks retry to re-mount the widget fresh.
       setError(
         apiErr?.message || data?.error || "Verification failed. Please retry.",
       );
-      if (widgetIdRef.current && window.turnstile) {
-        try {
-          window.turnstile.reset(widgetIdRef.current);
-        } catch {
-          /* noop */
-        }
+      // If we still have attempts left AND no PoW fallback, go to the error
+      // state so the user can deliberately retry (not auto-loop).
+      if (!powChallenge) {
+        setStatus("error");
+      } else if (submitAttemptsRef.current >= MAX_TURNSTILE_ATTEMPTS) {
+        setStatus("pow");
+      } else {
+        setStatus("error");
       }
       return;
     }
@@ -261,6 +301,9 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
     }>("/api/verify-bot", { mode: "pow", challenge, nonce });
     setVerifying(false);
     if (apiErr || !data?.ok) {
+      // ANTI-LOOP: do NOT auto-retry. The PoW challenge is single-use; a
+      // failure means it was consumed or expired. The user clicks retry to
+      // get a fresh challenge.
       setError(
         apiErr?.message ||
           data?.error ||
@@ -273,9 +316,11 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
   }
 
   function retry() {
+    // Reset all attempt counters + state for a clean re-mount.
+    errorAttemptsRef.current = 0;
+    submitAttemptsRef.current = 0;
     setError(null);
     setPowProgress(0);
-    // Re-fetch a fresh state (cookie may have been set by a parallel tab).
     setStatus("checking");
     void (async () => {
       const { data } = await api.get<{
@@ -418,8 +463,12 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
  * Uses the Web Crypto API (built-in, no external lib). Yields progress so
  * the UI can show a bar. Per Z.md: no external libraries unless necessary.
  *
- * Runs on a async yield loop so the UI stays responsive; a tight sync loop
+ * Runs on an async yield loop so the UI stays responsive; a tight sync loop
  * would freeze the main thread. Returns the winning nonce string.
+ *
+ * NOTE: matches the server's hasPoWPrefix exactly (zero BITS, not hex chars):
+ * difficulty 16 -> 4 hex zero chars -> 16 zero bits. Verified against
+ * tests/turnstile.test.ts hasPoWPrefix cases.
  */
 async function solvePow(
   ch: PowChallenge,
@@ -429,8 +478,7 @@ async function solvePow(
   const prefix = "0".repeat(targetHexChars);
   const encoder = new TextEncoder();
   let nonce = 0;
-  // Sample heuristics: report progress logarithmically. Real solve time is
-  // ~10-50ms for 16 bits, but cap iterations to bound worst case.
+  // Cap iterations to bound worst case. 16 bits -> ~65k avg; 5M is a safe ceiling.
   const MAX_ITER = 5_000_000;
   const BATCH = 1024;
   while (nonce < MAX_ITER) {

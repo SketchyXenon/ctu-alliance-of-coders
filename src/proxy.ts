@@ -52,18 +52,26 @@ const TURNSTILE_HOST = "https://challenges.cloudflare.com";
  *                                                  blocks cross-origin window references)
  *  - Cross-Origin-Resource-Policy: same-origin   (CORP — block cross-origin reads
  *                                                  of our responses)
- *  - Cross-Origin-Embedder-Policy: credentialless (COEP — blocks no-cors cross-origin
- *                                                  embeds unless they opt in via CORP;
- *                                                  credentialless so Supabase image
- *                                                  loads with cookies still work)
+ *  - Cross-Origin-Embedder-Policy: unsafe-none  (COEP — disables cross-origin
+ *                                                  isolation so the Cloudflare
+ *                                                  Turnstile iframe can load
+ *                                                  its cross-origin subresources.
+ *                                                  COOP+CORP still isolate our
+ *                                                  own responses; full COEP
+ *                                                  isolation breaks Turnstile.)
  *  - X-DNS-Prefetch-Control: off                 (no DNS prefetch info leak)
  *  - Content-Security-Policy                     (strict, see buildCsp)
  *
- * COOP+COEP pair enables crossOriginIsolation, which hardens against
- * spectre-style side channels that read cross-origin responses via
- * SharedArrayBuffer + high-resolution timers. COEP=credentialless (not
- * require-corp) so third-party image hosts that don't send CORP headers
- * still load, but without credentials.
+ * Trade-off note (06 section 9 "always state trade-offs"): full cross-origin
+ * isolation (COOP+COEP=require-corp or credentialless) would harden against
+ * Spectre-style side channels via SharedArrayBuffer, BUT it blocks the
+ * Cloudflare Turnstile widget, whose iframe loads cross-origin subresources
+ * that do not always send CORP headers. That blocking caused the production
+ * "always throws Verification error" loop: the widget's error-callback fired
+ * on every render -> reset() -> error -> infinite loop. We keep COOP+CORP
+ * (which isolate our own responses without breaking third-party embeds) and
+ * set COEP=unsafe-none so Turnstile can run. CSP frame-src is already
+ * scoped to challenges.cloudflare.com, so the iframe surface is minimal.
  */
 function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   res.headers.set("X-Content-Type-Options", "nosniff");
@@ -75,10 +83,10 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   );
   res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
-  // credentialless: blocks no-cors cross-origin embeds unless they opt in via
-  // CORP, but allows credentialled subresource loads (Supabase images). Safer
-  // than require-corp for this app's image-heavy UI. Per 06 section 9.
-  res.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
+  // unsafe-none disables cross-origin isolation so the Turnstile iframe can
+  // load. COOP+CORP still apply to our own responses. See the trade-off note
+  // above. Per 06 section 9 + 02 section 9 (state the trade-off).
+  res.headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
   res.headers.set("X-DNS-Prefetch-Control", "off");
 
   if (process.env.NODE_ENV === "production") {

@@ -104,7 +104,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
         CACHE_NO_STORE,
       );
     }
-    return issueBotOkCookie(config);
+    return await issueBotOkCookie(config);
   }
 
   // --- Turnstile path (default) ----------------------------------------
@@ -139,25 +139,26 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  return issueBotOkCookie(config);
+  return await issueBotOkCookie(config);
 
   /** Set the signed bot-ok cookie on a successful verification. Shared by
-   *  both paths so downstream enforcement is identical. */
-  function issueBotOkCookie(cfg: typeof config) {
+   *  both paths so downstream enforcement is identical. Awaited by the caller
+   *  so the cookie is set before the response is returned (was returning a
+   *  Promise<NextResponse> without await — latent bug). */
+  async function issueBotOkCookie(cfg: typeof config): Promise<NextResponse> {
     const expiresAt = Date.now() + COOKIE_TTL_MS;
     const cookieValue = signBotCookie(expiresAt, cfg);
     // HttpOnly so JS can't read it; SameSite=Lax so it survives top-level
     // navigations; Secure in prod. Per 06 section 2.
-    return cookies().then((store) => {
-      store.set(BOT_COOKIE_NAME, cookieValue, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        path: "/",
-        expires: new Date(expiresAt),
-      });
-      return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
+    const store = await cookies();
+    store.set(BOT_COOKIE_NAME, cookieValue, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: new Date(expiresAt),
     });
+    return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
   }
 });
 
