@@ -239,13 +239,16 @@ export function BotCheckpoint({ children }: BotCheckpointProps) {
     submitAttemptsRef.current += 1;
     if (submitAttemptsRef.current > MAX_TURNSTILE_ATTEMPTS) {
       submittingRef.current = false;
-      // Hard cap: stop auto-submitting. Degrade to PoW or error.
-      if (powChallenge) {
-        setStatus("pow");
-      } else {
-        setError("Verification kept failing. Please retry.");
-        setStatus("error");
-      }
+      // Hard cap on auto-submits: stop and surface a clear error. We do NOT
+      // force the PoW fallback here anymore — that re-introduced the "always
+      // redirects to PoW" symptom: a misconfigured secret or a persistently
+      // bad token would fail 3 times, then the client silently degraded to
+      // PoW, masking the real problem. The server now offers PoW itself when
+      // Cloudflare is genuinely unreachable (serviceDown), so this cap only
+      // needs to stop the loop and let the user retry. Per 06 §1 (fail closed)
+      // + §11 (surface, don't silently degrade).
+      setError("Verification kept failing. Please retry, or refresh the page.");
+      setStatus("error");
       return;
     }
     setVerifying(true);

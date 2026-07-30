@@ -68,6 +68,22 @@ export interface VerifyResult {
   serviceDown?: boolean;
 }
 
+/** Match a single IPv4 or IPv6 literal. Cloudflare's siteverify `remoteip` is
+ *  optional but MUST be a valid IP when present — sending a non-IP sentinel
+ *  (e.g. "unknown" from getClientIp when no X-Forwarded-For is present) can
+ *  make siteverify return `bad-request`, failing EVERY verification and
+ *  silently routing users to the PoW fallback. Per 06 §5: validate all
+ *  external input before forwarding it to a third party. */
+const IP_LITERALS = /^(?:(?:\d{1,3}\.){3}\d{1,3}|[0-9a-f:]+)$/i;
+function isLikelyValidIp(ip: string | null | undefined): ip is string {
+  return (
+    typeof ip === "string" &&
+    ip.length > 0 &&
+    ip.length <= 45 &&
+    IP_LITERALS.test(ip)
+  );
+}
+
 /**
  * Verify a Turnstile token server-side by calling Cloudflare's siteverify.
  * Per 06 section 5: the client-supplied token is untrusted until verified.
@@ -99,7 +115,11 @@ export async function verifyTurnstileToken(
     const body = new URLSearchParams();
     body.append("secret", config.secretKey!);
     body.append("response", token);
-    if (remoteIp) body.append("remoteip", remoteIp);
+    // Only forward remoteip when it is a real IP literal. getClientIp returns
+    // "unknown" when no proxy headers are present; sending that to Cloudflare
+    // can trigger `bad-request` and fail every verification. remoteip is
+    // optional for siteverify, so omitting it is safe.
+    if (isLikelyValidIp(remoteIp)) body.append("remoteip", remoteIp);
 
     const res = await fetchImpl(TURNSTILE_VERIFY_URL, {
       method: "POST",
@@ -123,10 +143,13 @@ export async function verifyTurnstileToken(
     if (data.success === true) {
       return { ok: true };
     }
-    return {
-      ok: false,
-      reason: `siteverify-failed:${(data["error-codes"] || []).join(",")}`,
-    };
+    // Surface Cloudflare's error-codes in the reason so the operator can
+    // diagnose (invalid-input-secret, timeout-or-duplicate, etc.) instead of
+    // every failure looking identical. Per 06 §11: log security-relevant
+    // detail with enough context to investigate. The reason stays server-side
+    // (never echoed to the client verbatim).
+    const codes = (data["error-codes"] || []).join(",") || "no-error-codes";
+    return { ok: false, reason: `siteverify-failed:${codes}` };
   } catch (e) {
     // Network / timeout: fail CLOSED (a bot shouldn't get through because
     // Cloudflare was briefly unreachable), but mark serviceDown so the caller

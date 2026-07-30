@@ -403,6 +403,27 @@ export function OfficerOrgChart({
 
   if (nodes.length === 0) return null;
 
+  // React Flow (@xyflow/react) themes via CSS variables. The library exposes
+  // --xy-controls-button-* and --xy-minimap-* and consumes them with a
+  // var(--xy-..., var(--xy-...-default)) fallback, so setting them here wins
+  // over the light-only defaults (#fefefe button bg, gray icons) which clash
+  // with the dark card and make the zoom in/out/fit controls hard to see.
+  // These are set as INLINE STYLE (not in globals.css) because Tailwind v4 /
+  // Lightning CSS strips unreferenced --xy-* custom properties during CSS
+  // minification; inline styles bypass the compiler and reach the DOM intact.
+  // Values reference the project's theme tokens so they adapt to light/dark.
+  // Per 05-ui-ux-design.md section 3 (flat, theme-aware color) + section 5.
+  const chartThemeVars: React.CSSProperties = {
+    "--xy-controls-button-background-color": "var(--card)",
+    "--xy-controls-button-background-color-hover": "var(--muted)",
+    "--xy-controls-button-border-color": "var(--border)",
+    "--xy-controls-button-color": "var(--foreground)",
+    "--xy-controls-button-color-hover": "var(--foreground)",
+    "--xy-controls-box-shadow": "var(--shadow-md)",
+    "--xy-minimap-background-color": "var(--card)",
+    "--xy-minimap-mask-background-color": "rgba(127, 127, 127, 0.12)",
+  };
+
   return (
     <div
       className={cn(
@@ -412,6 +433,7 @@ export function OfficerOrgChart({
           : "border-border/40",
         className,
       )}
+      style={chartThemeVars}
       role="tree"
       aria-label="Officers organizational chart"
     >

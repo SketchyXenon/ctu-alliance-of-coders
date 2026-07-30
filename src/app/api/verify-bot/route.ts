@@ -117,32 +117,40 @@ export const POST = withPrismaError(async function POST(request: Request) {
       ip,
       serviceDown: result.serviceDown,
     });
-    // 200 ok:false (NOT 403) for business-level verification failures. This is
-    // the critical fix: the client's api-client discards the response body on
-    // non-2xx (returns data:null), so a 403 would strip the `fallback` +
-    // `powChallenge` fields -> the PoW graceful-degradation path never
-    // triggered -> user stuck on "Verification unavailable". Returning 200
-    // with ok:false lets the body through. 429 (rate limit) and 400 (bad JSON)
-    // stay as HTTP errors since those ARE transport-level failures.
-    // Per 06 section 1: fail closed (ok:false, no cookie). Per 02 section 6:
-    // graceful degradation (offer PoW fallback so a Cloudflare outage or a
-    // bad token doesn't hard-block the user).
+    // 200 ok:false (NOT 403) for business-level verification failures so the
+    // response body survives the api-client (which discards non-2xx bodies).
+    // The client reads `fallback` + `error` to decide the next step.
+    //
+    // PoW fallback policy (the main culprit behind "always redirects to PoW"):
+    //   The previous version offered PoW on ANY Turnstile failure. That meant a
+    //   genuine token rejection (bad/expired/duplicate token, OR a misconfigured
+    //   secret returning success:false) was silently swallowed and the user was
+    //   routed to PoW every time — making it LOOK like "the token was never
+    //   validated." That also weakened the bot gate: a bot that fails Turnstile
+    //   just solved the easier PoW.
+    //
+    //   Correct policy per 06-security-architecture.md section 1 (fail closed)
+    //   + section 11 (log + surface, don't silently degrade):
+    //     - serviceDown (network/5xx -> Cloudflare unreachable): offer PoW. This
+    //       is the graceful-degradation path (02 section 6) for a real outage.
+    //     - Genuine token failure (success:false / 4xx): NO PoW. Return a clear
+    //       error so the user can retry and the operator can see the logged
+    //       reason (invalid-input-secret, timeout-or-duplicate, etc.). A legit
+    //       user retries and succeeds; a bot is blocked. Fail closed.
     const payload: Record<string, unknown> = {
       ok: false,
       error: "Bot verification failed. Please try again.",
     };
-    // Offer the PoW fallback whenever Turnstile fails AND is enabled — not
-    // just on serviceDown. A bad/expired/duplicate token (success:false) also
-    // leaves the user stuck; PoW is the graceful-degradation path that keeps
-    // the site usable. The PoW itself is rate-limited (10/min per IP) + the
-    // challenge is single-use, so this doesn't weaken the bot gate.
-    const ch = issuePowChallenge(ip);
-    if (ch) {
-      payload.fallback = "pow";
-      payload.powChallenge = ch;
-    } else {
-      // IP exceeded the challenge-issue limit.
-      payload.error = "Too many challenges. Please wait a minute.";
+    if (result.serviceDown) {
+      const ch = issuePowChallenge(ip);
+      if (ch) {
+        payload.fallback = "pow";
+        payload.powChallenge = ch;
+        payload.error =
+          "The verification service is unreachable. Running a backup check instead.";
+      } else {
+        payload.error = "Too many challenges. Please wait a minute.";
+      }
     }
     return withCache(NextResponse.json(payload), CACHE_NO_STORE);
   }

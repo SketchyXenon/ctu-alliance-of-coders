@@ -616,14 +616,12 @@
   }
 }
 
-/* Officer org-chart - zero-dependency CSS Grid + connector implementation.
-   The chart is built with flexbox + absolute-positioned connector divs in
-   officer-org-chart.tsx (no external library). These class hooks are kept
-   for future customization (e.g. themed connector colors via CSS variables).
-   The old react-organizational-chart <ul>/<li> rules were removed when the
-   dependency was dropped (per Z.md: no external libraries unless necessary). */
+/* Officer org-chart - connector color hook (adapts to light/dark via --border).
+   React Flow (@xyflow/react) theme variables are set inline on the container
+   in officer-org-chart.tsx (NOT here) because Tailwind v4 / Lightning CSS
+   strips unreferenced --xy-* custom properties during CSS minification. Inline
+   styles bypass the compiler and reach the DOM directly. See officer-org-chart.tsx. */
 .officer-org-chart {
-  /* Connector color: adapts to light/dark via the --border variable. */
   --org-chart-line: var(--border);
 }
 .officer-org-chart button:hover,
