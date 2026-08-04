@@ -44,7 +44,7 @@ const WEBP_QUALITY = 82;
 
 export type UploadBucket = "officer" | "announcement";
 
-const VALID_BUCKETS: UploadBucket[] = ["officer", "announcement"];
+export const VALID_BUCKETS: UploadBucket[] = ["officer", "announcement"];
 
 export interface UploadResult {
   ok: boolean;

@@ -108,7 +108,11 @@ export function AnnouncementPost({
 
   async function handleShare() {
     const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-    const shareData = { title: ann.title, text: ann.body.slice(0, 120), url: shareUrl };
+    const shareData = {
+      title: ann.title,
+      text: ann.body.slice(0, 120),
+      url: shareUrl,
+    };
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
@@ -154,15 +158,14 @@ export function AnnouncementPost({
       {/* Hero image (optional) */}
       {ann.image && (
         <div className="relative mb-8 aspect-[16/9] w-full overflow-hidden rounded-xl border bg-muted shadow-sm">
-          <img
-            src={ann.image}
-            alt=""
-            className="h-full w-full object-cover"
-          />
+          <img src={ann.image} alt="" className="h-full w-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-navy-950/60 via-transparent to-transparent" />
           <Badge
             variant="outline"
-            className={cn("absolute left-3 top-3 backdrop-blur-sm", badgeCfg.className)}
+            className={cn(
+              "absolute left-3 top-3 backdrop-blur-sm",
+              badgeCfg.className,
+            )}
           >
             {badgeCfg.label}
           </Badge>
@@ -176,7 +179,7 @@ export function AnnouncementPost({
             <span
               className={cn(
                 "inline-flex h-8 w-8 items-center justify-center rounded-lg",
-                badgeCfg.className
+                badgeCfg.className,
               )}
               aria-hidden="true"
             >
@@ -235,7 +238,10 @@ export function AnnouncementPost({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                 >
-                  <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <ExternalLink
+                    className="h-3.5 w-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
                   {link.label}
                 </a>
               </li>

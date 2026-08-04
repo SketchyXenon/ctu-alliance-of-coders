@@ -13,6 +13,9 @@ interface SectionHeadingProps {
   iconLabel?: string;
   className?: string;
   align?: "left" | "center";
+  // Applied to the h2 so a parent section's aria-labelledby resolves. Without
+  // this the id is dangling and screen readers can't label the section (F3).
+  id?: string;
 }
 
 /**
@@ -30,11 +33,13 @@ export function SectionHeading({
   iconLabel,
   className,
   align = "left",
+  id,
 }: SectionHeadingProps) {
   const prefersReducedMotion = useReducedMotion();
 
   const Icon = icon
-    ? ((LucideIcons as unknown as Record<string, LucideIcon>)[icon] ?? LucideIcons.Sparkles)
+    ? ((LucideIcons as unknown as Record<string, LucideIcon>)[icon] ??
+      LucideIcons.Sparkles)
     : null;
 
   const container = {
@@ -63,7 +68,7 @@ export function SectionHeading({
       className={cn(
         "section-heading",
         align === "center" && "text-center mx-auto",
-        className
+        className,
       )}
     >
       {(eyebrow || icon) && (
@@ -71,7 +76,7 @@ export function SectionHeading({
           variants={item}
           className={cn(
             "inline-flex items-center gap-2 mb-3",
-            align === "center" && "justify-center"
+            align === "center" && "justify-center",
           )}
         >
           {Icon && (
@@ -88,6 +93,7 @@ export function SectionHeading({
         </motion.div>
       )}
       <motion.h2
+        id={id}
         variants={item}
         className="font-display text-3xl font-bold tracking-tight text-foreground sm:text-4xl text-balance"
       >

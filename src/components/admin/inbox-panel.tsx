@@ -516,7 +516,7 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-3 gap-3">
         <StatCard label="New" value={counts.new} tone="new" />
         <StatCard label="Read" value={counts.read} tone="read" />
         <StatCard label="Resolved" value={counts.resolved} tone="resolved" />

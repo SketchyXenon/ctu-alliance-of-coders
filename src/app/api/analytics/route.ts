@@ -17,11 +17,6 @@ import { withCache, CACHE_NO_STORE } from "@/lib/cache";
  *   - byDevice: [{ device, views }] coarse device breakdown.
  *   - byCountry: [{ country, views }] top 10 countries.
  *
- * Per 06 section 3 (authorization): requireAdmin() — the raw aggregates are
- * not sensitive (no PII, daily hashes only) but access is admin-gated so the
- * endpoint can't be scraped for traffic stats. Per 06 section 7: the queries
- * are bounded (GROUP BY on indexed columns, LIMIT 10) so they can't be used
- * for resource exhaustion.
  */
 export const GET = withPrismaError(async function GET(request: Request) {
   try {
@@ -53,9 +48,13 @@ export const GET = withPrismaError(async function GET(request: Request) {
       }),
       // Daily breakdown for the sparkline. SQLite/Postgres both support
       // date trunc via substring of the ISO timestamp (UTC day).
+      // Bounded take (06 section 7: resource limits) so a 90-day window on a
+      // busy site can't OOM the function. The sparkline is approximate if the
+      // cap is hit; totals use the groupBy above which is already bounded.
       db.pageView.findMany({
         where: { createdAt: { gte: since } },
         select: { visitorHash: true, createdAt: true },
+        take: 100_000,
       }),
       db.pageView.groupBy({
         by: ["path"],

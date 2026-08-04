@@ -241,7 +241,7 @@ export function SessionsPanel() {
                     </Badge>
                   )}
                 </div>
-                <p className="mt-0.5 flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-muted-foreground">
                   <Clock className="size-3 shrink-0" aria-hidden="true" />
                   <span>Signed in {timeAgo(session.createdAt)}</span>
                   <span aria-hidden="true">&middot;</span>

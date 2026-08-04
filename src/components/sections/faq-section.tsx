@@ -67,6 +67,7 @@ export function FaqSection() {
       className="mx-auto w-full max-w-6xl scroll-mt-24 px-4 py-16 sm:py-20"
     >
       <SectionHeading
+        id="faq-heading"
         eyebrow="Help Center"
         title="Frequently Asked Questions"
         sub="Common questions about the Alliance of Coders website."
@@ -107,7 +108,9 @@ export function FaqSection() {
           <button
             type="button"
             onClick={() => {
-              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "k", metaKey: true }),
+              );
             }}
             className="font-medium text-gold-600 underline-offset-2 hover:underline dark:text-gold-400"
           >

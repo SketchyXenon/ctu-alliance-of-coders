@@ -56,7 +56,9 @@ import { Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 6;
 const TITLE_MAX = 200;
-const BODY_MAX = 1000;
+// Match the server MAX_BODY (src/app/api/announcements/route.ts). A lower
+// client cap silently truncated bodies on save (F7 fix).
+const BODY_MAX = 5000;
 const IMAGE_URL_MAX = 500;
 
 type FilterValue = AnnouncementType | "all";
@@ -359,6 +361,7 @@ export function AnnouncementsSection({
       className="mx-auto w-full max-w-6xl px-4 py-16 sm:py-20"
     >
       <SectionHeading
+        id="announcements-heading"
         eyebrow="Latest News"
         title="Announcements"
         sub="Awards, recognitions, and reports."

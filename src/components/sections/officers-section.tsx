@@ -178,6 +178,7 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
       className="mx-auto w-full max-w-6xl scroll-mt-24 px-4 py-16 sm:py-20"
     >
       <SectionHeading
+        id="officers-heading"
         eyebrow="Organizational Chart"
         title="Officers & Leadership"
         sub="Meet the current leadership team."

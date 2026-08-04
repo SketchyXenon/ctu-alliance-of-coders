@@ -1,36 +1,26 @@
 import { NextResponse } from "next/server";
+import path from "node:path";
 import { requireAdmin } from "@/lib/auth";
 import { rateLimit } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
-import { CACHE_NO_STORE, withCache } from "@/lib/cache";
+import { withCache, CACHE_NO_STORE } from "@/lib/cache";
 import { logActivity } from "@/lib/activity";
+import { logger } from "@/lib/logger";
 import {
   processImageUpload,
   MAX_FILE_SIZE,
+  VALID_BUCKETS,
   type UploadBucket,
 } from "@/lib/upload";
-import path from "path";
 
-// Dev uploads are served from /uploads/<bucket>/<file> via the public/ dir.
-// Per 02 section 9 (trade-offs): local-fallback dev storage does not persist
-// across serverless instances; prod uses Supabase Storage (see lib/upload.ts).
+// Dev upload root: public/uploads/<bucket>/<file>.webp, served as /uploads/...
+// In prod (Supabase configured) processImageUpload uploads to Storage instead.
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
-/**
- * POST /api/upload - admin only, compresses + stores an image.
- *
- * Wires the 9-layer processImageUpload defense (lib/upload.ts) behind:
- *   1. requireAdmin (layer 1 of the 9-layer defense — auth)
- *   2. rate limit (layer 2 — per-admin upload throttle)
- *   3. CSRF (layer 3 — enforced by proxy.ts on every state-changing request)
- *   4-9. processImageUpload: size, magic bytes, allowlist, sharp re-encode,
- *        server filename, dimension caps (see lib/upload.ts).
- *
- * Per 06-security-architecture.md A10: fail closed, no stack traces to client.
- * Per 03 section 6: validate all external input; reveal what the user needs.
- * Per 06 section 7: the file.size check enforces MAX_FILE_SIZE after parse;
- * huge-body DoS is bounded by the platform (Caddy / Next.js request body limit).
- */
+/** POST /api/upload - admin-only image upload with 9-layer defense.
+ *  The auth + rate-limit + size + bucket layers live here; the magic-byte,
+ *  sharp re-encode, dimension-cap, and storage layers live in lib/upload.ts.
+ *  */
 export const POST = withPrismaError(async function POST(request: Request) {
   let user;
   try {
@@ -46,7 +36,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
   if (!rl.allowed) {
     return withCache(
       NextResponse.json(
-        { error: "Too many uploads. Please wait a moment." },
+        { error: "Too many requests. Please slow down." },
         {
           status: 429,
           headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
@@ -67,20 +57,29 @@ export const POST = withPrismaError(async function POST(request: Request) {
   }
 
   const file = formData.get("file");
-  const bucket = formData.get("bucket");
-
-  if (!(file instanceof File)) {
+  if (!file || !(file instanceof File)) {
     return withCache(
       NextResponse.json({ error: "No file provided." }, { status: 400 }),
       CACHE_NO_STORE,
     );
   }
-  if (file.size === 0) {
+
+  // Validate bucket before processing (path-traversal defense). The lib
+  // re-validates, but checking here keeps the error message consistent and
+  // avoids touching sharp/supabase for obviously bad input.
+  const bucketRaw = String(formData.get("bucket") ?? "");
+  if (!VALID_BUCKETS.includes(bucketRaw as UploadBucket)) {
     return withCache(
-      NextResponse.json({ error: "Empty file." }, { status: 400 }),
+      NextResponse.json(
+        { error: "Invalid bucket. Must be 'officer' or 'announcement'." },
+        { status: 400 },
+      ),
       CACHE_NO_STORE,
     );
   }
+
+  // Size check before decoding (DoS defense). file.size is the declared size;
+  // lib/upload re-checks the buffer length after read.
   if (file.size > MAX_FILE_SIZE) {
     return withCache(
       NextResponse.json(
@@ -93,29 +92,14 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  if (
-    typeof bucket !== "string" ||
-    (bucket !== "officer" && bucket !== "announcement")
-  ) {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const result = await processImageUpload(buffer, bucketRaw, UPLOAD_ROOT);
+  if (!result.ok || !result.url) {
     return withCache(
       NextResponse.json(
-        { error: "Invalid bucket. Must be 'officer' or 'announcement'." },
+        { error: result.error ?? "Upload failed." },
         { status: 400 },
       ),
-      CACHE_NO_STORE,
-    );
-  }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const result = await processImageUpload(
-    buffer,
-    bucket as UploadBucket,
-    UPLOAD_ROOT,
-  );
-  if (!result.ok) {
-    // Validation failures (bad magic bytes, corrupt image) are 400, not 500.
-    return withCache(
-      NextResponse.json({ error: result.error }, { status: 400 }),
       CACHE_NO_STORE,
     );
   }
@@ -125,7 +109,13 @@ export const POST = withPrismaError(async function POST(request: Request) {
     action: "create",
     entity: "upload",
     entityId: result.filename,
-    summary: `Uploaded image to ${bucket} bucket (${result.bytes} bytes)`,
+    summary: `Uploaded image to ${bucketRaw} bucket (${result.bytes} bytes).`,
+  });
+
+  logger.info("Image uploaded", {
+    bucket: bucketRaw,
+    filename: result.filename,
+    bytes: result.bytes,
   });
 
   return withCache(

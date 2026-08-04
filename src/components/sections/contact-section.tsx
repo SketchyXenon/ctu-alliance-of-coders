@@ -182,6 +182,7 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
       className="relative mx-auto w-full max-w-6xl scroll-mt-24 px-4 py-16 sm:py-20"
     >
       <SectionHeading
+        id="contact-heading"
         eyebrow="Contact"
         title="Get in touch"
         sub="Send a message to the admin team."

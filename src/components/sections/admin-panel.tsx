@@ -337,7 +337,7 @@ export function AdminPanel() {
         </div>
 
         <Tabs defaultValue="inbox" className="w-full">
-          <div className="flex items-center justify-between gap-2">
+          <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0">
             <TabsList className="bg-muted/60">
               <TabsTrigger value="inbox">
                 <AlertCircle className="size-3.5" aria-hidden="true" />

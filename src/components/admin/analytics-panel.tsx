@@ -1,10 +1,25 @@
 "use client";
 
 import * as React from "react";
-import { BarChart3, Eye, Globe, Monitor, RefreshCw, Smartphone, Tablet, Users } from "lucide-react";
+import {
+  BarChart3,
+  Eye,
+  Globe,
+  Monitor,
+  RefreshCw,
+  Smartphone,
+  Tablet,
+  Users,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
@@ -49,7 +64,9 @@ export function AnalyticsPanel() {
 
   const load = React.useCallback(async (d: number) => {
     setLoading(true);
-    const { data: payload } = await api.get<AnalyticsData>(`/api/analytics?days=${d}`);
+    const { data: payload } = await api.get<AnalyticsData>(
+      `/api/analytics?days=${d}`,
+    );
     if (payload) setData(payload);
     setLoading(false);
   }, []);
@@ -58,22 +75,49 @@ export function AnalyticsPanel() {
     void load(days);
   }, [load, days]);
 
-  // Sparkline: normalize daily views to a 0..100 scale for the bar heights.
+  // Sparkline: downsample to at most 14 bars so the chart stays readable on a
+  // 375px viewport. 90 flex-1 bars + gaps compute to ~0px each and overflow.
+  // Buckets consecutive days, summing views + visitors; labels the bucket
+  // with its first date.
+  const sparkData = React.useMemo(() => {
+    const daily = data?.daily ?? [];
+    if (daily.length <= 14) return daily;
+    const bucketSize = Math.ceil(daily.length / 14);
+    const buckets: { date: string; views: number; visitors: number }[] = [];
+    for (let i = 0; i < daily.length; i += bucketSize) {
+      const slice = daily.slice(i, i + bucketSize);
+      buckets.push({
+        date: slice[0].date,
+        views: slice.reduce((s, d) => s + d.views, 0),
+        visitors: slice.reduce((s, d) => s + d.visitors, 0),
+      });
+    }
+    return buckets;
+  }, [data]);
+
   const maxDaily = React.useMemo(
-    () => Math.max(1, ...(data?.daily.map((d) => d.views) ?? [1])),
-    [data]
+    () => Math.max(1, ...(sparkData.map((d) => d.views) ?? [1])),
+    [sparkData],
   );
 
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <BarChart3 className="size-4 text-gold-600 dark:text-gold-400" aria-hidden="true" />
-          <h3 className="font-display text-sm font-semibold text-foreground">Page Analytics</h3>
+          <BarChart3
+            className="size-4 text-gold-600 dark:text-gold-400"
+            aria-hidden="true"
+          />
+          <h3 className="font-display text-sm font-semibold text-foreground">
+            Page Analytics
+          </h3>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
+          <Select
+            value={String(days)}
+            onValueChange={(v) => setDays(Number(v))}
+          >
             <SelectTrigger className="h-8 w-[120px]" aria-label="Time range">
               <SelectValue />
             </SelectTrigger>
@@ -84,7 +128,12 @@ export function AnalyticsPanel() {
               <SelectItem value="90">Last 90 days</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="sm" onClick={() => load(days)} disabled={loading}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => load(days)}
+            disabled={loading}
+          >
             <RefreshCw className={cn("size-4", loading && "animate-spin")} />
             <span className="sr-only">Refresh analytics</span>
           </Button>
@@ -97,8 +146,13 @@ export function AnalyticsPanel() {
         </div>
       ) : !data || data.totals.views === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-          <BarChart3 className="size-8 text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm font-medium text-foreground">No page views yet</p>
+          <BarChart3
+            className="size-8 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <p className="text-sm font-medium text-foreground">
+            No page views yet
+          </p>
           <p className="text-xs text-muted-foreground">
             Anonymous visits will appear here once the site gets traffic.
           </p>
@@ -122,19 +176,23 @@ export function AnalyticsPanel() {
             <StatCard
               icon={BarChart3}
               label="Avg / Day"
-              value={formatNum(Math.round(data.totals.views / Math.max(1, data.days)))}
+              value={formatNum(
+                Math.round(data.totals.views / Math.max(1, data.days)),
+              )}
               accent="navy"
             />
             <StatCard
               icon={Globe}
               label="Countries"
-              value={formatNum(data.byCountry.filter((c) => c.country !== "unknown").length)}
+              value={formatNum(
+                data.byCountry.filter((c) => c.country !== "unknown").length,
+              )}
               accent="gold"
             />
           </div>
 
           {/* Sparkline */}
-          {data.daily.length > 1 && (
+          {sparkData.length > 1 && (
             <div className="rounded-lg border border-border/60 bg-card/40 p-4">
               <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Daily Views
@@ -144,11 +202,13 @@ export function AnalyticsPanel() {
                 role="img"
                 aria-label="Daily page views sparkline"
               >
-                {data.daily.map((d) => (
+                {sparkData.map((d) => (
                   <div
                     key={d.date}
                     className="group relative flex-1 rounded-t bg-gradient-to-t from-navy-600 to-navy-400 transition-all hover:from-gold-500 hover:to-gold-400 dark:from-navy-400 dark:to-navy-300"
-                    style={{ height: `${Math.max(4, (d.views / maxDaily) * 100)}%` }}
+                    style={{
+                      height: `${Math.max(4, (d.views / maxDaily) * 100)}%`,
+                    }}
                     title={`${d.date}: ${d.views} views`}
                   >
                     <span className="sr-only">
@@ -158,8 +218,8 @@ export function AnalyticsPanel() {
                 ))}
               </div>
               <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-                <span>{data.daily[0]?.date}</span>
-                <span>{data.daily[data.daily.length - 1]?.date}</span>
+                <span>{sparkData[0]?.date}</span>
+                <span>{sparkData[sparkData.length - 1]?.date}</span>
               </div>
             </div>
           )}
@@ -172,14 +232,23 @@ export function AnalyticsPanel() {
               </h4>
               <ol className="space-y-1.5">
                 {data.topPaths.map((p, i) => (
-                  <li key={p.path + i} className="flex items-center gap-2 text-sm">
+                  <li
+                    key={p.path + i}
+                    className="flex items-center gap-2 text-sm"
+                  >
                     <span className="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] font-semibold text-muted-foreground">
                       {i + 1}
                     </span>
-                    <span className="truncate font-mono text-xs text-foreground" title={p.path}>
+                    <span
+                      className="truncate font-mono text-xs text-foreground"
+                      title={p.path}
+                    >
                       {p.path}
                     </span>
-                    <Badge variant="secondary" className="ml-auto shrink-0 text-[10px]">
+                    <Badge
+                      variant="secondary"
+                      className="ml-auto shrink-0 text-[10px]"
+                    >
                       {formatNum(p.views)}
                     </Badge>
                   </li>
@@ -201,8 +270,13 @@ export function AnalyticsPanel() {
                         className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2.5 py-1 text-xs"
                         title={`${d.device}: ${d.views} views`}
                       >
-                        <Icon className="size-3 text-muted-foreground" aria-hidden="true" />
-                        <span className="capitalize text-foreground">{d.device}</span>
+                        <Icon
+                          className="size-3 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <span className="capitalize text-foreground">
+                          {d.device}
+                        </span>
                         <span className="font-semibold text-muted-foreground">
                           {formatNum(d.views)}
                         </span>
@@ -217,9 +291,11 @@ export function AnalyticsPanel() {
                   Top Countries
                 </h4>
                 <div className="flex flex-wrap gap-2">
-                  {data.byCountry.filter((c) => c.country !== "unknown").length === 0 ? (
+                  {data.byCountry.filter((c) => c.country !== "unknown")
+                    .length === 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      No country data (edge headers not present in this environment).
+                      No country data (edge headers not present in this
+                      environment).
                     </p>
                   ) : (
                     data.byCountry
@@ -229,8 +305,12 @@ export function AnalyticsPanel() {
                           key={c.country}
                           className="inline-flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2.5 py-1 text-xs"
                         >
-                          <span className="font-semibold text-foreground">{c.country}</span>
-                          <span className="text-muted-foreground">{formatNum(c.views)}</span>
+                          <span className="font-semibold text-foreground">
+                            {c.country}
+                          </span>
+                          <span className="text-muted-foreground">
+                            {formatNum(c.views)}
+                          </span>
                         </span>
                       ))
                   )}
@@ -242,7 +322,10 @@ export function AnalyticsPanel() {
           <p className="text-xs text-muted-foreground">
             Privacy: visitors are counted via a daily rotating hash — no raw IPs
             or cookies are stored. See{" "}
-            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">src/lib/analytics.ts</code>.
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">
+              src/lib/analytics.ts
+            </code>
+            .
           </p>
         </div>
       )}
@@ -267,13 +350,19 @@ function StatCard({
         <Icon
           className={cn(
             "size-3.5",
-            accent === "gold" ? "text-gold-600 dark:text-gold-400" : "text-navy-600 dark:text-navy-300"
+            accent === "gold"
+              ? "text-gold-600 dark:text-gold-400"
+              : "text-navy-600 dark:text-navy-300",
           )}
           aria-hidden="true"
         />
-        <span className="text-[10px] font-medium uppercase tracking-wide">{label}</span>
+        <span className="text-[10px] font-medium uppercase tracking-wide">
+          {label}
+        </span>
       </div>
-      <p className="mt-1.5 font-display text-xl font-bold text-foreground">{value}</p>
+      <p className="mt-1.5 font-display text-xl font-bold text-foreground">
+        {value}
+      </p>
     </div>
   );
 }

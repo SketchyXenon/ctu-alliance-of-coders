@@ -40,6 +40,7 @@ export function PolicyPageSection({ policy }: PolicyPageProps) {
     >
       <div className="flex items-start justify-between gap-4">
         <SectionHeading
+          id="policy-heading"
           eyebrow={policy.eyebrow}
           title={policy.title}
           sub={policy.sub}

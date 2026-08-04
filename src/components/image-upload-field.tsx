@@ -44,7 +44,10 @@ export function ImageUploadField({
       const formData = new FormData();
       formData.append("file", file);
       formData.append("bucket", bucket);
-      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Upload failed");
@@ -65,7 +68,7 @@ export function ImageUploadField({
         {label}{" "}
         <span className="font-normal text-muted-foreground">(optional)</span>
       </Label>
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Input
           id={id}
           type="url"

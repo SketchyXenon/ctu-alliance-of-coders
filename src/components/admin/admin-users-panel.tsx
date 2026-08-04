@@ -1,9 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { Mail, ShieldCheck, Clock, UserCheck, UserX, Loader2 } from "lucide-react";
+import {
+  Mail,
+  ShieldCheck,
+  Clock,
+  UserCheck,
+  UserX,
+  Loader2,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -39,7 +53,9 @@ export function AdminUsersPanel() {
   const load = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    const { data, error } = await api.get<{ items: AdminUserEntry[] }>("/api/admin-users");
+    const { data, error } = await api.get<{ items: AdminUserEntry[] }>(
+      "/api/admin-users",
+    );
     if (error || !data) {
       setError(error?.message ?? "Failed to load admin users.");
       setAdmins([]);
@@ -68,13 +84,15 @@ export function AdminUsersPanel() {
         <CardContent className="py-6 text-center text-sm text-destructive">
           {error}
           <div className="mt-3">
-            <button
+            <Button
               type="button"
+              variant="link"
+              size="sm"
               onClick={load}
-              className="text-xs font-medium underline hover:no-underline"
+              className="h-8 px-2 text-xs"
             >
               Try again
-            </button>
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -88,10 +106,15 @@ export function AdminUsersPanel() {
           <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
             <ShieldCheck className="size-6" aria-hidden="true" />
           </span>
-          <p className="text-sm font-medium text-foreground">No admin accounts</p>
+          <p className="text-sm font-medium text-foreground">
+            No admin accounts
+          </p>
           <p className="text-xs text-muted-foreground">
-            Run <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">bun run bootstrap</code> to
-            create the first admin.
+            Run{" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[10px]">
+              bun run bootstrap
+            </code>{" "}
+            to create the first admin.
           </p>
         </CardContent>
       </Card>
@@ -106,7 +129,8 @@ export function AdminUsersPanel() {
           Admin Accounts
         </CardTitle>
         <CardDescription>
-          {admins.length} admin {admins.length === 1 ? "account" : "accounts"} with access to this panel.
+          {admins.length} admin {admins.length === 1 ? "account" : "accounts"}{" "}
+          with access to this panel.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -124,7 +148,9 @@ export function AdminUsersPanel() {
                 key={admin.id}
                 className={cn(
                   "flex items-center gap-3 rounded-md border border-border/60 bg-card/40 p-3 transition-colors",
-                  admin.isSelf ? "ring-1 ring-inset ring-primary/30" : "hover:bg-card/80"
+                  admin.isSelf
+                    ? "ring-1 ring-inset ring-primary/30"
+                    : "hover:bg-card/80",
                 )}
               >
                 <Avatar className="size-10 border border-border/60">
@@ -138,17 +164,29 @@ export function AdminUsersPanel() {
                       {admin.name || admin.email}
                     </p>
                     {admin.isSelf && (
-                      <Badge variant="outline" className="border-primary/40 text-[10px] text-primary">
+                      <Badge
+                        variant="outline"
+                        className="border-primary/40 text-[10px] text-primary"
+                      >
                         You
                       </Badge>
                     )}
                     {activeNow && (
-                      <Badge variant="outline" className="border-emerald-300 text-[10px] text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300">
-                        <span className="mr-1 size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                      <Badge
+                        variant="outline"
+                        className="border-emerald-300 text-[10px] text-emerald-700 dark:border-emerald-500/40 dark:text-emerald-300"
+                      >
+                        <span
+                          className="mr-1 size-1.5 rounded-full bg-emerald-500"
+                          aria-hidden="true"
+                        />
                         Active
                       </Badge>
                     )}
-                    <Badge variant="secondary" className="text-[10px] capitalize">
+                    <Badge
+                      variant="secondary"
+                      className="text-[10px] capitalize"
+                    >
                       {admin.role}
                     </Badge>
                   </div>
@@ -195,5 +233,9 @@ function formatRelative(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days < 30) return `${days}d ago`;
-  return d.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+  return d.toLocaleDateString("en-PH", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
