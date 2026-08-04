@@ -17,11 +17,6 @@ interface ImageUploadFieldProps {
   className?: string;
 }
 
-/**
- * ImageUploadField - composite input for image URL + file upload.
- * Uses the /api/upload compressor endpoint. Falls back to URL paste
- * if the upload fails or for non-admin contexts.
- */
 export function ImageUploadField({
   id,
   label,
@@ -33,6 +28,7 @@ export function ImageUploadField({
 }: ImageUploadFieldProps) {
   const [uploading, setUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [previewError, setPreviewError] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -54,6 +50,7 @@ export function ImageUploadField({
         return;
       }
       onChange(data.url);
+      setPreviewError(false);
     } catch {
       setError("Network error during upload");
     } finally {
@@ -113,13 +110,22 @@ export function ImageUploadField({
         )}
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
-      {value && (
+      {value && !previewError && (
         <div className="relative h-24 w-full overflow-hidden rounded-md border">
           <img
             src={value}
             alt="Preview"
             className="h-full w-full object-cover"
+            onError={() => setPreviewError(true)}
           />
+        </div>
+      )}
+      {value && previewError && (
+        <div className="flex h-24 w-full items-center justify-center rounded-md border border-destructive/40 bg-destructive/5 px-4 text-center">
+          <p className="text-xs text-destructive">
+            Preview failed to load. The URL may be invalid or the image is not
+            publicly accessible.
+          </p>
         </div>
       )}
       <p className="text-xs text-muted-foreground">

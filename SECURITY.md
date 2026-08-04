@@ -162,7 +162,7 @@ Storage: Supabase Storage (prod) or local `public/uploads/` (dev). No silent fal
 
 ## Supabase RLS
 
-The `profiles` table + RLS policies were dead code (the app uses the service-role key which bypasses RLS). They were cleaned up in `supabase/migrations/20260725000000_drop_profiles_dead_code.sql`. All authorization is enforced in the application layer (Prisma + `requireAdmin`).
+The `profiles` table + `auth.uid()`-based RLS policies were dead code (the app uses the service-role key which bypasses RLS) and were removed. The consolidated schema in `supabase/migrations/00000000000000_init.sql` keeps RLS enabled on every table (Supabase linter requirement) with minimal defense-in-depth policies: public read on public-facing tables, public insert on the contact form, and no policies on admin-only tables (default deny). All authorization is enforced in the application layer (Prisma + `requireAdmin`).
 
 Storage buckets remain:
 - `officer-photos` (public read, admin write via service-role key)

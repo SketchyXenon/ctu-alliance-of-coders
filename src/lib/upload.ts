@@ -77,14 +77,11 @@ export interface UploadResult {
 export async function processImageUpload(
   fileBuffer: Buffer,
   bucket: string,
-  uploadRoot: string,
+  uploadRoot: string
 ): Promise<UploadResult> {
   // Layer 1: validate bucket name. Never trust user input for the path.
   if (!VALID_BUCKETS.includes(bucket as UploadBucket)) {
-    return {
-      ok: false,
-      error: "Invalid bucket. Must be 'officer' or 'announcement'.",
-    };
+    return { ok: false, error: "Invalid bucket. Must be 'officer' or 'announcement'." };
   }
 
   // Layer 2: size check before any processing.
@@ -104,11 +101,7 @@ export async function processImageUpload(
   // it implicitly."
   const detected = await fileTypeFromBuffer(fileBuffer);
   if (!detected) {
-    return {
-      ok: false,
-      error:
-        "Could not detect file type. The file may be corrupt or not a real image.",
-    };
+    return { ok: false, error: "Could not detect file type. The file may be corrupt or not a real image." };
   }
 
   const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
@@ -141,7 +134,9 @@ export async function processImageUpload(
 
   let processedBuffer: Buffer;
   try {
-    processedBuffer = await pipeline.webp({ quality: WEBP_QUALITY }).toBuffer();
+    processedBuffer = await pipeline
+      .webp({ quality: WEBP_QUALITY })
+      .toBuffer();
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown sharp error";
     return {
@@ -160,18 +155,19 @@ export async function processImageUpload(
 
   // Layer 9: save the processed buffer. In production (Supabase configured),
   // upload to Supabase Storage. In dev (no Supabase), save to the local
-  // filesystem. Both paths use the same server-generated filename so there's
-  // no user input in the storage path. Per 02 section 9 (trade-offs): the
-  // local fallback means dev uploads don't persist across serverless
-  // instances — acceptable for dev; prod uses Supabase.
+  // filesystem. Per 02 section 9 (trade-offs): the local fallback means dev
+  // uploads don't persist across serverless instances — acceptable for dev;
+  // prod uses Supabase.
+  //
+  // CRITICAL: in production we MUST NOT fall back to the local filesystem.
+  // Vercel's serverless FS is read-only/ephemeral and public/uploads/ is not
+  // deployed, so a relative /uploads/... URL stored in the DB would 404 on
+  // the live site (broken images). Fail closed with a clear error instead.
+  // This is the root-cause fix for broken production images.
   let url: string;
   if (isSupabaseConfigured()) {
     // Production: Supabase Storage.
-    const storageResult = await uploadToStorage(
-      processedBuffer,
-      bucket,
-      filename,
-    );
+    const storageResult = await uploadToStorage(processedBuffer, bucket, filename);
     if (!storageResult) {
       return {
         ok: false,
@@ -184,8 +180,23 @@ export async function processImageUpload(
       filename,
       bytes: processedBuffer.length,
     });
+  } else if (process.env.NODE_ENV === "production") {
+    // Production without Supabase configured: refuse rather than store a URL
+    // that will 404. Per 03 section 6: fail fast and loud on misconfiguration.
+    // Per 06 section 1: fail closed.
+    logger.error(
+      "Upload rejected: Supabase not configured in production. " +
+        "Set NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.",
+      { bucket, filename }
+    );
+    return {
+      ok: false,
+      error:
+        "Image storage is not configured on the server. " +
+        "An administrator must set the Supabase environment variables.",
+    };
   } else {
-    // Dev: local filesystem (public/uploads/<bucket>/<filename>).
+    // Dev only: local filesystem (public/uploads/<bucket>/<filename>).
     const bucketDir = path.join(uploadRoot, bucket);
     const filePath = path.join(bucketDir, filename);
 

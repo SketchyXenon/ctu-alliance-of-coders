@@ -2,12 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { generateRequestId, runWithContext, logger } from "@/lib/logger";
 import { getClientIp } from "@/lib/security";
 
-// Next.js 16 renamed the "middleware" file convention to "proxy".
-// This file was src/middleware.ts; renamed to src/proxy.ts per the deprecation.
-// See https://nextjs.org/docs/messages/middleware-to-proxy
-
-// CSRF origin allowlist. Env-driven so staging/preview URLs can be added
-// without a code change (S9). Falls back to localhost for dev.
 const PROD_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const EXTRA_ORIGINS = (process.env.CSRF_ALLOWED_ORIGINS || "")
   .split(",")
@@ -20,37 +14,12 @@ const ALLOWED_ORIGINS = new Set<string>([
   ...EXTRA_ORIGINS,
 ]);
 
-// Allowed image hosts for CSP img-src. Defaults to self + Supabase storage.
-// Supabase uses both .co and .in TLDs (src/lib/db.ts matches both); list both
-// so a prod deploy on the .in host doesn't get its images blocked by CSP.
-// Add more via IMG_ALLOWED_HOSTS env var (comma-separated hosts).
 const DEFAULT_IMG_HOSTS = ["https://*.supabase.co", "https://*.supabase.in"];
 const EXTRA_IMG_HOSTS = (process.env.IMG_ALLOWED_HOSTS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 
-/**
- * Build the full security-header set applied to EVERY response (including the
- * CSRF-blocked 403). Centralized so the blocked path can't drift from the
- * allowed path (06 section 9: every response carries the headers).
- *
- * Headers applied (per 06-security-architecture.md section 9):
- *  - X-Content-Type-Options: nosniff            (MIME sniffing)
- *  - X-Frame-Options: DENY                       (clickjacking; belt to CSP frame-ancestors)
- *  - Referrer-Policy: strict-origin-when-cross-origin
- *  - Permissions-Policy                          (lock down powerful APIs)
- *  - Strict-Transport-Security (prod only, HTTPS)
- *  - Cross-Origin-Opener-Policy: same-origin     (COOP — isolate browsing context)
- *  - Cross-Origin-Resource-Policy: same-origin   (CORP — block cross-origin reads)
- *  - Cross-Origin-Embedder-Policy: require-corp  (COEP — full cross-origin isolation.
- *                                                  Safe now that the Cloudflare
- *                                                  Turnstile iframe is gone; hardens
- *                                                  against Spectre-style side channels
- *                                                  via SharedArrayBuffer. Per 06 §9.)
- *  - X-DNS-Prefetch-Control: off                 (no DNS prefetch info leak)
- *  - Content-Security-Policy                     (strict, see buildCsp)
- */
 function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
@@ -61,11 +30,8 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   );
   res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
-  // Full cross-origin isolation (COOP+COEP=require-corp). Now safe since the
-  // Cloudflare Turnstile iframe (which needed unsafe-none to load its
-  // cross-origin subresources) has been removed. Hardens against Spectre-style
-  // side channels. Per 06 section 9.
-  res.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+
+  res.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
   res.headers.set("X-DNS-Prefetch-Control", "off");
 
   if (process.env.NODE_ENV === "production") {
@@ -78,17 +44,6 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   res.headers.set("Content-Security-Policy", buildCsp(isDev));
 }
 
-/**
- * Build the Content-Security-Policy. Per 06 section 9: strict default-src,
- * explicit per-directive allowlists. No third-party script/frame/connect hosts
- * are needed now that Cloudflare Turnstile is removed (bot protection is
- * handled by Vercel Firewall at the edge).
- *
- * img-src is restricted to self + explicit allowlist (S7) rather than the
- * overly-permissive "https:" which enabled tracking pixels / cache timing.
- * script-src allows 'unsafe-inline' (Next.js inline runtime) but NOT
- * 'unsafe-eval' in prod. Dev keeps 'unsafe-eval' for HMR.
- */
 function buildCsp(isDev: boolean): string {
   const scriptSrc = isDev
     ? `script-src 'self' 'unsafe-inline' 'unsafe-eval'`
@@ -113,18 +68,12 @@ function buildCsp(isDev: boolean): string {
   ].join("; ");
 }
 
-/**
- * Proxy (formerly middleware) - security headers, CSRF protection, request ID.
- * Per 06-security-architecture.md: defense in depth, fail closed, zero trust.
- */
 export function proxy(request: NextRequest) {
   const requestId = generateRequestId();
   const ip = getClientIp(request.headers);
   const isDev = process.env.NODE_ENV !== "production";
 
   return runWithContext({ requestId, ip }, () => {
-    // CSRF protection for state-changing requests. Runs BEFORE building the
-    // success response so a blocked request never does app work. Per 06 §5.
     if (
       request.method !== "GET" &&
       request.method !== "HEAD" &&
@@ -133,13 +82,6 @@ export function proxy(request: NextRequest) {
       const origin = request.headers.get("origin");
       const secFetchSite = request.headers.get("sec-fetch-site");
 
-      // Allow ONLY same-origin requests (Sec-Fetch-Site: same-origin) or
-      // requests whose Origin is on the allowlist. The previous `none`
-      // allowance (for user-typed navigations) is dropped: a state-changing
-      // POST from a user-typed URL still needs a valid Origin, and a
-      // non-browser client can forge `sec-fetch-site: none` (the audit's
-      // info finding). SameSite=Lax on the session cookie is the primary
-      // CSRF defense; this is defense-in-depth. Per 06 section 5.
       const isAllowed =
         secFetchSite === "same-origin" ||
         (origin !== null && ALLOWED_ORIGINS.has(origin));
@@ -151,10 +93,7 @@ export function proxy(request: NextRequest) {
           origin,
           secFetchSite,
         });
-        // Apply the SAME security headers to the blocked response (06 §9:
-        // every response carries the headers — the old code built a bare
-        // NextResponse that skipped CSP/HSTS/COOP/CORP). Add Cache-Control
-        // no-store so the 403 is never cached by an intermediary.
+
         const blocked = new NextResponse(
           JSON.stringify({ error: "Cross-origin request blocked." }),
           { status: 403, headers: { "Content-Type": "application/json" } },

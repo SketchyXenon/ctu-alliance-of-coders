@@ -70,7 +70,7 @@ Browser -> proxy (CSRF, headers, requestId) -> API route -> Prisma -> Database
 
 ### Production (PostgreSQL/Supabase)
 - `schema.prisma` - same models with @db.Uuid, @db.Text, snake_case @map, desc indexes
-- `supabase/migrations/` - raw SQL with storage buckets (profiles + RLS cleaned up in 20260725000000 migration)
+- `supabase/migrations/00000000000000_init.sql` - consolidated raw SQL (tables, indexes, RLS, public storage buckets, updated_at triggers). Single source of truth for the prod schema; mirrors `schema.prisma`.
 
 ### Prisma 7 Adapter Pattern
 Prisma 7 requires a driver adapter at construction time (no more `datasource.url` in the schema):
