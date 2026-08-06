@@ -14,6 +14,12 @@ const ALLOWED_ORIGINS = new Set<string>([
   ...EXTRA_ORIGINS,
 ]);
 
+const DEFAULT_IMG_HOSTS = ["https://*.supabase.co", "https://*.supabase.in"];
+const EXTRA_IMG_HOSTS = (process.env.IMG_ALLOWED_HOSTS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
@@ -24,7 +30,6 @@ function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   );
   res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
   res.headers.set("Cross-Origin-Resource-Policy", "same-origin");
-
   res.headers.set("Cross-Origin-Embedder-Policy", "credentialless");
   res.headers.set("X-DNS-Prefetch-Control", "off");
 
