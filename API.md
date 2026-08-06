@@ -48,6 +48,7 @@ Health check for monitoring.
 ### POST /api/auth/logout
 Destroys the current session.
 **Response**: `{ ok: true }`
+**Rate limit**: 20/min per admin (bounds audit-log noise from a stolen session)
 
 ### GET /api/auth/session
 Check current session.
@@ -95,10 +96,16 @@ All require a valid admin session cookie.
 ### Sessions
 - `GET /api/sessions` - list active sessions (returns SHA-256 surrogate IDs, never raw tokens)
 - `DELETE /api/sessions/[id]` - revoke a session (cannot revoke current; with confirmation)
+  - **Rate limit**: 10/min per admin (bounds DB load from surrogate-id probing)
 
 ### Activity Log
 - `GET /api/activity` - paginated log (cursor-based, 50 per page)
 - `GET /api/activity/export` - CSV export (500 most recent, csvEscape applied)
+  - **Rate limit**: 5/min per admin (bounds DB/CPU amplification)
+
+### Announcements Export
+- `GET /api/announcements/export` - CSV export (500 most recent, csvEscape applied)
+  - **Rate limit**: 5/min per admin (bounds DB/CPU amplification)
 
 ### Image Upload
 - `POST /api/upload` - multipart form data (file + bucket: officer|announcement)
@@ -112,6 +119,34 @@ All require a valid admin session cookie.
 - `GET /api/integrations/email/status` - returns SMTP config status (configured, fromName, fromEmail, host, port). Does NOT expose SMTP_PASS.
 - `POST /api/integrations/email/test` - sends a test email. Optional `{ to }` body (defaults to admin's email).
   - **Rate limit**: 5/hour per admin
+
+### Integrations - Webhook + Outbound APIs
+Full integration management for webhook + outbound_api (Discord, Google Workspace, Facebook, Google Forms). Secrets are stored opaquely server-side and never returned to the client (only a masked preview).
+
+- `GET /api/integrations` - returns the full integration catalog merged with stored config + masked secrets.
+  - **Response**: `{ items: IntegrationStatus[] }` where each item has `{ id, label, desc, icon, kind, enabled, secretPreview, config, updatedAt }`
+- `PUT /api/integrations/[id]` - upsert an integration (enable/disable + config + secret).
+  - **Body**: `{ enabled: boolean, config?: Record<string,string>, secret?: string }`
+  - Webhook: secret is server-generated (HMAC signing key). Outbound: admin-supplied credential (stored opaquely).
+  - Toggling `enabled` without config preserves the stored config + secret.
+  - **Rate limit**: 30/min per admin
+- `DELETE /api/integrations/[id]` - disables + clears stored credentials (revokes a leaked key).
+- `POST /api/integrations/[id]` - rotate the webhook signing key (webhook only). Returns the new raw secret once (never retrievable again).
+- `POST /api/integrations/[id]/test` - test connection.
+  - Webhook: enables the integration + returns the signing key + publish URL (first enable only).
+  - Outbound: validates config + attempts a live connectivity check (Discord: GET /users/@me; others: shape-validation only, degrades gracefully on network block).
+  - **Rate limit**: 10/min per admin
+
+### POST /api/webhook/publish (PUBLIC, HMAC-signed)
+Auto-publishes an announcement from an external system. **Authorization is the HMAC signature, not an admin session** — this is the only state-changing endpoint exempt from the CSRF origin check.
+
+**Headers**: `x-aoc-signature: <hex HMAC-SHA256>`, `x-aoc-timestamp: <epoch s or ms>`
+**Body**: `{ title, body, type?, links?, pinned?, date? }` (links follow the same `{url,label}[]` schema as announcements, re-validated server-side)
+**Signature**: `HMAC-SHA256(secret, "${timestamp}.${rawBody}")` — the timestamp is bound to the payload (replay protection, 5-min window).
+**Response**: `{ item: Announcement }` (201) or `{ error }` (401 invalid/missing signature, 400 invalid payload)
+**Rate limit**: 30/min per IP (before signature verification, bounds brute-force)
+**Audit**: logged with synthetic `userId: "webhook"` actor
+**Security**: rate-limited per IP before sig verify; timestamp freshness (replay protection); timing-safe signature compare; full payload validation (title 5-200, body 10-5000, type allowlist, links http/https only)
 
 ## Error Responses
 
@@ -171,5 +206,17 @@ interface ContactMessage {
   message: string;
   status: "new" | "read" | "resolved" | "archived";
   createdAt: string; // ISO
+}
+
+interface IntegrationStatus {
+  id: string;                 // "webhook" | "discord" | "google-workspace" | "facebook" | "google-forms"
+  label: string;
+  desc: string;
+  icon: string;               // Lucide icon name
+  kind: "webhook" | "outbound_api";
+  enabled: boolean;
+  secretPreview: string | null;  // masked (e.g. "…7890"), never the raw secret
+  config: Record<string, string>;  // non-secret fields (channelId, calendarId, etc)
+  updatedAt: string | null;   // ISO
 }
 ```

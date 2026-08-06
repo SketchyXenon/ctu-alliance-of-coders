@@ -9,7 +9,7 @@ data operations with server-side authorization.
 ```
 src/
   app/
-    api/            - Route handlers (21+ endpoints)
+    api/            - Route handlers (31 endpoints: auth, contact, announcements, officers, admin-years, sessions, upload, integrations, webhook, analytics, activity, site-data, health)
     layout.tsx      - Root layout (fonts, theme, metadata, JSON-LD)
     page.tsx        - Main page (section router, state)
     globals.css     - Design tokens, utilities
@@ -25,7 +25,7 @@ src/
     site-footer.tsx - Footer
     ...             - Shared components (back-to-top, command-palette, etc.)
   hooks/            - Custom hooks (keyboard shortcuts, count-up, parallax, command palette)
-  lib/              - Server utilities (auth, db, security, logger, email, upload, supabase, announcements, env, store)
+  lib/              - Server utilities (auth, db, security, logger, email, upload, supabase, announcements, integrations, validation, env, store)
   proxy.ts        - CSRF + security headers + request ID (Next 16 renamed middleware to proxy)
 prisma/
   schema.prisma         - Production schema (PostgreSQL, @db.Uuid + @map)
@@ -93,6 +93,8 @@ Supabase provides three endpoints. The app uses two:
 | AdminUser | Admin account (email, scrypt password hash, role) |
 | AdminSession | Session row (id, userId, expiresAt) — UUID in prod |
 | ActivityLog | Audit trail (userId, action, entity, summary) |
+| IntegrationConfig | External integration config (id, enabled, JSON config, opaque secret) — one row per integration |
+| PageView | Privacy-first analytics (daily visitor hash, path, referrer, device, country) |
 
 ## Authentication
 
@@ -161,6 +163,32 @@ Custom session-based auth (not Supabase Auth, not NextAuth):
 - URLs restricted to http/https (rejects javascript:, data:, file:)
 - Label defaults to hostname if empty
 - Validated client-side + server-side (defense in depth)
+- Rendered in three places: announcement card (preview, max 3-6), modal, and dedicated post view ("Related links")
+
+## Integrations
+
+External integrations managed via the admin panel. The architecture follows separation of concerns (03 §6): a pure lib, thin API routes, and a client UI.
+
+**Library (`src/lib/integrations.ts`)** — pure functions only (no DB, no React), unit-testable:
+- `INTEGRATION_DEFS` catalog: webhook + 4 outbound_api (discord, google-workspace, facebook, google-forms)
+- `validateConfig` (non-secret fields; skips secret-type fields) + `validateSecret` (per-integration token shape)
+- `maskSecret` (never leaks raw — returns `…7890` or null)
+- `generateWebhookSecret` (32 random bytes, hex)
+- `signWebhook` / `verifyWebhookSignature` (HMAC-SHA256 + timing-safe compare)
+- `isWebhookTimestampFresh` (5-min replay window, tolerant of s/ms units)
+- `toStatus` (DB row -> safe client payload; raw secret never appears)
+
+**API routes**:
+- `GET /api/integrations` — catalog + masked status (admin)
+- `PUT /api/integrations/[id]` — upsert enable/disable + config + secret (admin, rate-limited)
+- `DELETE /api/integrations/[id]` — clear credentials (admin)
+- `POST /api/integrations/[id]` — rotate webhook key (admin, webhook only)
+- `POST /api/integrations/[id]/test` — test connection (admin)
+- `POST /api/webhook/publish` — public, HMAC-signed announcement publish
+
+**UI (`src/components/admin/integrations-panel.tsx`)**: 5 cards each with status badge, enable/disable Switch, Configure modal (per-integration fields, secret password input), Test/Get-key button, clear-with-confirm. Webhook card shows publish URL + signing key reveal/copy/rotate.
+
+**Data model**: `IntegrationConfig` (id, enabled, JSON config, opaque secret, timestamps) — one row per integration. Secrets never returned to client; webhook signing key returned raw only once (on generation/rotation).
 
 ## Trade-offs
 

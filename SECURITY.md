@@ -37,6 +37,7 @@ Aligned with OWASP Top 10:2025 and the project's security architecture guide.
 - No `dangerouslySetInnerHTML` with user input (3 uses are all static JSON-LD / theme flash)
 - CSV exports route every cell through csvEscape (formula-injection defense, CWE-1236)
 - Announcement links: URLs restricted to http/https (rejects javascript:, data:, file:)
+- **Email header injection defense (CWE-93)**: contact `name` + `subject` validated with `rejectCRLF: true` at submission (prevents new injections); reply route applies `sanitizeForHeader()` to stored `existing.subject` + `existing.name` before they become email headers (defense-in-depth for records pre-dating the fix). Nodemailer also strips CRLF, but we reject early so the admin gets a clear 400 rather than a silently-mangled email.
 
 ### A04 - Insecure Design
 - Threat-modeled with STRIDE (see above)
@@ -96,6 +97,8 @@ The proxy (`src/proxy.ts`, renamed from `middleware.ts` in Next.js 16) enforces 
 - Origin in allowlist (localhost, production domain) - allowed
 - All other - blocked with 403
 
+**Exemption — `POST /api/webhook/publish`**: this is a public, HMAC-signed endpoint meant to be called by external systems cross-origin. Its authorization model is the HMAC signature (verified in the route), not the browser Origin. Applying the CSRF origin check would block legitimate webhook deliveries. The route still enforces per-IP rate limiting, timestamp freshness (5-min replay window), and a timing-safe signature compare.
+
 ## Rate Limiting
 
 | Endpoint | Limit | Window | Scope |
@@ -103,17 +106,24 @@ The proxy (`src/proxy.ts`, renamed from `middleware.ts` in Next.js 16) enforces 
 | POST /api/auth/login | 5 | 1 min | per IP |
 | POST /api/auth/login | 10 | 1 hour | per email |
 | POST /api/auth/change-password | 3 | 10 min | per user |
+| POST /api/auth/logout | 20 | 1 min | per admin |
 | POST /api/contact | 4 | 10 min | per IP |
 | POST /api/contact | 2 | 30 min | per email |
 | POST /api/contact/[id]/reply | 10 | 1 hour | per admin |
 | POST /api/upload | 10 | 1 min | per admin |
 | POST /api/integrations/email/test | 5 | 1 hour | per admin |
+| PUT /api/integrations/[id] | 30 | 1 min | per admin |
+| POST /api/integrations/[id]/test | 10 | 1 min | per admin |
 | POST /api/announcements | 10 | 1 min | per admin |
 | POST /api/officers | 20 | 1 min | per admin |
 | POST /api/admin-years | 10 | 1 min | per admin |
+| DELETE /api/sessions/[id] | 10 | 1 min | per admin |
+| GET /api/activity/export | 5 | 1 min | per admin |
+| GET /api/announcements/export | 5 | 1 min | per admin |
+| POST /api/webhook/publish | 30 | 1 min | per IP |
 | GET /api/health | 60 | 1 min | per IP |
 
-**Note**: In-memory rate limiter is per-instance. For multi-instance production, use Redis/Upstash. The limiter has periodic eviction to bound memory (entries untouched for 1 hour are swept).
+**Note**: In-memory rate limiter is per-instance. For multi-instance production (Vercel serverless), use Redis/Upstash so limits are shared across instances. The limiter has periodic eviction to bound memory (entries untouched for 1 hour are swept). Tech debt: documented in activity-log.md.
 
 ## File Upload Security (9-layer defense)
 
@@ -134,10 +144,35 @@ Storage: Supabase Storage (prod) or local `public/uploads/` (dev). No silent fal
 - SMTP credentials server-only (never shipped to client)
 - Plain-text email only (no HTML XSS surface)
 - Reply body validated with validateText (XSS blocklist, 5-4000 chars)
-- Reply subject validated with validateText (max 200 chars)
+- Reply subject validated with validateText (max 200 chars, rejectCRLF for header-injection defense)
+- **Email header injection defense (CWE-93)**: contact `name` + `subject` rejected at submission if they contain CR/LF (`rejectCRLF: true`); reply route applies `sanitizeForHeader()` to stored `existing.subject` + `existing.name` before they become email headers (defense-in-depth for pre-fix records)
 - SMTP errors mapped to user-friendly messages via mapSmtpError (no internal hostnames/ports/stack traces leaked)
 - BCC the admin on reply (sent-folder record)
 - Rate-limited (10/hour per admin for replies, 5/hour for test emails)
+
+## Integrations Security
+
+External integrations (webhook + Discord, Google Workspace, Facebook, Google Forms) are managed via the admin panel. Each integration has a `IntegrationConfig` row storing `enabled`, JSON `config` (non-secret fields), and an opaque `secret` (credential / signing key).
+
+**Secret handling (per 06 §8)**:
+- Secrets are stored opaquely server-side and **never returned to the client** — only a masked preview (`…7890`) is exposed via `toStatus()`.
+- The raw webhook signing key is returned **only once**: immediately after generation (on first enable/test) or rotation, so the admin can copy it. It is never retrievable again.
+- Rotation invalidates the old key immediately.
+
+**Webhook publish endpoint (`POST /api/webhook/publish`)**:
+- Public (no admin session) — authorization is the HMAC-SHA256 signature.
+- Rate-limited per IP **before** signature verification (bounds brute-force).
+- Timestamp freshness: 5-minute window, rejects replay attacks. The timestamp is bound to the payload (`HMAC(secret, "${timestamp}.${body}")`), so a captured signature can't be reused on a different body.
+- Timing-safe signature comparison (`crypto.timingSafeEqual`) prevents timing oracles.
+- Full payload validation server-side (title 5-200, body 10-5000, type allowlist, links http/https only) — never trusts client input.
+- Audit-logged with a synthetic `userId: "webhook"` actor.
+
+**Outbound API integrations**:
+- Per-integration token-shape validation (`validateSecret`): Discord bot tokens checked against the known format; generic printable-token check for others.
+- Secrets validated separately from config (single `secret` column; `validateConfig` skips secret-type fields to avoid BOPLA/mass-assignment issues).
+- Connectivity test (Discord: real `GET /users/@me`; others: shape-validation only, degrades gracefully on network block).
+
+**CSRF exemption**: the webhook publish endpoint is the only state-changing route exempt from the proxy CSRF origin check (its auth is the HMAC signature). See CSRF Protection above.
 
 ## Session Security
 

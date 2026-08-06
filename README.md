@@ -5,8 +5,8 @@ The official website for the Alliance of Coders at Cebu Technological University
 ## Features
 
 - **Public**: Hero landing, announcements feed (with specialized links), officers org chart, contact form, FAQ, policy pages
-- **Admin**: Dashboard with inbox (email reply via SMTP), officer management (inline edit + photo upload), announcements CRUD (with links), activity log, session management, integrations panel
-- **Security**: Session-based auth with scrypt hashing, CSRF protection, rate limiting, CSP headers, 9-layer upload defense, enumeration-safe login, fail-closed error handling
+- **Admin**: Dashboard with inbox (email reply via SMTP), officer management (inline edit + photo upload), announcements CRUD (with links), activity log, session management, integrations panel (functional webhook + configurable Discord/Google/Facebook)
+- **Security**: Session-based auth with scrypt hashing, CSRF protection, rate limiting, CSP headers, 9-layer upload defense, enumeration-safe login, HMAC-signed webhook, email header-injection defense, fail-closed error handling
 - **Performance**: ISR caching on public endpoints, image compression (sharp -> WebP), lazy-loaded sections
 - **UX**: Command palette (Cmd+K), keyboard shortcuts, dark mode, responsive design, print styles, AlertDialog confirmations on destructive actions
 
@@ -79,7 +79,7 @@ See [`.env.example`](./.env.example) for all variables.
 | `bun run start` | Start production server (standalone) |
 | `bun run lint` | Run ESLint |
 | `bun run typecheck` | Run TypeScript type checking (tsc --noEmit) |
-| `bun run test` | Run vitest test suite (182 tests) |
+| `bun run test` | Run vitest test suite (371 tests) |
 | `bun run db:push` | Push schema to database (uses prisma.config.ts) |
 | `bun run db:push:sqlite` | Push schema to dev SQLite database |
 | `bun run db:seed` | Seed initial data |
@@ -103,9 +103,11 @@ The app builds to a self-contained standalone server via `.zscripts/build.sh`.
 1. Push to GitHub.
 2. Import the project in Vercel.
 3. Set environment variables. `DATABASE_URL` = pooler (port 6543), `DIRECT_URL` = session pooler (port 5432).
-4. Run `bun run db:push` to create tables.
+4. Apply the Supabase schema by running the SQL migrations in `supabase/migrations/` against your Supabase Postgres (via the Supabase dashboard SQL Editor, in order). These are the single source of truth for the prod schema. Then run `bun run db:push` to sync Prisma's client with the applied schema.
 5. Run `bun run bootstrap` (locally with prod env) to create the admin account.
 6. Deploy.
+
+Bot protection is handled by Vercel Firewall (edge). Configure bot rules in the Vercel dashboard > Project > Security > Firewall. No Cloudflare Turnstile or client-side gate is needed.
 
 See [docs/deployment.md](./docs/deployment.md) for the full deployment runbook.
 
