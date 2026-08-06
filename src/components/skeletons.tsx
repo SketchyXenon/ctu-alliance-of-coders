@@ -2,10 +2,6 @@
 
 import { cn } from "@/lib/utils";
 
-/**
- * Skeleton primitives for loading states.
- * Uses a shimmer animation to feel alive rather than a static gray block.
- */
 export function Skeleton({ className }: { className?: string }) {
   return (
     <div
@@ -14,14 +10,12 @@ export function Skeleton({ className }: { className?: string }) {
         "before:absolute before:inset-0 before:-translate-x-full",
         "before:animate-[shimmer_1.8s_infinite] before:bg-gradient-to-r",
         "before:from-transparent before:via-foreground/8 before:to-transparent",
-        className
+        className,
       )}
       aria-hidden="true"
     />
   );
 }
-
-/** Announcement card skeleton - matches the card grid layout. */
 export function AnnouncementCardSkeleton() {
   return (
     <div className="rounded-xl border bg-card p-0 shadow-sm">
@@ -38,8 +32,6 @@ export function AnnouncementCardSkeleton() {
     </div>
   );
 }
-
-/** Officer card skeleton - circular avatar + name/role. */
 export function OfficerCardSkeleton() {
   return (
     <div className="flex flex-col items-center gap-3 rounded-xl border bg-card p-5 text-center shadow-sm">
@@ -49,8 +41,6 @@ export function OfficerCardSkeleton() {
     </div>
   );
 }
-
-/** Full announcements section skeleton. */
 export function AnnouncementsSkeleton() {
   return (
     <section

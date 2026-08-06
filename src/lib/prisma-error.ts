@@ -2,19 +2,6 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { logger } from "./logger";
 
-/**
- * Duck-type an error as a Prisma error by its constructor name.
- *
- * WHY: In bundled serverless builds (Vercel, Next.js standalone), the
- * `@prisma/client` module can resolve to a different instance than the one
- * the generated client extends. When that happens, `error instanceof
- * Prisma.PrismaClientInitializationError` returns false even though the error
- * IS that class — the constructor identity differs across module instances.
- *
- * The constructor `name` is a stable string set by Prisma's runtime and does
- * not depend on module identity, so it is reliable across bundles.
- * Per 02 section 6: "Assume every dependency will fail, and design for it."
- */
 function getErrorName(error: unknown): string {
   if (!error || typeof error !== "object") return "";
   const name = (error as { name?: string }).name;
@@ -60,15 +47,7 @@ function isPrismaUnknownRequestError(error: unknown): boolean {
   );
 }
 
-/**
- * Translate Prisma errors to HTTP responses.
- * Returns null if the error isn't a recognized Prisma error.
- * Per 06-security-architecture.md A10: reveal what the user needs, not
- * stack traces. Per 02 section 6: graceful degradation under dependency
- * failure.
- */
 export function handlePrismaError(error: unknown): NextResponse | null {
-  // Connection / initialization errors -> 503 Service Unavailable.
   if (isPrismaInitError(error)) {
     logger.error("Database connection failed", {
       message: (error as Error).message,
@@ -141,7 +120,6 @@ export function handlePrismaError(error: unknown): NextResponse | null {
     );
   }
 
-  // Last-resort: message-match for DB connection failures regardless of class.
   const msg = (error as { message?: string })?.message ?? "";
   if (
     /Can't reach database server|Timed out|connect ECONNREFUSED|ENOTFOUND|Tenant or database not found/i.test(

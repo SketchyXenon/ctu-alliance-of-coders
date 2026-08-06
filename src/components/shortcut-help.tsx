@@ -32,10 +32,6 @@ const SHORTCUTS: Shortcut[] = [
   { keys: "Esc", description: "Close dialogs", group: "Actions" },
 ];
 
-/**
- * ShortcutHelp - a dialog showing all available keyboard shortcuts.
- * Opened with the "?" key.
- */
 export function ShortcutHelp({ open, onOpenChange }: ShortcutHelpProps) {
   const groups = React.useMemo(() => {
     const map = new Map<string, Shortcut[]>();
@@ -51,7 +47,9 @@ export function ShortcutHelp({ open, onOpenChange }: ShortcutHelpProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-display text-xl">Keyboard Shortcuts</DialogTitle>
+          <DialogTitle className="font-display text-xl">
+            Keyboard Shortcuts
+          </DialogTitle>
           <DialogDescription>
             Use these keys to navigate the site faster.
           </DialogDescription>
@@ -69,7 +67,9 @@ export function ShortcutHelp({ open, onOpenChange }: ShortcutHelpProps) {
                     key={s.keys}
                     className="flex items-center justify-between gap-3"
                   >
-                    <span className="text-sm text-foreground">{s.description}</span>
+                    <span className="text-sm text-foreground">
+                      {s.description}
+                    </span>
                     <kbd className="shrink-0 rounded-md border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground shadow-sm">
                       {s.keys}
                     </kbd>

@@ -2,16 +2,6 @@
 // Prisma 7: the datasource URL is no longer in the schema. It lives in
 // prisma.config.ts (for CLI) and is passed as an adapter to PrismaClient
 // (for runtime). See prisma.config.ts and src/lib/db.ts.
-//
-// Supabase note: prisma db push / migrate do NOT work through PgBouncer
-// transaction pooling (pooler port 6543). The config's datasource.url is
-// set to DIRECT_URL when available (see prisma.config.ts). Runtime queries
-// use DATABASE_URL (the pooler) directly via the adapter in src/lib/db.ts.
-//
-// The dead-code `profiles` table (which had a cross-schema FK to auth.users)
-// was dropped in supabase/migrations/20260725000000_drop_profiles_dead_code.sql.
-// With that FK gone, Prisma no longer needs "auth" in the schemas list, and
-// db push will not try to drop Supabase's managed auth tables. Per ADR-0003.
 
 generator client {
   provider = "prisma-client-js"
@@ -150,4 +140,14 @@ model PageView {
   @@index([path])
   @@index([visitorHash])
   @@map("page_views")
+}
+model IntegrationConfig {
+  id        String   @id
+  enabled   Boolean  @default(false)
+  config    String   @default("") @db.Text
+  secret    String   @default("") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt     @map("updated_at")
+
+  @@map("integration_configs")
 }

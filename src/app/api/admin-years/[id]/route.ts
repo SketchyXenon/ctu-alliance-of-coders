@@ -7,7 +7,6 @@ import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { logActivity } from "@/lib/activity";
 import type { AdminYear } from "@/lib/types";
 
-/** PATCH /api/admin-years/[id] - admin only, update year/theme/sortOrder. */
 export const PATCH = withPrismaError(
   async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     let user;
@@ -96,7 +95,6 @@ export const PATCH = withPrismaError(
       changed.push("sortOrder");
     }
 
-    // If no fields to update, return the existing record (no-op).
     if (Object.keys(data).length === 0) {
       const item: AdminYear = {
         id: existing.id,
@@ -114,7 +112,6 @@ export const PATCH = withPrismaError(
       include: { officers: { orderBy: { sortOrder: "asc" } } },
     });
 
-    // S5: PATCH on admin-years previously skipped audit logging.
     const summary = changed.length
       ? `Updated year ${existing.year}: ${changed.join(", ")}`
       : `Touched year ${existing.year}`;
@@ -144,7 +141,6 @@ export const PATCH = withPrismaError(
   },
 );
 
-/** DELETE /api/admin-years/[id] - admin only, cascades officers. */
 export const DELETE = withPrismaError(
   async (
     _request: Request,

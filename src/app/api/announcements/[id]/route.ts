@@ -16,7 +16,6 @@ import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
 
 const MAX_BODY = 5000;
 
-/** PATCH /api/announcements/[id] - admin only, update fields. */
 export const PATCH = withPrismaError(
   async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     let user;
@@ -116,7 +115,6 @@ export const PATCH = withPrismaError(
       data.pinned = body.pinned;
     }
     if (body.image !== undefined) {
-      // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
       const imgCheck = validateImageUrl(body.image);
       if (!imgCheck.valid)
         return withCache(
@@ -126,7 +124,6 @@ export const PATCH = withPrismaError(
       data.image = imgCheck.normalized;
     }
     if (body.links !== undefined) {
-      // Validate links array (06 section 5: validate all external input).
       const linksCheck = validateAnnouncementLinks(body.links);
       if (!linksCheck.valid) {
         return withCache(
@@ -137,7 +134,6 @@ export const PATCH = withPrismaError(
       data.links = serializeLinks(linksCheck.normalized);
     }
 
-    // If no fields to update, return the existing record (no-op).
     if (Object.keys(data).length === 0) {
       const item: Announcement = {
         id: existing.id,
@@ -176,7 +172,6 @@ export const PATCH = withPrismaError(
   },
 );
 
-/** DELETE /api/announcements/[id] - admin only. */
 export const DELETE = withPrismaError(
   async (
     _request: Request,

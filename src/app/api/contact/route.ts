@@ -22,7 +22,6 @@ import type { ContactMessage as PrismaContactMessage } from "@prisma/client";
 
 const MAX_MESSAGE = 2000;
 
-// Q7: extract the DTO mapper that was duplicated 4x in this file.
 export function toContactMessageDTO(r: PrismaContactMessage): ContactMessage {
   return {
     id: r.id,
@@ -37,11 +36,6 @@ export function toContactMessageDTO(r: PrismaContactMessage): ContactMessage {
   };
 }
 
-// H1 regression helper: build the dedup response based on caller role.
-// Anonymous callers get a bare {ok:true} ack (no PII). Authenticated admins
-// get the full DTO + deduplicated:true flag so the admin inbox can show the
-// existing message. Extracted as a helper (03 §1 DRY) so the regression test
-// in tests/contact-dedup.test.ts can pin both response shapes.
 export function buildDedupResponse(
   existing: PrismaContactMessage,
   admin: Pick<AdminUser, "id" | "role"> | null,
@@ -58,8 +52,6 @@ export function buildDedupResponse(
   return withCache(NextResponse.json({ ok: true }), CACHE_NO_STORE);
 }
 
-/** GET /api/contact - admin only, list all messages newest first.
- *  Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500. */
 export const GET = withPrismaError(async function GET() {
   try {
     await requireAdmin();
@@ -77,14 +69,6 @@ export const GET = withPrismaError(async function GET() {
   return res;
 });
 
-/** POST /api/contact - public submit. Rate-limited per IP and per email.
- *  Authenticated admins are rejected (403): the contact form is a public
- *  intake channel, not a self-message path. Admins must log out first.
- *  Defense-in-depth: the client also hides the form for admins, but the
- *  server check is authoritative per 06 section 3 (never trust the client).
- *  Ordering: the IP rate limit runs BEFORE getCurrentUser() so an
- *  unauthenticated attacker can't amplify DB load via the session lookup
- *  (06 section 7: rate limiting first). */
 export const POST = withPrismaError(async function POST(request: Request) {
   const ip = getClientIp(request.headers);
 
@@ -104,10 +88,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Admins are rejected after the rate limit passes (defense in depth).
-  // Bot protection is handled by Vercel Firewall at the edge (no client-side
-  // gate needed). Per 06 §3: the edge firewall is the bot gate; this route
-  // still enforces per-IP rate limiting (above) as defense in depth.
   const admin = await getCurrentUser();
   if (admin && admin.role === "admin") {
     return withCache(
@@ -135,6 +115,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     required: true,
     minLen: 2,
     maxLen: 80,
+    rejectCRLF: true,
   });
   if (!nameCheck.valid)
     return withCache(
@@ -153,6 +134,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     required: true,
     minLen: 3,
     maxLen: 120,
+    rejectCRLF: true,
   });
   if (!subjectCheck.valid)
     return withCache(
@@ -203,8 +185,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Validate clientId if provided (A01-1 fix: defense-in-depth — run through
-  // the XSS blocklist even though clientId isn't rendered in the UI today).
   const clientIdInput =
     typeof body.clientId === "string" && body.clientId
       ? String(body.clientId).slice(0, 128)
@@ -218,14 +198,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
   }
   const clientId = clientIdInput;
 
-  // Idempotency: try create, catch P2002 (unique on clientId) -> return existing.
-  // H1 fix: never return PII to an anonymous caller, even on a dedup hit.
-  // A leaked clientId (log/referrer) would otherwise let an attacker read
-  // another submitter's name/email/subject/message. Anonymous callers always
-  // get a bare ack here (admins are rejected at the top of POST).
   try {
-    // withDbRetry: retry on transient connection failures (serverless cold
-    // start, Supabase pooler warmup). Per 02 section 6: retries with backoff.
     await withDbRetry(() =>
       db.contactMessage.create({
         data: {
@@ -240,8 +213,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
       }),
     );
   } catch (error) {
-    // Duck-typed P2002 check (instanceof can fail across module instances in
-    // bundled serverless builds). Non-P2002 errors re-throw to withPrismaError.
     const isP2002 =
       (error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002") ||
@@ -259,9 +230,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     throw error;
   }
 
-  // Admins are rejected at the top of POST, so the caller here is always
-  // anonymous -> bare ack, no PII. (buildDedupResponse stays exported for the
-  // dedup path + tests/contact-dedup.test.ts.)
   return withCache(
     NextResponse.json({ ok: true }, { status: 201 }),
     CACHE_NO_STORE,

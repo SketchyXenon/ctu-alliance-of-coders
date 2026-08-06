@@ -3,17 +3,12 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { SESSION_COOKIE } from "@/lib/auth";
+import { rateLimit } from "@/lib/security";
 import { logActivity } from "@/lib/activity";
 import { withPrismaError } from "@/lib/route-helpers";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import { sessionDisplayId } from "../route";
 
-/**
- * DELETE /api/sessions/[id] - revoke a specific session.
- * `id` is a non-reversible surrogate (SHA-256 prefix of the real session
- * token). Cannot revoke the current session (use /api/auth/logout instead).
- * Wrapped in withPrismaError so DB-down returns a clean 503, not a raw 500.
- */
 export const DELETE = withPrismaError(async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -26,11 +21,24 @@ export const DELETE = withPrismaError(async function DELETE(
     );
   }
 
+  const rl = rateLimit(`session-revoke:${user.id}`, 10, 60_000);
+  if (!rl.allowed) {
+    return withCache(
+      NextResponse.json(
+        { error: "Too many requests. Please slow down." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
+      CACHE_NO_STORE,
+    );
+  }
+
   const { id } = await params;
   const store = await cookies();
   const currentSessionId = store.get(SESSION_COOKIE)?.value;
 
-  // Compare surrogate ids so the raw token never leaves the server.
   if (currentSessionId && sessionDisplayId(currentSessionId) === id) {
     return withCache(
       NextResponse.json(
@@ -41,8 +49,6 @@ export const DELETE = withPrismaError(async function DELETE(
     );
   }
 
-  // Resolve the surrogate back to the real session by scanning the caller's
-  // sessions (max 5 per user, so this is a cheap lookup).
   const userSessions = await db.adminSession.findMany({
     where: { userId: user.id },
     select: { id: true },

@@ -1,6 +1,3 @@
-// Static site configuration: navigation, badges, filters, policies.
-// Kept in one place so the UI and API agree on enums.
-
 import type { AnnouncementType, SectionKey } from "./types";
 
 export interface NavLink {
@@ -20,18 +17,37 @@ export const NAV_LINKS: NavLink[] = [
 export interface BadgeConfig {
   className: string;
   label: string;
-  /** CSS class for the modal accent bar (saturated, readable as a thin stripe). */
+
   accentBar: string;
 }
 
 export const BADGE_CONFIG: Record<AnnouncementType, BadgeConfig> = {
-  award: { className: "badge-award", label: "Award", accentBar: "accent-bar-award" },
-  recognition: { className: "badge-recognition", label: "Recognition", accentBar: "accent-bar-recognition" },
-  report: { className: "badge-report", label: "Report", accentBar: "accent-bar-report" },
-  general: { className: "badge-general", label: "General", accentBar: "accent-bar-general" },
+  award: {
+    className: "badge-award",
+    label: "Award",
+    accentBar: "accent-bar-award",
+  },
+  recognition: {
+    className: "badge-recognition",
+    label: "Recognition",
+    accentBar: "accent-bar-recognition",
+  },
+  report: {
+    className: "badge-report",
+    label: "Report",
+    accentBar: "accent-bar-report",
+  },
+  general: {
+    className: "badge-general",
+    label: "General",
+    accentBar: "accent-bar-general",
+  },
 };
 
-export const FILTER_OPTIONS: { value: AnnouncementType | "all"; label: string }[] = [
+export const FILTER_OPTIONS: {
+  value: AnnouncementType | "all";
+  label: string;
+}[] = [
   { value: "all", label: "All" },
   { value: "award", label: "Awards" },
   { value: "recognition", label: "Recognitions" },
@@ -91,8 +107,7 @@ export const POLICY_PAGES: PolicyPage[] = [
     icon: "FileText",
     eyebrow: "Usage Guide",
     sub: "Using this site.",
-    summary:
-      "This site is for the Alliance of Coders community.",
+    summary: "This site is for the Alliance of Coders community.",
     bullets: [
       "Submit accurate, respectful information.",
       "Admins moderate all content.",

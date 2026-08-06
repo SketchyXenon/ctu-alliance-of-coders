@@ -9,7 +9,6 @@ import { logActivity } from "@/lib/activity";
 import { wouldCreateCycle } from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
 
-/** PATCH /api/officers/[id] - admin only, update name/role/image/reportsToId. */
 export const PATCH = withPrismaError(
   async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
     let user;
@@ -77,7 +76,6 @@ export const PATCH = withPrismaError(
       data.role = String(body.role).trim() || "Open Position";
     }
     if (body.image !== undefined) {
-      // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
       const imgCheck = validateImageUrl(body.image);
       if (!imgCheck.valid)
         return withCache(
@@ -105,9 +103,6 @@ export const PATCH = withPrismaError(
           ? null
           : String(body.reportsToId);
       if (raw !== null) {
-        // Same-year + cycle checks. Per 06 section 3 (IDOR): the parent must
-        // belong to the same year; a cross-year parent id is rejected. Per 02
-        // section 6: cycle check before the write.
         const parent = await db.officer.findUnique({ where: { id: raw } });
         if (!parent || parent.yearId !== existing.yearId) {
           return withCache(
@@ -138,7 +133,6 @@ export const PATCH = withPrismaError(
       data.reportsToId = raw;
     }
 
-    // If no fields to update, return the existing record (no-op).
     if (Object.keys(data).length === 0) {
       const item: Officer = {
         id: existing.id,
@@ -173,7 +167,6 @@ export const PATCH = withPrismaError(
   },
 );
 
-/** DELETE /api/officers/[id] - admin only. */
 export const DELETE = withPrismaError(
   async (
     _request: Request,

@@ -46,10 +46,6 @@ interface ContactSectionProps {
     category: string;
     message: string;
   }) => Promise<void>;
-  /** When true, the caller is an authenticated admin. The public contact
-   *  form is hidden and replaced with a notice to log out first — the
-   *  contact form is a public intake channel, not a self-message path.
-   *  The server enforces this independently (403) per 06 §3. */
   isAdmin?: boolean;
 }
 
@@ -128,7 +124,7 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
     e.preventDefault();
     if (submitting) return;
 
-    // Client-side rate limit.
+
     const now = Date.now();
     submitTimesRef.current = submitTimesRef.current.filter(
       (t) => now - t < WINDOW_MS,
@@ -263,9 +259,6 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
             </CardContent>
           </Card>
         </div>
-
-        {/* Form card: hidden for authenticated admins (defense in depth;
-            server still rejects with 403 per 06 §3). */}
         {isAdmin ? (
           <Card className="border-2 border-amber-500/40 bg-amber-50/50 shadow-md dark:border-amber-500/30 dark:bg-amber-950/20">
             <CardContent className="flex flex-col items-start gap-4 p-8">

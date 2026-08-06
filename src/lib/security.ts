@@ -1,23 +1,8 @@
-// Server-side security utilities.
-// OWASP-aligned: input validation, rate limiting, CSRF helpers.
-// Per 06-security-architecture.md: never trust the client, validate all input,
-// fail closed, defense in depth.
-
-// Patterns that indicate possible script injection in display fields.
-// NOTE: defense-in-depth blocklist for DISPLAY text only. React escapes at
-// render time; this catches input that would be dangerous if ever rendered
-// raw. MUST NOT be applied to password fields; use validatePassword from
-// lib/validation.ts for those (strong passwords may legitimately contain
-// these substrings). See 06-security-architecture.md S2.
-//
-// Per A05-1 fix: the on\w+\s*= regex was too broad (matched "online=true",
-// "ongoing=task"). Tightened to require an HTML tag context: only matches
-// on* event handlers inside angle brackets (e.g. <div onclick=...>).
 const DANGEROUS_PATTERNS = [
   /<script/i,
   /javascript:/i,
   /vbscript:/i,
-  /<[^>]*\son\w+\s*=/i, // event handlers only inside HTML tags
+  /<[^>]*\son\w+\s*=/i,
 ];
 
 export interface ValidationResult {
@@ -25,16 +10,6 @@ export interface ValidationResult {
   error: string | null;
 }
 
-/** Validate a plain-text display field with length and dangerous-pattern checks.
- *  When required is false (default), undefined/null are treated as "not provided"
- *  and return valid (the caller applies a default). Per 03 section 6: fail
- *  safe, but don't over-block optional fields.
- *
- *  When rejectCRLF is true, carriage returns / line feeds are rejected. Use
- *  this for fields that become email headers (Subject, From name) — CRLF there
- *  enables header injection (CWE-93). Per 06 section 5: validate all external
- *  input. Do NOT set rejectCRLF on fields that legitimately contain newlines
- *  (e.g. email body, contact message). */
 export function validateText(
   value: unknown,
   opts: {
@@ -50,8 +25,7 @@ export function validateText(
     required = false,
     rejectCRLF = false,
   } = opts;
-  // When the field is optional, undefined/null are valid (not provided).
-  // The caller is responsible for applying a default value.
+
   if (value === undefined || value === null) {
     if (required) {
       return { valid: false, error: "This field is required." };
@@ -61,8 +35,7 @@ export function validateText(
   if (typeof value !== "string") {
     return { valid: false, error: "Invalid type." };
   }
-  // CRLF check BEFORE trim (trim only removes leading/trailing whitespace,
-  // not embedded newlines). A06 fix: header injection defense-in-depth.
+
   if (rejectCRLF && /[\r\n]/.test(value)) {
     return {
       valid: false,
@@ -87,7 +60,6 @@ export function validateText(
   return { valid: true, error: null };
 }
 
-/** Validate an email format (RFC-ish, conservative). */
 export function validateEmail(value: unknown): ValidationResult {
   if (typeof value !== "string") {
     return { valid: false, error: "Invalid email." };
@@ -103,36 +75,21 @@ export function validateEmail(value: unknown): ValidationResult {
   return { valid: true, error: null };
 }
 
-/** Generate a cryptographically random token (CSRF or session). */
 export function generateToken(bytes = 32): string {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
   return Array.from(buf, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/**
- * Failed-login lockout tracker.
- *
- * Complements the IP + email rate limits: those throttle request VOLUME, this
- * locks an account after N FAILED attempts regardless of source IP (so a
- * distributed credential-stuffing attack still gets locked out per-account).
- * Per 06-security-architecture.md section 7: "tighter limits on
- * authentication and computationally expensive routes."
- *
- * Trade-off: in-memory => single-instance only. For multi-instance prod, back
- * this with Redis/Upstash (same caveat as rateLimit). Entries are swept with
- * the same eviction pass as rateLimitStore.
- */
 interface LockoutEntry {
   failures: number;
   lockedUntil: number;
   lastTouched: number;
 }
 const lockoutStore = new Map<string, LockoutEntry>();
-const LOCKOUT_THRESHOLD = 5; // 5 failed attempts triggers a lock
-const LOCKOUT_DURATION_MS = 15 * 60_000; // 15 minutes
+const LOCKOUT_THRESHOLD = 5;
+const LOCKOUT_DURATION_MS = 15 * 60_000;
 
-/** Record a failed login attempt for an email. Call AFTER a login failure. */
 export function recordLoginFailure(email: string): {
   locked: boolean;
   lockedForMs: number;
@@ -144,7 +101,7 @@ export function recordLoginFailure(email: string): {
     lockedUntil: 0,
     lastTouched: now,
   };
-  // If the lockout has expired, reset the counter.
+
   if (entry.lockedUntil && entry.lockedUntil < now) {
     entry.failures = 0;
     entry.lockedUntil = 0;
@@ -160,7 +117,6 @@ export function recordLoginFailure(email: string): {
   return { locked: false, lockedForMs: 0 };
 }
 
-/** Check if an email is currently locked. Call BEFORE attempting a login. */
 export function isLoginLocked(email: string): {
   locked: boolean;
   retryAfterMs: number;
@@ -170,40 +126,26 @@ export function isLoginLocked(email: string): {
   if (!entry || !entry.lockedUntil) return { locked: false, retryAfterMs: 0 };
   const now = Date.now();
   if (entry.lockedUntil <= now) {
-    // Lockout expired; clear it so the next failure starts fresh.
     lockoutStore.delete(key);
     return { locked: false, retryAfterMs: 0 };
   }
   return { locked: true, retryAfterMs: entry.lockedUntil - now };
 }
 
-/** Clear the lockout for an email. Call on a SUCCESSFUL login (so a user who
- *  forgot their password, then remembered it, isn't still one failure from a
- *  lockout). */
 export function clearLoginFailures(email: string): void {
   lockoutStore.delete(email.toLowerCase());
 }
 
-// Expose the threshold + duration for tests + the login route to reference.
 export const LOGIN_LOCKOUT_THRESHOLD = LOCKOUT_THRESHOLD;
 export const LOGIN_LOCKOUT_DURATION_MS = LOCKOUT_DURATION_MS;
 
-/**
- * In-memory sliding-window rate limiter.
- * Per 06-security-architecture.md section 7: rate limit auth and expensive
- * endpoints, return 429 with Retry-After. Singleton for app-wide use.
- *
- * Trade-off: in-memory => single-instance only. For multi-instance production,
- * back this with Redis/Upstash. Empty entries are swept periodically to avoid
- * unbounded memory growth (S3).
- */
 interface RateLimitEntry {
   timestamps: number[];
   lastTouched: number;
 }
 const rateLimitStore = new Map<string, RateLimitEntry>();
-const EVICTION_INTERVAL_MS = 5 * 60_000; // sweep every 5 minutes
-const EVICTION_MAX_AGE_MS = 60 * 60_000; // drop entries untouched for 1 hour
+const EVICTION_INTERVAL_MS = 5 * 60_000;
+const EVICTION_MAX_AGE_MS = 60 * 60_000;
 let lastEvictionRun = 0;
 
 export function rateLimit(
@@ -213,7 +155,6 @@ export function rateLimit(
 ): { allowed: boolean; retryAfterMs: number } {
   const now = Date.now();
 
-  // Periodic sweep of stale entries to bound memory (S3).
   if (now - lastEvictionRun > EVICTION_INTERVAL_MS) {
     lastEvictionRun = now;
     for (const [k, v] of rateLimitStore) {
@@ -235,13 +176,10 @@ export function rateLimit(
   return { allowed: true, retryAfterMs: 0 };
 }
 
-/** Truncate a string safely for display. */
 export function truncate(str: unknown, maxLen = 100): string {
   if (typeof str !== "string") return "";
   return str.length <= maxLen ? str : str.slice(0, maxLen - 1) + "…";
 }
-
-/** Format an ISO timestamp into a relative + absolute form. */
 export function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr + "T00:00:00").toLocaleDateString("en-PH", {
@@ -254,16 +192,8 @@ export function formatDate(dateStr: string): string {
   }
 }
 
-// Trusted proxy hop count. The sandbox gateway (Caddy) is 1 hop in front of
-// this app, so the rightmost X-Forwarded-For entry is the gateway's view of
-// the real client. Anything to the left of that is client-supplied and
-// spoofable. Per 06-security-architecture.md section 7: do not trust
-// client-controlled headers for rate-limit keying (M4 fix).
 const TRUSTED_PROXY_HOPS = 1;
 
-/** Extract the real client IP, trusting only the rightmost TRUSTED_PROXY_HOPS
- *  entries of X-Forwarded-For. Shared by proxy.ts and API routes so the
- *  rate-limit key is consistent and not spoofable. */
 export function getClientIp(headers: Headers): string {
   const xff = headers.get("x-forwarded-for");
   if (xff) {
@@ -279,16 +209,17 @@ export function getClientIp(headers: Headers): string {
   return headers.get("x-real-ip") || "unknown";
 }
 
-/** Mask an email for logs: a***@example.com. Per 06-security-architecture.md
- *  section 11: never log full PII in warn/info logs; keep the full value only
- *  in the access-controlled audit trail (M5 fix). */
 export function maskEmail(email: string): string {
   const at = email.indexOf("@");
   if (at <= 0) return "***";
   return email[0] + "***" + email.slice(at);
 }
 
-/** Format an ISO timestamp into a relative + absolute form. */
+export function sanitizeForHeader(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
 export function formatDateTime(iso: string): string {
   try {
     return new Date(iso).toLocaleString("en-PH", {

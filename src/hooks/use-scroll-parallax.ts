@@ -2,11 +2,6 @@
 
 import * as React from "react";
 
-/**
- * useScrollParallax - returns a scroll-based offset value for parallax effects.
- * The offset ranges from 0 (top of page) to ~maxOffset as the user scrolls
- * down. Respects prefers-reduced-motion (always returns 0).
- */
 export function useScrollParallax(maxOffset = 80) {
   const [offset, setOffset] = React.useState(0);
 
@@ -26,7 +21,7 @@ export function useScrollParallax(maxOffset = 80) {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const scrollY = window.scrollY;
-        // Only apply parallax while the hero is roughly in view (first 100vh).
+
         const clamped = Math.min(scrollY * 0.3, maxOffset);
         setOffset(clamped);
       });

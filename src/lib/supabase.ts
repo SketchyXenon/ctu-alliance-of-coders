@@ -77,11 +77,6 @@ export async function uploadToStorage(
   };
 }
 
-/**
- * Delete a file from Supabase Storage.
- * Used when an officer photo or announcement image is replaced/removed.
- * Per 06 section 11: logs the result (no secrets).
- */
 export async function deleteFromStorage(
   bucket: string,
   filename: string,
@@ -108,7 +103,6 @@ export async function deleteFromStorage(
   return true;
 }
 
-/** Reset the client + config cache. Used in tests. */
 export function _resetSupabaseForTesting(): void {
   _client = null;
   _configured = null;

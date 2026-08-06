@@ -18,29 +18,18 @@ interface OfficerCardProps {
 }
 
 const ACCEPTED_MIME = ["image/jpeg", "image/png", "image/webp"] as const;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
-/**
- * Derive 2-char uppercase initials from a name.
- * Falls back to "?" when the name is empty.
- */
 function getInitials(name: string): string {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return "?";
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   const first = parts[0]?.[0] ?? "";
-  const second = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  const second = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
   return (first + second).toUpperCase().slice(0, 2);
 }
 
-/**
- * OfficerCard - a single officer presentation card.
- *
- * Public mode (editable=false): static avatar (image or initials).
- * Admin mode (editable=true): avatar becomes a button that triggers a hidden
- * file input; a "Change Photo" action appears below.
- */
 export function OfficerCard({
   officer,
   editable = false,
@@ -62,12 +51,14 @@ export function OfficerCard({
   const handleFileChange = React.useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      // Always reset the input value so re-selecting the same file fires change.
+
       event.target.value = "";
       if (!file) return;
 
       // Client-side validation
-      if (!ACCEPTED_MIME.includes(file.type as (typeof ACCEPTED_MIME)[number])) {
+      if (
+        !ACCEPTED_MIME.includes(file.type as (typeof ACCEPTED_MIME)[number])
+      ) {
         toast.error("Invalid file type", {
           description: "Please upload a JPEG, PNG, or WebP image.",
         });
@@ -100,7 +91,7 @@ export function OfficerCard({
         setIsUploading(false);
       }
     },
-    [onImageUpload, officer.id, displayName]
+    [onImageUpload, officer.id, displayName],
   );
 
   const avatarContent = officer.image ? (
@@ -115,7 +106,7 @@ export function OfficerCard({
     <span
       className={cn(
         "font-display text-2xl font-bold tracking-wide",
-        isVacant ? "text-muted-foreground/70" : "text-gold-400"
+        isVacant ? "text-muted-foreground/70" : "text-gold-400",
       )}
       aria-hidden="true"
     >
@@ -137,7 +128,7 @@ export function OfficerCard({
         onClick?.(officer);
       }
     },
-    [isClickable, onClick, officer]
+    [isClickable, onClick, officer],
   );
 
   return (
@@ -147,7 +138,7 @@ export function OfficerCard({
         "hover:-translate-y-1 hover:shadow-xl hover:border-gold-300/60",
         "focus-within:shadow-md focus-within:border-gold-300/60",
         isVacant && "opacity-90 border-dashed",
-        isClickable && "cursor-pointer"
+        isClickable && "cursor-pointer",
       )}
       data-officer-id={officer.id}
       onClick={handleCardClick}
@@ -174,7 +165,7 @@ export function OfficerCard({
               "bg-navy-700 text-white transition-all duration-200",
               "hover:ring-gold-400 hover:ring-offset-3",
               "focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gold-400/70 focus-visible:ring-offset-2",
-              "active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              "active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60",
             )}
           >
             {/* Image / initials layer */}
@@ -187,12 +178,16 @@ export function OfficerCard({
                 "pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1",
                 "bg-navy-900/70 text-white opacity-0 backdrop-blur-[2px]",
                 "transition-opacity duration-200 group-hover:opacity-100",
-                "group-focus-visible:opacity-100"
+                "group-focus-visible:opacity-100",
               )}
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
               <span className="text-[11px] font-semibold uppercase tracking-wide">
-                {isUploading ? "Uploading" : officer.image ? "Change" : "Upload"}
+                {isUploading
+                  ? "Uploading"
+                  : officer.image
+                    ? "Change"
+                    : "Upload"}
               </span>
             </span>
           </button>
@@ -202,7 +197,7 @@ export function OfficerCard({
               "relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-full",
               "bg-gradient-to-br from-navy-700 to-navy-900",
               "ring-2 ring-gold-400/30 ring-offset-2 ring-offset-card",
-              "shadow-md"
+              "shadow-md",
             )}
           >
             {avatarContent}
@@ -228,7 +223,7 @@ export function OfficerCard({
         <h3
           className={cn(
             "font-display text-base font-semibold leading-tight text-foreground text-balance",
-            isVacant && "text-muted-foreground"
+            isVacant && "text-muted-foreground",
           )}
         >
           {displayName}
@@ -255,7 +250,7 @@ export function OfficerCard({
             "mt-1 h-7 gap-1.5 px-2 text-xs text-muted-foreground",
             "hover:bg-gold-100/60 hover:text-gold-800",
             "focus-visible:ring-2 focus-visible:ring-gold-400/60",
-            "dark:hover:bg-gold-400/10 dark:hover:text-gold-300"
+            "dark:hover:bg-gold-400/10 dark:hover:text-gold-300",
           )}
         >
           <Camera className="h-3.5 w-3.5" aria-hidden="true" />

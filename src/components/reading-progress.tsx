@@ -2,11 +2,6 @@
 
 import * as React from "react";
 
-/**
- * ReadingProgress - a fixed gold progress bar at the top of the viewport
- * that fills as the user scrolls down the page. Hidden on the hero (Home)
- * since it's a full-viewport section with minimal scroll value.
- */
 export function ReadingProgress({ active }: { active: boolean }) {
   const [progress, setProgress] = React.useState(0);
 
@@ -34,8 +29,10 @@ export function ReadingProgress({ active }: { active: boolean }) {
       style={{
         width: `${progress}%`,
         height: "4px",
-        background: "linear-gradient(to right, var(--gold-500), var(--gold-300))",
-        boxShadow: "0 0 8px rgba(212, 175, 55, 0.5), 0 1px 2px rgba(0, 0, 0, 0.1)",
+        background:
+          "linear-gradient(to right, var(--gold-500), var(--gold-300))",
+        boxShadow:
+          "0 0 8px rgba(212, 175, 55, 0.5), 0 1px 2px rgba(0, 0, 0, 0.1)",
         borderBottomRightRadius: "2px",
       }}
       aria-hidden="true"

@@ -1,11 +1,5 @@
-// Shared domain types for Alliance of Coders.
-// These mirror the Prisma models but are decoupled so the API can evolve
-// without leaking database internals to the client.
-
 export type AnnouncementType = "award" | "recognition" | "report" | "general";
 
-/** A specialized link attached to an announcement (e.g. registration form,
- *  event page, PDF). Validated server-side via validateAnnouncementLink. */
 export interface AnnouncementLink {
   url: string;
   label: string;
@@ -28,8 +22,7 @@ export interface Officer {
   role: string;
   image: string | null;
   sortOrder: number;
-  /** Optional parent officer id for the org-chart hierarchy. Null = root.
-   *  Validated server-side (same year, no cycle) per 06 section 3. */
+
   reportsToId?: string | null;
 }
 

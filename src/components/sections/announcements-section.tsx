@@ -82,8 +82,6 @@ const EMPTY_DRAFT: AnnouncementDraft = {
   pinned: false,
 };
 
-/** Generate a stable client-side id for optimistic UI. The server may
- *  reassign on persist. Uses crypto.randomUUID when available. */
 function generateClientId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
@@ -100,21 +98,12 @@ export interface AnnouncementsSectionProps {
   onUpdate: (ann: Announcement) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<boolean>;
   syncStatus: SyncStatus;
-  /** Called when a card is clicked. If provided, opens the dedicated
-   *  announcement page view (blog-post feel) instead of the modal. */
+
   onOpen?: (ann: Announcement) => void;
-  /** Optional ref the parent can use to trigger edit from the dedicated view. */
+
   editRequestRef?: React.MutableRefObject<((ann: Announcement) => void) | null>;
 }
 
-/**
- * AnnouncementsSection - the full news feed section.
- *
- * Composes the toolbar (filter + post button), the collapsible admin
- * post/edit form, a featured lead story, the responsive grid, and pagination.
- * Card click opens the dedicated AnnouncementPost view (via onOpen) instead
- * of a modal, giving a blog-post reading experience.
- */
 export function AnnouncementsSection({
   announcements,
   isAdmin,
@@ -143,7 +132,6 @@ export function AnnouncementsSection({
 
   const isEditing = Boolean(draft.id);
 
-  // Sort: pinned always first, then by selected sort option.
   const sorted = React.useMemo(() => {
     return [...announcements].sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
@@ -186,7 +174,6 @@ export function AnnouncementsSection({
     setPage(1);
   }
 
-  // Featured lead = first pinned (or first overall), rest go to the grid.
   const featured = filtered[0] ?? null;
   const rest = filtered.slice(1);
 
@@ -201,9 +188,6 @@ export function AnnouncementsSection({
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  // When onOpen is provided, card clicks open the dedicated page view (blog
-  // post). Otherwise fall back to the in-section modal. Per the feature
-  // request: "instead of using modals" for reading full announcements.
   const openModal = React.useCallback(
     (ann: Announcement) => {
       if (onOpen) {
@@ -216,13 +200,10 @@ export function AnnouncementsSection({
     [onOpen],
   );
 
-  // Navigate to a different announcement within the modal (prev/next).
   const handleModalNavigate = React.useCallback((ann: Announcement) => {
     setModalAnn(ann);
   }, []);
 
-  // Wrap onDelete so the card/modal receive a Promise<void> (parent returns
-  // Promise<boolean> for success signalling, which we discard here).
   const handleCardDelete = React.useCallback(
     async (id: string) => {
       await onDelete(id);
@@ -252,8 +233,6 @@ export function AnnouncementsSection({
     setShowForm(true);
   }, []);
 
-  // Expose the edit handler via the parent-provided ref so the dedicated
-  // AnnouncementPost's Edit button can trigger this section's editor.
   React.useEffect(() => {
     if (!editRequestRef) return;
     editRequestRef.current = (ann: Announcement) => {
@@ -302,7 +281,6 @@ export function AnnouncementsSection({
       }
     }
 
-    // Validate links — filter out empty rows, validate each URL (06 §5).
     const cleanLinks = draft.links.filter((l) => l.url.trim());
     for (let i = 0; i < cleanLinks.length; i++) {
       const check = validateAnnouncementLink(

@@ -1,10 +1,6 @@
 import { db } from "./db";
 import { logger } from "./logger";
 
-/**
- * Log an admin action to the activity log.
- * Logs errors via structured logger (no longer silently swallowed).
- */
 export async function logActivity(params: {
   userId: string;
   action: "create" | "update" | "delete" | "login" | "logout";
@@ -14,7 +10,8 @@ export async function logActivity(params: {
     | "year"
     | "message"
     | "session"
-    | "upload";
+    | "upload"
+    | "integration";
   entityId?: string;
   summary: string;
 }): Promise<void> {

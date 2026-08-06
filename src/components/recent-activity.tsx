@@ -29,11 +29,6 @@ interface RecentActivityProps {
   onNav: (section: SectionKey) => void;
 }
 
-/**
- * RecentActivity - a compact feed of the latest 4 announcements,
- * shown on the home page below the hero. Each item is clickable and
- * navigates to the Announcements section.
- */
 export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
   const recent = React.useMemo(
     () =>

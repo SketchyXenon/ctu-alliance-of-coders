@@ -1,36 +1,8 @@
 // Prisma 7 configuration file.
-// Per Prisma 7: the datasource URL is no longer in the schema file. It lives
-// here (for CLI commands like db push, migrate) and is passed as an adapter
-// to PrismaClient (for runtime queries). See src/lib/db.ts for the runtime
-// adapter.
-//
-// This config defaults to the PostgreSQL production schema (schema.prisma).
-// For local SQLite dev, set DATABASE_URL=file:./db/custom.db and the
-// PRISMA_SCHEMA env var to prisma/schema.sqlite.prisma (or run db:push:sqlite).
-//
-// SUPABASE / PGBOUNCER: prisma db push and prisma migrate do NOT work through
-// PgBouncer transaction pooling (Supabase pooler port 6543). They require a
-// direct connection. Set DIRECT_URL to the direct connection string (port 5432)
-// in .env. This config prefers DIRECT_URL for CLI commands when set; falls back
-// to DATABASE_URL otherwise (SQLite dev, or non-pooled Postgres).
-//
-// RUNTIME: the app's PrismaClient adapter (src/lib/db.ts) reads DATABASE_URL
-// directly, NOT this config. So DATABASE_URL should point at the POOLED
-// connection for runtime; DIRECT_URL is used only for CLI migrations.
-//
-// Per 03-software-engineering.md section 6: fail fast with a clear message.
-// Per 02-system-design.md section 6: no unbounded waits (the pooler hang).
-
 import path from "node:path";
 import fs from "node:fs";
 import { defineConfig } from "@prisma/config";
 
-/**
- * Explicitly load .env from the project root into process.env.
- * The Prisma CLI may run in a context where .env isn't auto-loaded (e.g.,
- * `bunx prisma` on Windows). This ensures DATABASE_URL and DIRECT_URL are
- * available when the config file is evaluated. Per 03 section 6: fail fast.
- */
 function loadEnvFile(): void {
   let dir = process.cwd();
   for (let i = 0; i < 5; i++) {
@@ -62,11 +34,6 @@ function loadEnvFile(): void {
 
 loadEnvFile();
 
-// Pre-flight check: warn if DIRECT_URL uses Supabase's IPv6-only direct endpoint.
-// The direct endpoint (db.<ref>.supabase.co:5432) is unreachable from most IPv4
-// networks, causing P1001 errors on prisma db push / migrate. The session-mode
-// pooler (aws-<region>.pooler.supabase.com:5432) is the IPv4-friendly replacement.
-// Per 03 section 6: fail fast with a clear message (before the hang).
 function warnIfIpv6OnlyDirectUrl(): void {
   const directUrl = process.env.DIRECT_URL || "";
   if (directUrl && /db\.[a-z0-9]+\.supabase\.(co|in)/i.test(directUrl)) {
@@ -83,7 +50,6 @@ function warnIfIpv6OnlyDirectUrl(): void {
 
 warnIfIpv6OnlyDirectUrl();
 
-// Select schema based on DATABASE_URL scheme or PRISMA_SCHEMA override.
 function resolveSchema(): string {
   const override = process.env.PRISMA_SCHEMA;
   if (override) return override;
@@ -95,10 +61,6 @@ function resolveSchema(): string {
   return path.join("prisma", "schema.prisma");
 }
 
-// CLI datasource URL: prefer DIRECT_URL (for Supabase/Postgres pooled setups
-// where db push/migrate can't go through PgBouncer). Fall back to DATABASE_URL
-// for SQLite dev or non-pooled Postgres. Runtime queries do NOT use this value
-// (they use DATABASE_URL directly via the adapter in src/lib/db.ts).
 const cliDatasourceUrl = process.env.DIRECT_URL || process.env.DATABASE_URL;
 
 export default defineConfig({

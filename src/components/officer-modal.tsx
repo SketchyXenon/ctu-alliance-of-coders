@@ -31,23 +31,14 @@ interface OfficerModalProps {
   officer: Officer | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Academic year label the officer served (e.g. "2024-2025"). */
+
   yearLabel?: string;
-  /** Full ordered list of officers (enables prev/next navigation). */
+
   list?: Officer[];
-  /** Called when the user navigates to a different officer in the list. */
+
   onNavigate?: (officer: Officer) => void;
 }
 
-/** Role-to-icon matching lives in the RoleIcon component below (kept inline
- *  so the react-hooks/static-components lint rule is satisfied). */
-
-/**
- * OfficerModal - detail view for a single officer.
- * Shows large avatar, name, role icon, year served, and a generated bio.
- * Supports prev/next navigation when a list is provided (parity with
- * the announcement modal).
- */
 export function OfficerModal({
   officer,
   open,
@@ -56,14 +47,14 @@ export function OfficerModal({
   list,
   onNavigate,
 }: OfficerModalProps) {
-  // Compute current index for prev/next navigation.
   const hasList = Boolean(list && list.length > 1);
   const currentIndex = React.useMemo(() => {
     if (!officer || !list) return -1;
     return list.findIndex((o) => o.id === officer.id);
   }, [officer, list]);
   const canPrev = hasList && currentIndex > 0;
-  const canNext = hasList && currentIndex >= 0 && currentIndex < (list!.length - 1);
+  const canNext =
+    hasList && currentIndex >= 0 && currentIndex < list!.length - 1;
 
   const goPrev = React.useCallback(() => {
     if (canPrev && list && onNavigate) onNavigate(list[currentIndex - 1]);
@@ -73,7 +64,6 @@ export function OfficerModal({
     if (canNext && list && onNavigate) onNavigate(list[currentIndex + 1]);
   }, [canNext, list, currentIndex, onNavigate]);
 
-  // Keyboard navigation: ArrowLeft/ArrowRight.
   React.useEffect(() => {
     if (!open || !hasList) return;
     function onKey(e: KeyboardEvent) {
@@ -89,7 +79,10 @@ export function OfficerModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, hasList, goPrev, goNext]);
 
-  const position = hasList && currentIndex >= 0 ? `${currentIndex + 1} / ${list!.length}` : null;
+  const position =
+    hasList && currentIndex >= 0
+      ? `${currentIndex + 1} / ${list!.length}`
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,7 +102,9 @@ export function OfficerModal({
             onClose={() => onOpenChange(false)}
           />
         ) : (
-          <div className="p-6 text-sm text-muted-foreground">No officer selected.</div>
+          <div className="p-6 text-sm text-muted-foreground">
+            No officer selected.
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -209,7 +204,10 @@ function OfficerModalBody({
         {/* Year served chip */}
         {yearLabel && (
           <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5 text-gold-500" aria-hidden="true" />
+            <Calendar
+              className="h-3.5 w-3.5 text-gold-500"
+              aria-hidden="true"
+            />
             <span>Served academic year</span>
             <span className="font-semibold text-foreground">{yearLabel}</span>
           </div>
@@ -317,15 +315,18 @@ function getRoleDescription(role: string): string {
   return "A dedicated member of the Alliance of Coders leadership team, contributing to the organization's mission of building the future one commit at a time.";
 }
 
-/** Renders the Lucide icon matching an officer role. Each icon is referenced
- *  from a static module-level map so the react-hooks/static-components lint
- *  rule is satisfied (no component is created during render). */
 function RoleIcon({ role }: { role: string }) {
-  if (/president|vice/i.test(role)) return <Award className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (/secretary|audit/i.test(role)) return <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (/treasurer/i.test(role)) return <Wallet className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (/pro|public|relations/i.test(role)) return <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (/technical|tech/i.test(role)) return <Code2 className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (/event/i.test(role)) return <Calendar className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (/president|vice/i.test(role))
+    return <Award className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (/secretary|audit/i.test(role))
+    return <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (/treasurer/i.test(role))
+    return <Wallet className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (/pro|public|relations/i.test(role))
+    return <Megaphone className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (/technical|tech/i.test(role))
+    return <Code2 className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (/event/i.test(role))
+    return <Calendar className="h-3.5 w-3.5" aria-hidden="true" />;
   return <Briefcase className="h-3.5 w-3.5" aria-hidden="true" />;
 }

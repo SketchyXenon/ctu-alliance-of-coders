@@ -616,11 +616,6 @@
   }
 }
 
-/* Officer org-chart - connector color hook (adapts to light/dark via --border).
-   React Flow (@xyflow/react) theme variables are set inline on the container
-   in officer-org-chart.tsx (NOT here) because Tailwind v4 / Lightning CSS
-   strips unreferenced --xy-* custom properties during CSS minification. Inline
-   styles bypass the compiler and reach the DOM directly. See officer-org-chart.tsx. */
 .officer-org-chart {
   --org-chart-line: var(--border);
 }

@@ -1,22 +1,7 @@
-// Prisma 7 client with runtime adapter selection.
-// Prisma 7 requires passing a database adapter to PrismaClient instead of
-// reading DATABASE_URL from the schema. This module detects the DATABASE_URL
-// scheme and selects the right adapter:
-//   - file:*        -> @prisma/adapter-better-sqlite3 (dev)
-//   - postgresql:// -> @prisma/adapter-pg (prod)
-// Per 02-system-design.md section 6: "Assume every dependency will fail, and
-// design for it." Per 03 section 6: fail fast with a clear message.
-
 import { PrismaClient } from "@prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { PrismaPg } from "@prisma/adapter-pg";
 
-/**
- * Warn if DATABASE_URL uses Supabase's DIRECT connection endpoint.
- * Supabase's direct URL (db.<ref>.supabase.co:5432) is IPv6-only and
- * unreachable from Vercel serverless. Use the Transaction mode pooler
- * (port 6543) instead. Per 02 section 6 and 03 section 6.
- */
 function validateConnectionString(): void {
   const url = process.env.DATABASE_URL || "";
   if (!url) return;
@@ -43,11 +28,6 @@ function validateConnectionString(): void {
   }
 }
 
-/**
- * Create a PrismaClient with the adapter matching the DATABASE_URL scheme.
- * Prisma 7 requires the adapter at construction time. Both adapter
- * constructors are synchronous, so this function is synchronous.
- */
 function createClient(): PrismaClient {
   validateConnectionString();
 
@@ -59,13 +39,11 @@ function createClient(): PrismaClient {
     );
   }
 
-  // SQLite: file:./db/custom.db
   if (url.startsWith("file:")) {
     const adapter = new PrismaBetterSqlite3({ url });
     return new PrismaClient({ adapter });
   }
 
-  // PostgreSQL: postgresql:// or postgres://
   if (url.startsWith("postgresql://") || url.startsWith("postgres://")) {
     const adapter = new PrismaPg({ connectionString: url });
     return new PrismaClient({ adapter });
@@ -76,12 +54,6 @@ function createClient(): PrismaClient {
   );
 }
 
-/**
- * Wrap a DB operation with retry + exponential backoff + jitter.
- * Per 02-system-design.md section 6: "Retries with exponential backoff and
- * jitter for transient failures." Serverless cold starts and pool warmups
- * can cause transient connection failures on the first attempt.
- */
 export async function withDbRetry<T>(
   fn: () => Promise<T>,
   opts: { retries?: number; baseDelayMs?: number } = {},
@@ -116,7 +88,6 @@ export async function withDbRetry<T>(
   throw lastError;
 }
 
-// Lazy singleton: create on first access, reuse for all subsequent requests.
 let _db: PrismaClient | null = null;
 
 function getDb(): PrismaClient {
@@ -126,9 +97,6 @@ function getDb(): PrismaClient {
   return _db;
 }
 
-// Export the client. PrismaClient is constructed lazily on first property
-// access via a getter, so module import doesn't trigger DB connection.
-// This keeps `next build` working when DATABASE_URL isn't set yet.
 export const db = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
     const client = getDb();

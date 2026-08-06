@@ -19,14 +19,6 @@ import { usePageStore } from "@/lib/store";
 import type { SectionKey } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-/**
- * SiteNav - sticky primary navigation for the Alliance of Coders site.
- *
- * Single-page section model: nav links call `setActiveNav` on the Zustand
- * page store rather than routing. The Admin Panel link surfaces a green
- * "session active" dot when the visitor is signed in as admin, plus a
- * numeric badge for pending contact messages (capped at "9+").
- */
 export function SiteNav() {
   const { activeNav, setActiveNav, isAdmin, pendingMessages } = usePageStore(
     useShallow((s) => ({
@@ -78,10 +70,7 @@ export function SiteNav() {
             "focus-visible:bg-transparent focus-visible:text-foreground",
           )}
         >
-          <GearLogo
-            size={36}
-            spinOnHover
-          />
+          <GearLogo size={36} spinOnHover />
           <span className="flex flex-col items-start leading-tight">
             <span className="font-display text-base font-bold tracking-tight text-foreground">
               Alliance of Coders
@@ -137,7 +126,9 @@ export function SiteNav() {
                   aria-hidden="true"
                   className={cn(
                     "pointer-events-none absolute inset-x-3 bottom-1 h-0.5 origin-left rounded-full bg-gold-500 transition-transform duration-200 ease-out",
-                    isActive ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100",
+                    isActive
+                      ? "scale-x-100"
+                      : "scale-x-0 group-hover:scale-x-100",
                   )}
                 />
               </Button>
@@ -149,7 +140,9 @@ export function SiteNav() {
             size="sm"
             onClick={() => {
               // Dispatch a custom event the page listens for.
-              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
+              window.dispatchEvent(
+                new KeyboardEvent("keydown", { key: "k", metaKey: true }),
+              );
             }}
             className="ml-2 hidden items-center gap-2 text-muted-foreground lg:inline-flex"
             aria-label="Open command palette"
@@ -182,9 +175,7 @@ export function SiteNav() {
           />
         </div>
 
-        {/* Mobile hamburger + theme toggle */}
         <div className="flex items-center gap-1 md:hidden">
-          {/* Theme toggle icon in header (05 §4: visible without opening menu) */}
           <ThemeToggle
             mounted={mounted}
             isDark={isDark}
@@ -284,13 +275,6 @@ interface ThemeToggleProps {
   iconOnly?: boolean;
 }
 
-/**
- * ThemeToggle - accessible light/dark switch using next-themes.
- * Renders a stable placeholder until mounted to avoid hydration mismatch
- * (server has no knowledge of the user's resolved theme).
- * - `full`: wide button with label (used in mobile Sheet, now removed).
- * - `iconOnly`: compact icon button for the mobile header bar (05 §4).
- */
 function ThemeToggle({
   mounted,
   isDark,

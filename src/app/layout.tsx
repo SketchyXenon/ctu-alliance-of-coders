@@ -25,8 +25,6 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
-// Single source of truth: siteUrl comes from NEXT_PUBLIC_SITE_URL env var
-// (via siteConfig). Falls back to localhost:3000 in dev. Per Z.md + 03 §1 (DRY).
 const siteUrl = siteConfig.url;
 
 export const metadata: Metadata = {
@@ -108,7 +106,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <script
-          // Prevent theme flash: set the class before hydration.
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('aoc-theme-v1');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(!t&&m)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
           }}
@@ -118,7 +115,7 @@ export default function RootLayout({
             __html: JSON.stringify(orgJsonLd).replace(/</g, "\\u003c"),
           }}
         />
-        {/* LLM crawler guide (llms.txt standard). Per 05-ui-ux-design.md section 8. */}
+
         <link rel="llms.txt" href="/llms.txt" />
       </head>
       <body

@@ -8,31 +8,25 @@ interface RequestContext {
 
 const requestContext = new AsyncLocalStorage<RequestContext>();
 
-/**
- * Generate a new request ID (UUID v4).
- * Uses Web Crypto API (available in both Node.js and Edge runtime).
- */
 export function generateRequestId(): string {
   return crypto.randomUUID();
 }
 
-/**
- * Run a function with a request context (for log correlation).
- */
 export function runWithContext<T>(ctx: RequestContext, fn: () => T): T {
   return requestContext.run(ctx, fn);
 }
 
-/**
- * Get the current request context (for child loggers).
- */
 export function getContext(): RequestContext | undefined {
   return requestContext.getStore();
 }
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
-function formatLog(level: LogLevel, msg: string, meta?: Record<string, unknown>) {
+function formatLog(
+  level: LogLevel,
+  msg: string,
+  meta?: Record<string, unknown>,
+) {
   const ctx = getContext();
   const entry: Record<string, unknown> = {
     level,
@@ -46,10 +40,6 @@ function formatLog(level: LogLevel, msg: string, meta?: Record<string, unknown>)
   return entry;
 }
 
-/**
- * Structured logger - JSON in production, readable in dev.
- * Request-scoped via AsyncLocalStorage for correlation.
- */
 export const logger = {
   debug(msg: string, meta?: Record<string, unknown>) {
     if (process.env.NODE_ENV !== "production") {

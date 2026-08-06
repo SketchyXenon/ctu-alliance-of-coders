@@ -60,14 +60,6 @@ function splitParagraphs(body: string): string[] {
     .filter(Boolean);
 }
 
-/**
- * AnnouncementModal - full-screen reader for a single announcement.
- *
- * Renders inside a shadcn Dialog (Radix). The Dialog handles focus trap and
- * Escape-to-close. We just provide the layout: optional image hero, meta row
- * + title, paragraph body (scrollable), and a footer with close + admin
- * actions.
- */
 export function AnnouncementModal({
   ann,
   open,
@@ -80,12 +72,10 @@ export function AnnouncementModal({
 }: AnnouncementModalProps) {
   const [deleting, setDeleting] = React.useState(false);
 
-  // Reset the deleting flag whenever the modal closes so reopens start fresh.
   React.useEffect(() => {
     if (!open) setDeleting(false);
   }, [open]);
 
-  // Compute current index in the optional list (for prev/next navigation).
   const hasList = Boolean(list && list.length > 1);
   const currentIndex = React.useMemo(() => {
     if (!ann || !list) return -1;
@@ -107,7 +97,6 @@ export function AnnouncementModal({
     }
   }, [canNext, list, currentIndex, onNavigate]);
 
-  // Keyboard navigation: ArrowLeft/ArrowRight to move between announcements.
   React.useEffect(() => {
     if (!open || !hasList) return;
     function onKey(e: KeyboardEvent) {
@@ -220,17 +209,13 @@ function AnnouncementModalBody({
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch {
-        // User cancelled - no action needed.
-      }
+      } catch {}
     } else if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
         await navigator.clipboard.writeText(`${ann.title}\n${shareUrl}`);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 2000);
-      } catch {
-        // Clipboard API not available.
-      }
+      } catch {}
     }
   }
 
@@ -308,10 +293,6 @@ function AnnouncementModalBody({
               {p}
             </p>
           ))}
-
-          {/* Specialized links — displayed as a list with external-link icons.
-              Per 05-ui-ux-design.md §5: icon supports a label, doesn't replace
-              it. Per 06 §5: URLs are http/https only (validated server-side). */}
           {ann.links && ann.links.length > 0 && (
             <div className="space-y-2 border-t pt-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">

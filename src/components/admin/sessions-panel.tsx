@@ -69,11 +69,7 @@ export function SessionsPanel() {
     if (others.length === 0) return;
     setRevokingAll(true);
     setBulkError(null);
-    // Revoke in parallel; only drop the sessions that actually deleted.
-    // C1 fix: previously ALL others were removed from local state regardless
-    // of whether each DELETE succeeded — a network blip left dead sessions
-    // visible as "revoked" while they stayed alive server-side. Per 03 §6:
-    // never swallow an exception silently; per 05 §6: status must match reality.
+
     const results = await Promise.allSettled(
       others.map((s) => api.delete(`/api/sessions/${s.id}`)),
     );
@@ -96,8 +92,6 @@ export function SessionsPanel() {
       );
     }
     if (failedCount > 0) {
-      // Some revokes failed — reload to reflect true server state, and surface
-      // the failure so the admin knows those sessions may still be active.
       setBulkError(
         failedCount === others.length
           ? "Failed to revoke any sessions. They may still be active."
@@ -173,9 +167,6 @@ export function SessionsPanel() {
         )}
       </div>
 
-      {/* C1: inline error banner for partial/total bulk-revoke failure.
-          Per 05-ui-ux-design.md §6: persistent system-level state uses an
-          inline banner; per §6 copy: state what happened and what to do next. */}
       {bulkError && (
         <div
           role="alert"
@@ -199,7 +190,6 @@ export function SessionsPanel() {
 
       <ul className="space-y-2">
         {sessions.map((session) => {
-          // Rotate device icon by session index for visual variety.
           const DeviceIcon = session.isCurrent
             ? ShieldCheck
             : ([Monitor, Smartphone, Tablet, Monitor][
@@ -269,10 +259,6 @@ export function SessionsPanel() {
         })}
       </ul>
 
-      {/* Strict double confirmation per 05-ui-ux-design.md section 6: revoking
-          a session signs out that device immediately. The admin must type
-          REVOKE to arm the button so a stray click or Enter can't sign out a
-          real user. */}
       <ConfirmDialog
         open={confirmSession !== null}
         onOpenChange={(open) => {

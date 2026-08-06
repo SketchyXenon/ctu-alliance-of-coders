@@ -19,20 +19,6 @@ import { cookies } from "next/headers";
 const MIN_PASSWORD = 8;
 const MAX_PASSWORD = 128;
 
-/**
- * POST /api/auth/change-password - admin changes own password.
- * Rotates session ID and revokes all other sessions.
- *
- * Per 06-security-architecture.md section 2: rotate the session identifier on
- * any privilege change. Per 02 section 6: atomic operations to close TOCTOU.
- * Per A2/A8 fix: the password update and the "revoke other sessions" delete
- * run in a SINGLE transaction (atomic — either both land or neither does),
- * and rotateSession throws SessionNotFoundError if the session was concurrently
- * revoked, so we return 401 (fail closed) instead of 200 with a stale cookie.
- *
- * Wrapped in withPrismaError so a race in rotateSession (P2025) returns a
- * clean error instead of a raw 500 with the password already changed (M6).
- */
 export const POST = withPrismaError(async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
@@ -66,8 +52,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Validate current and new passwords WITHOUT display-field XSS blocklists
-  // (S2: strong passwords may legitimately contain "<script" etc.).
   const currentCheck = validatePassword(body.currentPassword, {
     minLen: 1,
     maxLen: MAX_PASSWORD,
@@ -125,9 +109,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Single transaction: password update + revoke all other sessions.
-  // Atomic (A2 fix): if either fails, NEITHER lands, so we never end up with
-  // a changed password but live other-sessions, or vice-versa. Per 02 section 6.
   const newHash = await hashPassword(newPassword);
   const store = await cookies();
   const currentSessionId = store.get(SESSION_COOKIE)?.value;
@@ -144,14 +125,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     }
   });
 
-  // Rotate the current session id (separate — sets a cookie, can't be inside
-  // the DB transaction cleanly). If rotateSession throws (SessionNotFoundError
-  // OR a transient Prisma error), the password + revocation above already
-  // succeeded (security maintained), so we tell the user to re-login rather
-  // than returning 200 with a stale cookie (A2 fail-closed fix) or letting
-  // withPrismaError surface a misleading 500 after a successful password
-  // change (audit finding: A10 mishandled exceptional conditions). Per 06 §1:
-  // fail closed; per 03 §6: never swallow an exception silently — log it.
   if (currentSessionId) {
     try {
       await rotateSession(currentSessionId);

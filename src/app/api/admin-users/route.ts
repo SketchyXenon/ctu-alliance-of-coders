@@ -6,14 +6,6 @@ import { withPrismaError } from "@/lib/route-helpers";
 import { logActivity } from "@/lib/activity";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 
-/**
- * GET /api/admin-users - admin only, lists all admin accounts.
- *
- * Returns each admin's id, email, name, role, createdAt, and lastActiveAt
- * (derived from the most recent session). NEVER returns password hashes.
- * Per 06 section 3: function-level authz (requireAdmin) + per 06 section 8:
- * data minimization (no passwordHash in the response).
- */
 export const GET = withPrismaError(async function GET() {
   let user;
   try {
@@ -39,8 +31,6 @@ export const GET = withPrismaError(async function GET() {
     );
   }
 
-  // Fetch all admin users + their most recent session (for last-active).
-  // Per 06 section 8: select only the columns we need; never passwordHash.
   const admins = await db.adminUser.findMany({
     orderBy: { createdAt: "asc" },
     select: {
@@ -75,7 +65,7 @@ export const GET = withPrismaError(async function GET() {
 
   await logActivity({
     userId: user.id,
-    action: "login", // reuses the "view" semantic; the activity log is admin-audited
+    action: "login",
     entity: "session",
     summary: `Viewed admin users list (${items.length} accounts)`,
   });

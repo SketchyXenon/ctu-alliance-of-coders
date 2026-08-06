@@ -2,11 +2,6 @@
 
 import * as React from "react";
 
-/**
- * useCommandPaletteShortcut - listens for Cmd+K / Ctrl+K globally.
- * Works even when focus is in an input (unlike the number shortcuts).
- * Toggles the `onToggle` callback.
- */
 export function useCommandPaletteShortcut(onToggle: () => void) {
   const callbackRef = React.useRef(onToggle);
 

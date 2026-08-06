@@ -13,11 +13,6 @@ interface FeaturedOfficersProps {
   onNav: (section: SectionKey) => void;
 }
 
-/**
- * FeaturedOfficers - highlights the current leadership team on the home page.
- * Shows the latest year's theme + a compact grid of key officers (President,
- * VP, Secretary, Treasurer). Each card shows avatar initials + name + role.
- */
 export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
   const latestYear = React.useMemo(() => {
     if (adminYears.length === 0) return null;
@@ -27,7 +22,6 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
     return sorted[0];
   }, [adminYears]);
 
-  // Pick the 4 key roles to highlight. Use exact match to avoid VP matching President.
   const keyRoles = React.useMemo(() => {
     if (!latestYear) return [];
     const rolePriority = [
@@ -49,7 +43,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
         seen.add(officer.id);
       }
     }
-    // Fill remaining slots with other officers if we have fewer than 4.
+
     if (result.length < 4) {
       for (const officer of latestYear.officers) {
         if (result.length >= 4) break;

@@ -28,21 +28,12 @@ import { usePageStore } from "@/lib/store";
 import type { SectionKey } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-/**
- * Icon registry mapping each social icon name to a Lucide component.
- * Resolves the string icon names from getSocialLinks() to components.
- */
 const SOCIAL_ICONS: Record<string, LucideIcon> = {
   Facebook,
   Github,
   Mail,
 };
 
-/**
- * Icon registry mapping each section key to a Lucide icon.
- * Kept here (not in constants.ts) because only the footer surfaces these
- * icons today; the nav uses pure text + underline indicator.
- */
 const NAV_ICONS: Partial<Record<SectionKey, LucideIcon>> = {
   Home: Home,
   Announcements: Megaphone,
@@ -52,10 +43,6 @@ const NAV_ICONS: Partial<Record<SectionKey, LucideIcon>> = {
   "Admin Panel": LayoutDashboard,
 };
 
-/**
- * Policy icon registry. The `icon` field on POLICY_PAGES is a string
- * (kept serializable in constants.ts), so we resolve it to a component here.
- */
 const POLICY_ICONS: Record<string, LucideIcon> = {
   ShieldCheck,
   Database,
@@ -63,13 +50,6 @@ const POLICY_ICONS: Record<string, LucideIcon> = {
   Cookie,
 };
 
-/**
- * SiteFooter - site-wide footer with brand, quick links, socials, and policies.
- *
- * The root <footer> uses `mt-auto` so that when the page wrapper is
- * `min-h-screen flex flex-col`, this footer pins to the viewport bottom on
- * short pages and stacks naturally after long content.
- */
 export function SiteFooter() {
   const setActiveNav = usePageStore((s) => s.setActiveNav);
   const year = React.useMemo(() => new Date().getFullYear(), []);
@@ -147,7 +127,11 @@ export function SiteFooter() {
                     <li key={social.key}>
                       <a
                         href={social.href ?? "#"}
-                        target={social.href?.startsWith("mailto:") ? "_self" : "_blank"}
+                        target={
+                          social.href?.startsWith("mailto:")
+                            ? "_self"
+                            : "_blank"
+                        }
                         rel="noopener noreferrer"
                         className={cn(
                           "group flex h-9 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm font-medium",
@@ -222,10 +206,7 @@ interface FooterHeadingProps {
 function FooterHeading({ icon: Icon, children }: FooterHeadingProps) {
   return (
     <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
-      <Icon
-        className="size-4 text-gold-500"
-        aria-hidden="true"
-      />
+      <Icon className="size-4 text-gold-500" aria-hidden="true" />
       {children}
     </h3>
   );

@@ -1,13 +1,3 @@
-// Centralized environment variable validation.
-// Per 06-security-architecture.md: secrets in env, validated at startup.
-// Per 03-software-engineering.md: fail fast and loud on misconfiguration.
-//
-// Production requires Supabase for image storage (officer photos +
-// announcement images). The upload route (src/lib/upload.ts) uses Supabase
-// Storage when configured, falling back to local fs in dev. In prod, the
-// Supabase env vars are mandatory so uploads don't silently fall back to
-// a local fs that doesn't persist across serverless instances.
-
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -16,13 +6,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_FACEBOOK_URL: z.string().url().optional().or(z.literal("")),
   NEXT_PUBLIC_GITHUB_URL: z.string().url().optional().or(z.literal("")),
   NEXT_PUBLIC_CONTACT_EMAIL: z.string().optional().or(z.literal("")),
-  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional().or(z.literal("")),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
-  // Cloudflare Turnstile was removed — bot protection is now handled by
-  // Vercel Firewall at the edge (no client-side gate, no server secrets).
-  // Per 06 §3: the edge firewall is the bot gate; server routes keep per-IP
-  // rate limiting as defense in depth.
   NEXT_PUBLIC_TURNSTILE_SITE_KEY: z.string().optional(),
   TURNSTILE_SECRET_KEY: z.string().optional(),
   NODE_ENV: z
@@ -34,10 +20,6 @@ export type Env = z.infer<typeof envSchema>;
 
 let cached: Env | null = null;
 
-/**
- * Validated env vars. Throws with a clear message on first invalid access.
- * Safe to call at runtime; not called at build time.
- */
 export function getEnv(): Env {
   if (cached) return cached;
 
@@ -50,11 +32,6 @@ export function getEnv(): Env {
       `Environment validation failed:\n${issues}\n\nCheck .env or Vercel settings.`,
     );
   }
-
-  // Production requires Supabase for image storage. Per 03 section 6: fail
-  // fast — a prod deploy without Supabase would silently fall back to local
-  // fs, which doesn't persist across serverless instances. Better to refuse
-  // to start than to silently lose uploads.
   if (parsed.data.NODE_ENV === "production") {
     const missing: string[] = [];
     if (!parsed.data.NEXT_PUBLIC_SUPABASE_URL)

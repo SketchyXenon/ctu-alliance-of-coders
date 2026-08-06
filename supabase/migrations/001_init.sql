@@ -2,38 +2,9 @@
 --
 -- This is the consolidated, final-state schema for the Supabase Postgres
 -- database. It replaces the previous seven incremental migrations
--- (20260721..20260801). It mirrors prisma/schema.prisma column-for-column
+-- (001). It mirrors prisma/schema.prisma column-for-column
 -- and index-for-index, so `prisma db push` reports zero drift after it runs.
---
--- DESIGN NOTES
---   - Auth model: the app uses a custom cookie-session system (AdminUser +
---     AdminSession Prisma models) and talks to Supabase ONLY through the
---     service-role key, which bypasses RLS entirely (ADR-0001, ADR-0003).
---     RLS is therefore defense-in-depth, not a primary control. Per
---     06 section 1: a layer never exercised may rot; we keep it enabled
---     (Supabase linter requires it) with minimal, documented policies.
---   - Storage: officer-photos + announcement-images buckets are PUBLIC
---     (public: true). The app stores getPublicUrl() CDN URLs in the DB and
---     renders them via raw <img>. Public buckets serve the CDN URL without
---     an RLS policy, so NO storage.objects SELECT policy is defined (a broad
---     SELECT policy would enable object LISTING — the linter warns on this).
---     Admin uploads use the service-role key (bypasses RLS for writes).
---   - No profiles table, no handle_new_user trigger, no auth.uid()-based
---     policies: those were dead code from the Supabase-Auth era, removed
---     per ADR-0003.
---   - updated_at triggers keep the timestamp in sync (Prisma's @updatedAt
---     also does this client-side, but the trigger is the server-side truth).
---
--- IDEMPOTENT: safe to run multiple times (every statement uses IF NOT EXISTS
--- or DROP IF EXISTS first). On a DB that already has the old migrations
--- applied, this file is a no-op net (it reconstructs the same final state).
--- Per 03 section 6: fail safe. Per 06 section 8: data minimization.
-
--- ============================================================================
--- EXTENSIONS
--- ============================================================================
-
-create extension if not exists "uuid-ossp";
+--create extension if not exists "uuid-ossp";
 create extension if not exists "pgcrypto";
 
 -- ============================================================================
@@ -187,11 +158,7 @@ create index if not exists idx_page_views_visitor     on public.page_views(visit
 -- ============================================================================
 -- ROW LEVEL SECURITY (defense-in-depth; app uses service-role key)
 -- ============================================================================
--- RLS is enabled on every table (Supabase linter requires it). Policies are
--- minimal: public read on public-facing tables, public insert on the contact
--- form, and NO policies on admin-only tables (service role bypasses RLS, so
--- the app works; anon/authenticated access is denied by default = fail
--- closed). Per 06 section 3: default deny.
+
 
 alter table public.announcements    enable row level security;
 alter table public.admin_years      enable row level security;
@@ -208,8 +175,7 @@ drop policy if exists "Admin years public read"        on public.admin_years;
 drop policy if exists "Officers public read"           on public.officers;
 drop policy if exists "Contact messages public insert" on public.contact_messages;
 
--- Public read on public-facing tables (defense-in-depth; the app reads these
--- via the service role, but if anon access is ever wired in, these allow it).
+
 create policy "Announcements public read"
   on public.announcements for select using (true);
 create policy "Admin years public read"

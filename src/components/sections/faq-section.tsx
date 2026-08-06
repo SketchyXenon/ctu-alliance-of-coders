@@ -16,11 +16,6 @@ interface FAQItem {
   answer: string;
 }
 
-/**
- * FAQ items. The primary question ("Why was this website created?") is listed
- * first - it's the core purpose statement. Per 05-ui-ux-design.md section 8:
- * FAQ content supports FAQPage structured data (added in layout.tsx).
- */
 const FAQ_ITEMS: FAQItem[] = [
   {
     question: "Why was this website created?",
@@ -54,11 +49,6 @@ const FAQ_ITEMS: FAQItem[] = [
   },
 ];
 
-/**
- * FaqSection - accordion-style frequently asked questions.
- * Uses the shadcn/ui Accordion (Radix-based) for accessible expand/collapse.
- * Per 05 §4: semantic HTML, keyboard accessible, full state set.
- */
 export function FaqSection() {
   return (
     <section

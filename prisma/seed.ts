@@ -150,7 +150,6 @@ async function main() {
   }
 
   // No demo admin account in seed. Use `bun run bootstrap` to create the
-  // first admin interactively (see scripts/bootstrap-admin.ts).
 
   console.info("Seed complete.");
   console.info(

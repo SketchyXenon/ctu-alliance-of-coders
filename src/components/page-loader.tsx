@@ -12,7 +12,6 @@ interface PageLoaderProps {
   className?: string;
 }
 
-// ClockLoader: clock metaphor suits a loading wait; single-color ring fits the navy/gold system.
 export function PageLoader({
   title = "Loading",
   description = "",
@@ -27,7 +26,7 @@ export function PageLoader({
       className={cn(
         "flex items-center justify-center bg-background",
         variant === "fullscreen" ? "min-h-screen" : "min-h-[40vh]",
-        className
+        className,
       )}
       role="status"
       aria-live="polite"
@@ -36,7 +35,6 @@ export function PageLoader({
       aria-describedby={descriptionId}
     >
       <div className="flex flex-col items-center gap-5 px-6 text-center">
-        {/* react-spinners renders inline-styled spans; reduced-motion override in globals.css targets them via .page-loader-spinner. */}
         <div className="page-loader-spinner" aria-hidden="true">
           <ClockLoader color="var(--gold-500)" size={56} />
         </div>

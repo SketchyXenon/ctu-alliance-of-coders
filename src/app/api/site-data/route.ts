@@ -4,21 +4,10 @@ import { logger } from "@/lib/logger";
 import { parseLinks } from "@/lib/announcements";
 import type { Announcement, AdminYear, SiteData } from "@/lib/types";
 
-// Force dynamic: never prerender this route at build time. The route queries
-// the database, which is unreachable during the Vercel build (Supabase may be
-// sleeping, or the build sandbox has no DB access). CDN-level caching is
-// provided by the Cache-Control header below (s-maxage + stale-while-revalidate),
-// which gives the same caching behavior as ISR without requiring a DB connection
-// at build time. Per 02-system-design.md section 6 (graceful degradation).
 export const dynamic = "force-dynamic";
 
-/** GET /api/site-data - public, returns all announcements + officer years.
- *  Graceful degradation: if the DB is unreachable, returns empty arrays with
- *  a 200 so the page renders with empty states instead of crashing (02 §6). */
 export async function GET() {
   try {
-    // withDbRetry: retry on transient connection failures (serverless cold
-    // start, Supabase pooler warmup). Per 02 section 6: retries with backoff.
     const [annRows, yearRows] = await Promise.all([
       withDbRetry(() =>
         db.announcement.findMany({
@@ -73,14 +62,12 @@ export async function GET() {
     );
     return res;
   } catch (e) {
-    // DB unreachable: return empty data so the page renders with empty states.
-    // Per 02 section 6: "a partial result beats a hard failure."
     logger.warn("site-data DB query failed, returning empty data", {
       error: String(e),
     });
     const empty: SiteData = { announcements: [], adminYears: [] };
     const res = NextResponse.json({ data: empty });
-    // Short cache so clients retry quickly when the DB recovers.
+
     res.headers.set("Cache-Control", "public, max-age=10");
     return res;
   }

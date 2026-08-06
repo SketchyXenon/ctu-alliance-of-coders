@@ -21,7 +21,6 @@ export async function hashPassword(password: string): Promise<string> {
   return `${salt}:${hash.toString("hex")}`;
 }
 
-/** Verify a password against a stored salt:hash string. Constant-time. */
 export async function verifyPassword(
   password: string,
   stored: string,
@@ -38,11 +37,6 @@ export async function verifyPassword(
   }
 }
 
-/** Create a new session for a user, enforcing a max-sessions cap.
- *  Wrapped in a transaction to close the TOCTOU race where two concurrent
- *  logins could each see < cap and each create a session (M2 fix).
- *  Uses crypto.randomUUID() for the session id so it works with both the
- *  SQLite dev schema (String id) and the Postgres prod schema (UUID id). */
 export async function createSession(userId: string): Promise<string> {
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -80,7 +74,6 @@ export async function createSession(userId: string): Promise<string> {
   return sessionId;
 }
 
-/** Destroy the current session (logout). */
 export async function destroySession(): Promise<void> {
   const store = await cookies();
   const sessionId = store.get(SESSION_COOKIE)?.value;
@@ -94,11 +87,6 @@ export async function destroySession(): Promise<void> {
   }
 }
 
-/** Thrown by rotateSession when the current session no longer exists (e.g. it
- *  was concurrently revoked between the auth check and the rotation). Per
- *  06-security-architecture.md section 2: rotate on privilege change. Per
- *  03 section 6: fail fast and loud — the caller MUST NOT return success with
- *  a stale cookie (the A2 silent-fail bug). */
 export class SessionNotFoundError extends Error {
   constructor(message = "Session not found during rotation.") {
     super(message);
@@ -106,30 +94,15 @@ export class SessionNotFoundError extends Error {
   }
 }
 
-/** Rotate the current session ID (for privilege changes). Preserves expiry.
- *  Uses crypto.randomUUID() for the new id (UUID type in prod).
- *  Wrapped in a transaction to close the TOCTOU race between findUnique and
- *  update (A07-1 fix). Per 06 section 2: rotate on privilege change.
- *  Per 06 section 11: never log the raw session token (A04-2/A09-2 fix).
- *  Per A2 fix: throws SessionNotFoundError when the session was concurrently
- *  revoked, so the caller fails closed instead of returning 200 with a stale
- *  cookie. */
 export async function rotateSession(currentSessionId: string): Promise<void> {
   const newId = crypto.randomUUID();
-  // Transaction: close the TOCTOU window where a concurrent session revoke
-  // could delete the session between our findUnique and our update.
-  // Per 02 section 6: "Atomic operations, database-level constraints/locks."
-  // Throws SessionNotFoundError (rolling back the no-op transaction) if the
-  // session is gone — the cookie is NOT updated, so the caller must surface
-  // the failure rather than report success.
+
   const result = await db.$transaction(async (tx) => {
     const existing = await tx.adminSession.findUnique({
       where: { id: currentSessionId },
       select: { expiresAt: true },
     });
     if (!existing) {
-      // Per A04-2/A09-2: do NOT log the raw session token. Log a masked
-      // prefix only — enough for correlation, not enough to replay.
       logger.warn("Session not found during rotation", {
         sessionIdPrefix: currentSessionId.slice(0, 8) + "...",
       });
@@ -152,10 +125,6 @@ export async function rotateSession(currentSessionId: string): Promise<void> {
   });
 }
 
-/** Get the currently authenticated admin user, or null.
- *  When the database is unreachable, returns null (treats DB-down as
- *  "not authenticated") rather than throwing. Per 06 section 2: fail closed.
- *  Per 02 section 6: graceful degradation. */
 export async function getCurrentUser() {
   const store = await cookies();
   const sessionId = store.get(SESSION_COOKIE)?.value;
@@ -167,7 +136,6 @@ export async function getCurrentUser() {
       include: { user: true },
     });
   } catch (e) {
-    // DB unreachable: fail closed (treat as logged out) rather than 500.
     logger.warn("Session check failed, treating as logged out", {
       error: String(e),
     });
@@ -185,7 +153,6 @@ export async function getCurrentUser() {
   return session.user;
 }
 
-/** Require an authenticated admin; throws a 401-shaped error if absent. */
 export async function requireAdmin() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {

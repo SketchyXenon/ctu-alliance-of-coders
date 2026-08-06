@@ -14,12 +14,6 @@ const ALLOWED_ORIGINS = new Set<string>([
   ...EXTRA_ORIGINS,
 ]);
 
-const DEFAULT_IMG_HOSTS = ["https://*.supabase.co", "https://*.supabase.in"];
-const EXTRA_IMG_HOSTS = (process.env.IMG_ALLOWED_HOSTS || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 function applySecurityHeaders(res: NextResponse, isDev: boolean): void {
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("X-Frame-Options", "DENY");
@@ -77,7 +71,8 @@ export function proxy(request: NextRequest) {
     if (
       request.method !== "GET" &&
       request.method !== "HEAD" &&
-      request.method !== "OPTIONS"
+      request.method !== "OPTIONS" &&
+      request.nextUrl.pathname !== "/api/webhook/publish"
     ) {
       const origin = request.headers.get("origin");
       const secFetchSite = request.headers.get("sec-fetch-site");
@@ -110,7 +105,7 @@ export function proxy(request: NextRequest) {
 
     const response = NextResponse.next();
     applySecurityHeaders(response, isDev);
-    // Add request ID to response for client-side correlation.
+
     response.headers.set("X-Request-Id", requestId);
     return response;
   });

@@ -33,10 +33,7 @@ type ViewMode = "grid" | "org";
 
 interface OfficersSectionProps {
   adminYears: AdminYear[];
-  /**
-   * Reserved for future admin-panel usage. In the public view the cards are
-   * rendered as non-editable (editable={false}).
-   */
+
   onImageUpload?: (officerId: string, file: File) => void | Promise<void>;
 }
 
@@ -52,7 +49,6 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
     [adminYears],
   );
 
-  // Default to the latest year (last in sorted array).
   const [selectedYearIndex, setSelectedYearIndex] = React.useState<string>(
     () => {
       if (sortedYears.length === 0) return "";
@@ -72,7 +68,6 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
     setModalOpen(true);
   }, []);
 
-  // Keep selection valid if adminYears reference changes.
   React.useEffect(() => {
     if (sortedYears.length === 0) {
       if (selectedYearIndex !== "") setSelectedYearIndex("");
@@ -113,7 +108,7 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
     setSelectedYearIndex(value);
     setPage(1);
     setSearch("");
-    // Smoothly scroll the section back into view so the new roster is visible.
+
     if (typeof window !== "undefined" && sectionRef.current) {
       window.requestAnimationFrame(() => {
         sectionRef.current?.scrollIntoView({
@@ -124,7 +119,6 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
     }
   }, []);
 
-  // Reset to page 1 whenever the search query changes.
   React.useEffect(() => {
     setPage(1);
   }, [search]);
@@ -146,7 +140,6 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
     [goToPage, safePage],
   );
 
-  // Keyboard navigation for pagination (left/right arrows when the pager is focused).
   const onPagerKeyDown = React.useCallback(
     (event: React.KeyboardEvent) => {
       if (event.key === "ArrowLeft") {
@@ -604,9 +597,6 @@ export function OfficersSection({ adminYears }: OfficersSectionProps) {
           )}
         </>
       )}
-
-      {/* Officer detail modal - passes the visible (filtered) list + year label
-          so the modal supports prev/next navigation and shows the year served. */}
       <OfficerModal
         officer={modalOfficer}
         open={modalOpen}

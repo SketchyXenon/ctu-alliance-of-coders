@@ -17,9 +17,6 @@ import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
 
 const MAX_BODY = 5000;
 
-/** GET /api/announcements - public read, newest first. Cached for 60s.
- *  Graceful degradation: on DB-down returns 200 with empty items so the page
- *  renders empty states instead of crashing (02 §6). Matches /api/site-data. */
 export async function GET() {
   try {
     const rows = await withDbRetry(() =>
@@ -123,7 +120,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
   const imageCheck = validateImageUrl(body.image);
   if (!imageCheck.valid) {
     return withCache(
@@ -132,7 +128,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Validate links array (06 section 5: validate all external input).
   const linksCheck = validateAnnouncementLinks(body.links);
   if (!linksCheck.valid) {
     return withCache(

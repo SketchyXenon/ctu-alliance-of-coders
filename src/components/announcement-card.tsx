@@ -40,10 +40,6 @@ export interface AnnouncementCardProps {
   onOpen: (ann: Announcement) => void;
 }
 
-/**
- * Inline admin action buttons (Edit + Delete). Delete defers confirmation to
- * the parent handler - per spec, the parent owns the confirm dialog.
- */
 function AdminActions({
   ann,
   isAdmin,
@@ -91,12 +87,6 @@ function AdminActions({
   );
 }
 
-/**
- * AnnouncementCard - a single editorial card in the news feed.
- *
- * Featured cards span two columns on large screens and use a side-by-side
- * image / content layout. Regular cards stack the image above the content.
- */
 export function AnnouncementCard({
   ann,
   isAdmin,
@@ -223,8 +213,6 @@ export function AnnouncementCard({
           {preview}
         </p>
 
-        {/* Specialized links — shown on the card so end users see them without
-            opening the modal. Per 05 section 5: icon supports the label. */}
         {ann.links && ann.links.length > 0 && (
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
             {ann.links.slice(0, featured ? 6 : 3).map((link, i) => (

@@ -6,12 +6,9 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePageStore } from "@/lib/store";
 
-// Consent schema version. Bump this when the cookie/localStorage policy changes
-// materially - users will be re-prompted. Per 06-security-architecture.md §8:
-// consent should be versioned and re-obtainable when terms change.
 const CONSENT_VERSION = 3;
 const CONSENT_KEY = "aoc-cookie-consent";
-// Re-prompt after 1 year even if the version hasn't changed (regulatory best practice).
+
 const CONSENT_TTL_MS = 365 * 24 * 60 * 60 * 1000;
 
 interface ConsentRecord {
@@ -20,32 +17,16 @@ interface ConsentRecord {
   ts: number;
 }
 
-/**
- * CookieConsent - dismissible banner that appears once until the user accepts
- * or declines. Stores a versioned consent record in localStorage so policy
- * changes re-prompt the user.
- *
- * Per the Cookie Policy page, the site uses local storage for:
- * - Theme preference (aoc-theme-v1)
- * - Cookie consent itself (aoc-cookie-consent)
- * - Client-side rate-limit counters (contact form, login)
- * No third-party tracking or advertising cookies.
- *
- * Suppressed on admin pages: the admin panel is an authenticated area where
- * the banner would overlap critical controls. Admins consent by logging in.
- */
 export function CookieConsent() {
   const [visible, setVisible] = React.useState(false);
-  const activeNav = usePageStore((s) => s.activeNav);
 
-  const isAdminArea = activeNav === "Admin Panel";
+  const isAdmin = usePageStore((s) => s.isAdmin);
 
   React.useEffect(() => {
-    if (isAdminArea) return;
+    if (isAdmin) return;
     try {
       const raw = localStorage.getItem(CONSENT_KEY);
       if (!raw) {
-        // No consent record - show banner after a brief delay.
         const t = window.setTimeout(() => setVisible(true), 1500);
         return () => window.clearTimeout(t);
       }
@@ -64,16 +45,14 @@ export function CookieConsent() {
         return () => window.clearTimeout(t);
       }
     } catch {
-      // localStorage blocked or corrupt JSON - show banner (best effort).
       const t = window.setTimeout(() => setVisible(true), 1500);
       return () => window.clearTimeout(t);
     }
-  }, [isAdminArea]);
+  }, [isAdmin]);
 
-  // Hide immediately when entering admin area.
   React.useEffect(() => {
-    if (isAdminArea) setVisible(false);
-  }, [isAdminArea]);
+    if (isAdmin) setVisible(false);
+  }, [isAdmin]);
 
   function dismiss(choice: "accepted" | "declined") {
     try {
@@ -83,9 +62,7 @@ export function CookieConsent() {
         ts: Date.now(),
       };
       localStorage.setItem(CONSENT_KEY, JSON.stringify(record));
-    } catch {
-      // Best-effort; the banner won't show again in this session.
-    }
+    } catch {}
     setVisible(false);
   }
 
@@ -111,10 +88,10 @@ export function CookieConsent() {
             Your privacy choices
           </p>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            We use browser local storage to remember your theme preference
-            (light or dark) and your consent choice. We do not use third-party
-            tracking, advertising, or analytics cookies. Your choice is stored
-            for up to 1 year. See our Cookie Policy for full details.
+            We use browser cookies to remember your theme preference (light or
+            dark) and your consent choice. We do not use third-party tracking,
+            advertising, or analytics cookies. See our Cookie Policy for full
+            details.
           </p>
         </div>
         <button

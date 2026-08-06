@@ -11,16 +11,10 @@ const SHORTCUT_MAP: Record<string, SectionKey> = {
   "5": "Admin Panel",
 };
 
-/**
- * useKeyboardShortcuts - global keyboard navigation.
- * Press 1-5 to jump between sections (ignored when typing in an input).
- * Press "t" to toggle theme.
- * Press "?" to show the keyboard shortcuts help dialog.
- */
 export function useKeyboardShortcuts(
   onNav: (section: SectionKey) => void,
   onToggleTheme?: () => void,
-  onToggleHelp?: () => void
+  onToggleHelp?: () => void,
 ) {
   React.useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -35,7 +29,6 @@ export function useKeyboardShortcuts(
         return;
       }
 
-      // Ignore modifier combos (Ctrl+, Cmd+, etc.)
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const section = SHORTCUT_MAP[e.key];

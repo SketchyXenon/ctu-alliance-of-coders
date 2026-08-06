@@ -8,9 +8,6 @@ import { logger } from "@/lib/logger";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 import type { AdminYear } from "@/lib/types";
 
-/** GET /api/admin-years - public, with officers. Cached for 60s.
- *  Graceful degradation: on DB-down returns 200 with empty items so the page
- *  renders empty states instead of crashing (02 §6). Matches /api/site-data. */
 export async function GET() {
   try {
     const years = await withDbRetry(() =>
@@ -50,7 +47,6 @@ export async function GET() {
   }
 }
 
-/** POST /api/admin-years - admin only, create a new leadership year. */
 export const POST = withPrismaError(async function POST(request: Request) {
   let user;
   try {
@@ -61,8 +57,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
       CACHE_NO_STORE,
     );
   }
-
-  // S8: rate limit was missing on this endpoint.
   const rl = rateLimit(`year-create:${user.id}`, 10, 60_000);
   if (!rl.allowed) {
     return withCache(
@@ -105,7 +99,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
       CACHE_NO_STORE,
     );
 
-  // Transaction: get max sortOrder + create atomically (fixes TOCTOU on sort-order).
   const created = await db.$transaction(async (tx) => {
     const maxSort = await tx.adminYear.aggregate({ _max: { sortOrder: true } });
     return tx.adminYear.create({

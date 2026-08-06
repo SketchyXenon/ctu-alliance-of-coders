@@ -9,7 +9,6 @@ import { logActivity } from "@/lib/activity";
 import { wouldCreateCycle } from "@/lib/org-chart";
 import type { Officer } from "@/lib/types";
 
-/** POST /api/officers - admin only, create an officer slot in a year. */
 export const POST = withPrismaError(async function POST(request: Request) {
   let user;
   try {
@@ -74,7 +73,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
       CACHE_NO_STORE,
     );
 
-  // Validate image URL (S1): reject javascript:, data:, off-domain http, etc.
   const imageCheck = validateImageUrl(body.image);
   if (!imageCheck.valid)
     return withCache(
@@ -82,10 +80,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
       CACHE_NO_STORE,
     );
 
-  // Validate reportsToId (org-chart parent): same year + no cycle. Per 06
-  // section 3: re-authorize every object access server-side; a parent id from
-  // another year is an IDOR attempt. Per 02 section 6: cycle check before the
-  // write so the data stays renderable.
   let reportsToId: string | null = null;
   if (
     body.reportsToId !== undefined &&
@@ -103,9 +97,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
         CACHE_NO_STORE,
       );
     }
-    // A new officer has no id yet, so it can't form a cycle by being assigned
-    // a parent — but we still guard against the parent referencing itself if a
-    // future code path ever passes the new id pre-create.
+
     const siblings = await db.officer.findMany({
       where: { yearId },
       select: { id: true, reportsToId: true },
@@ -125,7 +117,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     reportsToId = raw;
   }
 
-  // Transaction: aggregate + create atomically (fixes TOCTOU on sort-order).
   const created = await db.$transaction(async (tx) => {
     const maxSort = await tx.officer.aggregate({
       where: { yearId },

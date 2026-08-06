@@ -47,8 +47,6 @@ interface OfficersManagerProps {
   onRefresh: () => void;
 }
 
-// ---- Inline editable text field --------------------------------------------
-
 function InlineEditField({
   value,
   onSave,
@@ -76,7 +74,6 @@ function InlineEditField({
     }
   }, [editing]);
 
-  // Keep draft synced when the upstream value changes (e.g. after refresh).
   React.useEffect(() => {
     if (!editing) setDraft(value);
   }, [value, editing]);
@@ -90,14 +87,9 @@ function InlineEditField({
     setSaving(true);
     try {
       await onSave(next);
-      // Only close the editor if the save succeeded. Per 03 section 6:
-      // fail loud — if onSave throws, keep the editor open so the user
-      // sees the error and can retry or cancel with Escape.
+
       setEditing(false);
     } catch {
-      // onSave already showed a toast (via the parent's error handler).
-      // Keep the editor open + restore the original value so the user
-      // isn't left with a stale draft.
       setDraft(value);
     } finally {
       setSaving(false);
@@ -145,11 +137,6 @@ function InlineEditField({
   );
 }
 
-// ---- Officer row ------------------------------------------------------------
-// OfficerRow is now read-only display + an Edit button (opens the modal) + a
-// Delete button (opens a double-confirm). Editing happens in the modal so all
-// fields (name/role/image/reportsTo) can be set together.
-
 function OfficerRow({
   officer,
   onEdit,
@@ -160,8 +147,7 @@ function OfficerRow({
   onDelete: (id: string) => Promise<void>;
 }) {
   const [deleting, setDeleting] = React.useState(false);
-  // Strict double confirmation per the destructive-action policy: the admin
-  // must type the officer's name (or DELETE) to arm the confirm button.
+
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const confirmToken = officer.name?.trim()
     ? officer.name.trim().slice(0, 40)
@@ -174,8 +160,6 @@ function OfficerRow({
     } finally {
       setDeleting(false);
     }
-    // On success the dialog closes itself; on error ConfirmDialog surfaces it
-    // inline and stays open so the admin can retry.
   }
 
   return (
@@ -230,11 +214,6 @@ function OfficerRow({
   );
 }
 
-/**
- * OfficerImageBadge - small circular avatar (display only).
- * Photo editing moved to the OfficerFormDialog (modal) so all fields are
- * edited together. The badge just shows the photo or initials fallback.
- */
 function OfficerImageBadge({ officer }: { officer: Officer }) {
   const initials = (officer.name || "?")
     .split(/\s+/)
@@ -264,8 +243,6 @@ function OfficerImageBadge({ officer }: { officer: Officer }) {
   );
 }
 
-// ---- Year card --------------------------------------------------------------
-
 function YearCard({
   year,
   onPatchYear,
@@ -280,8 +257,7 @@ function YearCard({
     id: string,
     patch: Partial<Pick<AdminYear, "year" | "theme">>,
   ) => Promise<void>;
-  /** Single handler for add (officer=null) and edit (officer set). The modal
-   *  collects name/role/image/reportsTo and submits them together. */
+
   onSubmitOfficer: (
     yearId: string,
     officer: Officer | null,
@@ -289,23 +265,17 @@ function YearCard({
   ) => Promise<void>;
   onDeleteOfficer: (id: string) => Promise<void>;
   onDuplicateYear: (year: AdminYear) => Promise<void>;
-  /** Refresh the admin data after an org-chart edit (edge draw/delete) so the
-   *  chart re-layouts with the new reportsToId relationships. */
+
   onRefresh: () => void;
   onDeleteYear: (id: string) => Promise<void>;
 }) {
-  // OfficerFormDialog state: null = closed; { officer: Officer | null } = open
-  // in add (null) or edit (Officer) mode.
   const [formState, setFormState] = React.useState<{
     officer: Officer | null;
   } | null>(null);
   const [duplicating, setDuplicating] = React.useState(false);
   const [deletingYear, setDeletingYear] = React.useState(false);
   const [confirmYearDelete, setConfirmYearDelete] = React.useState(false);
-  // View mode for the officer list: "list" (editable rows) or "chart"
-  // (editable React Flow org chart). The chart lets admins drag handles to
-  // set reporting lines visually — much more intuitive than the dropdown
-  // picker in the form dialog. Per 05 §9: the right abstraction for the job.
+
   const [yearView, setYearView] = React.useState<"list" | "chart">("list");
 
   const dialogOpen = formState !== null;
@@ -396,8 +366,6 @@ function YearCard({
           </div>
         ) : (
           <>
-            {/* View toggle: List (editable rows) vs Chart (editable org chart).
-                Per 05 §4: full state set (pressed state on the active toggle). */}
             <div
               role="group"
               aria-label={`Officer view mode for ${year.year}`}
@@ -452,9 +420,6 @@ function YearCard({
                 showVacant
                 editable
                 onConnect={async (parentId, childId) => {
-                  // Admin drew a parent->child edge. PATCH the child's
-                  // reportsToId. The server validates cycles + same-year
-                  // (wouldCreateCycle) and enforces requireAdmin (06 §3).
                   try {
                     const { error } = await api.patch(
                       `/api/officers/${childId}`,
@@ -480,8 +445,6 @@ function YearCard({
                   }
                 }}
                 onEdgeDelete={async (childId) => {
-                  // Admin deleted an edge. Clear the child's reportsToId
-                  // (makes it a root).
                   try {
                     const { error } = await api.patch(
                       `/api/officers/${childId}`,
@@ -521,9 +484,6 @@ function YearCard({
         onSubmit={handleSubmitOfficer}
       />
 
-      {/* Year delete: strict double-confirm (type the year label). Deleting a
-          year cascades to all its officers, so this is the most destructive
-          action in the admin panel. */}
       <ConfirmDialog
         open={confirmYearDelete}
         onOpenChange={setConfirmYearDelete}
@@ -545,8 +505,6 @@ function YearCard({
     </Card>
   );
 }
-
-// ---- Add Year dialog --------------------------------------------------------
 
 function AddYearDialog({
   open,
@@ -686,7 +644,6 @@ export function OfficersManager({
     draft: OfficerFormDraft,
   ) {
     if (officer) {
-      // Edit: PATCH the existing officer with all fields at once.
       const { data, error } = await api.patch<{ item: Officer }>(
         `/api/officers/${officer.id}`,
         {
@@ -704,8 +661,6 @@ export function OfficersManager({
         description: `${data.item.name || "Vacant slot"} (${data.item.role || "open position"}) saved.`,
       });
     } else {
-      // Add: POST a new officer with all fields at once (no more inline-edit
-      // second step — the modal collects everything up front).
       const { data, error } = await api.post<{ item: Officer }>(
         "/api/officers",
         {
@@ -748,8 +703,7 @@ export function OfficersManager({
       toast.error("Could not duplicate year", { description: error?.message });
       return;
     }
-    // Duplicate officers into the new year. Track failures so we can report
-    // partial success (per 03 section 6: never swallow failures silently).
+
     let successCount = 0;
     let failCount = 0;
     if (year.officers.length > 0) {

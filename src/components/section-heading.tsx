@@ -13,18 +13,9 @@ interface SectionHeadingProps {
   iconLabel?: string;
   className?: string;
   align?: "left" | "center";
-  // Applied to the h2 so a parent section's aria-labelledby resolves. Without
-  // this the id is dangling and screen readers can't label the section (F3).
   id?: string;
 }
 
-/**
- * SectionHeading - consistent section header with eyebrow, title, subtitle.
- * Uses a gold rule as the signature structural device.
- *
- * Animated entrance: eyebrow + title + subtitle + rule fade and slide up
- * in a staggered sequence. Respects prefers-reduced-motion.
- */
 export function SectionHeading({
   eyebrow,
   title,

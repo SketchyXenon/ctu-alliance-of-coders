@@ -32,37 +32,18 @@ export interface OfficerFormDraft {
   name: string;
   role: string;
   image: string;
-  /** null = root (reports to no one in this year). */
   reportsToId: string | null;
 }
 
 export interface OfficerFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** null = add mode; an officer = edit mode. */
   officer: Officer | null;
-  /** The year label, shown in the dialog title for context. */
   yearLabel?: string;
-  /** All officers in the same year, for the reports-to picker. In edit mode
-   *  the officer being edited is excluded (can't report to self). */
   peers: Officer[];
   onSubmit: (draft: OfficerFormDraft) => Promise<void>;
 }
 
-/**
- * OfficerFormDialog - modal for adding OR editing an officer in one shot.
- *
- * Replaces the previous inline-edit-per-field UX so the admin can fill in
- * name + role + image + reports-to together (per the feature request:
- * "modify the adding of officers as modal so that we can edit all the info
- * all at once"). The same dialog serves both create and edit: pass
- * `officer={null}` for add, or the officer for edit.
- *
- * Per 05-ui-ux-design.md section 6: edit/add actions use a SOFT confirm
- * (single-step "Save"/"Add" button), unlike destructive deletes. The dialog
- * disables the submit button while a submission is in flight so a slow
- * network can't be double-clicked into duplicate creates.
- */
 export function OfficerFormDialog({
   open,
   onOpenChange,
@@ -78,9 +59,6 @@ export function OfficerFormDialog({
   const [reportsToId, setReportsToId] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Reset the form whenever the dialog opens. Populate from the officer in
-  // edit mode, or start blank in add mode. Per 05 section 4: full state set —
-  // the dialog always opens in a known state, never stale from a prior open.
   React.useEffect(() => {
     if (!open) return;
     if (officer) {
@@ -96,9 +74,6 @@ export function OfficerFormDialog({
     }
   }, [open, officer]);
 
-  // Peers available as parents: exclude the officer being edited (can't report
-  // to self). In add mode, all peers are eligible. The reportsTo picker shows
-  // name + role so the admin can distinguish same-named officers.
   const eligiblePeers = React.useMemo(() => {
     return officer ? peers.filter((p) => p.id !== officer.id) : peers;
   }, [peers, officer]);
@@ -115,8 +90,6 @@ export function OfficerFormDialog({
       });
       onOpenChange(false);
     } catch (e) {
-      // Surface the error inline so the admin can fix + retry without losing
-      // their typed values. Per 05 section 6: state what happened + next step.
       const msg = e instanceof Error ? e.message : "Could not save officer.";
       toast.error(msg);
     } finally {
@@ -179,7 +152,9 @@ export function OfficerFormDialog({
           />
 
           <div className="space-y-2">
-            <Label htmlFor="officer-reports-to">Reports to (org-chart parent)</Label>
+            <Label htmlFor="officer-reports-to">
+              Reports to (org-chart parent)
+            </Label>
             <Select
               value={reportsToId ?? "__root__"}
               onValueChange={(v) => setReportsToId(v === "__root__" ? null : v)}
@@ -197,8 +172,8 @@ export function OfficerFormDialog({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Sets where this officer sits in the org chart. Root officers appear
-              at the top.
+              Sets where this officer sits in the org chart. Root officers
+              appear at the top.
             </p>
           </div>
         </div>
@@ -212,12 +187,13 @@ export function OfficerFormDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting && <Loader2 className="mr-1.5 size-4 animate-spin" aria-hidden="true" />}
-            {submitting
-              ? "Saving..."
-              : isEdit
-                ? "Save changes"
-                : "Add officer"}
+            {submitting && (
+              <Loader2
+                className="mr-1.5 size-4 animate-spin"
+                aria-hidden="true"
+              />
+            )}
+            {submitting ? "Saving..." : isEdit ? "Save changes" : "Add officer"}
           </Button>
         </DialogFooter>
       </DialogContent>

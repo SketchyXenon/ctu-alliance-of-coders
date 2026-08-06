@@ -5,16 +5,6 @@ import { withPrismaError } from "@/lib/route-helpers";
 
 const PAGE_SIZE = 20;
 
-/**
- * GET /api/activity - admin only, returns paginated activity logs.
- * Query params: ?cursor=<id> for pagination (cursor-based).
- *
- * Per 04-testing-methodology.md + 02-system-design.md section 6: cursor-based
- * pagination scales (no OFFSET degradation) and bounds memory. PAGE_SIZE=20 so
- * a single load is cheap; the client "Load more"s on demand. Also returns the
- * total count so the UI can show "Showing X of Y entries".
- * Wrapped with withPrismaError so DB-down returns a clean 503 (03 section 6).
- */
 export const GET = withPrismaError(async function GET(request: Request) {
   try {
     await requireAdmin();
@@ -25,9 +15,6 @@ export const GET = withPrismaError(async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const cursor = searchParams.get("cursor");
 
-  // Run the page query + the total count in parallel so the latency is the
-  // max of the two, not the sum. Per 02 section 6: no unbounded waits — both
-  // queries are bounded (PAGE_SIZE+1 take, count is a single aggregate).
   const [logs, total] = await Promise.all([
     db.activityLog.findMany({
       orderBy: { createdAt: "desc" },

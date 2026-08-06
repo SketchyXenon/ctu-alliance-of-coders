@@ -33,18 +33,6 @@ interface AdminUserEntry {
   isSelf: boolean;
 }
 
-/**
- * AdminUsersPanel - lists all admin accounts with role + last-active.
- *
- * Per the feature request: "integrate an interface for all admin users
- * display for all admin accounts." Shows each admin's email, name, role,
- * when they were created, and when they were last active (from their most
- * recent session). The current viewer is badged "You".
- *
- * Per 06 section 3: the data is admin-only (the route requires requireAdmin).
- * Per 05 section 6: empty state says what belongs + how to add (bootstrap
- * script is the only way to create the first admin — noted in the copy).
- */
 export function AdminUsersPanel() {
   const [admins, setAdmins] = React.useState<AdminUserEntry[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -221,8 +209,6 @@ export function AdminUsersPanel() {
     </Card>
   );
 }
-
-/** Format an ISO timestamp as a relative "2h ago" / "3d ago" string. */
 function formatRelative(iso: string): string {
   const d = new Date(iso);
   const diff = Date.now() - d.getTime();

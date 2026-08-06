@@ -23,16 +23,6 @@ import {
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-/**
- * AnalyticsPanel - admin view of aggregate page-view stats.
- *
- * Reads GET /api/analytics (admin-gated). Shows totals, a daily sparkline,
- * top paths, and device/country breakdowns. Per 05-ui-ux-design.md: flat
- * surfaces, one accent color (gold), consistent spacing. Per 06 section 8:
- * all data shown is already privacy-minimized server-side (daily hashes, no
- * raw IP) so this view is safe to display to an authenticated admin.
- */
-
 interface AnalyticsData {
   days: number;
   since: string;
@@ -75,10 +65,6 @@ export function AnalyticsPanel() {
     void load(days);
   }, [load, days]);
 
-  // Sparkline: downsample to at most 14 bars so the chart stays readable on a
-  // 375px viewport. 90 flex-1 bars + gaps compute to ~0px each and overflow.
-  // Buckets consecutive days, summing views + visitors; labels the bucket
-  // with its first date.
   const sparkData = React.useMemo(() => {
     const daily = data?.daily ?? [];
     if (daily.length <= 14) return daily;

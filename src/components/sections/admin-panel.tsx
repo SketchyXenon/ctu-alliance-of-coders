@@ -59,17 +59,6 @@ type AuthState =
   | { status: "forbidden"; user: AdminUserPublic }
   | { status: "admin"; user: AdminUserPublic };
 
-/**
- * AdminPanel - orchestrates the admin console.
- *
- * On mount we check the session. The three valid branches are:
- *   - anonymous  -> LoginForm
- *   - forbidden  -> access-restricted card (signed in but not an admin)
- *   - admin      -> dashboard with Tabs (Inbox / Officers / Integrations)
- *
- * Children receive store data + a refresh callback. They call the API and
- * trigger refresh themselves; the store stays the single source of truth.
- */
 export function AdminPanel() {
   const isAdmin = usePageStore((s) => s.isAdmin);
   const adminEmail = usePageStore((s) => s.adminEmail);
@@ -81,9 +70,6 @@ export function AdminPanel() {
   const announcements = usePageStore((s) => s.announcements);
   const setAdminYears = usePageStore((s) => s.setAdminYears);
 
-  // `checked` flips true after the first session probe completes. Until then
-  // we show a loading state. The derived `auth` value reacts to the store so
-  // LoginForm's setIsAdmin(true) immediately promotes us to the dashboard.
   const [checked, setChecked] = React.useState(false);
   const [forbiddenUser, setForbiddenUser] =
     React.useState<AdminUserPublic | null>(null);
@@ -144,9 +130,6 @@ export function AdminPanel() {
     setForbiddenUser(null);
     toast.success("Signed out");
   }
-
-  // ---- Refresh helpers (children call these to re-sync the store) ---------
-
   const refreshMessages = React.useCallback(async () => {
     const { data, error } = await api.get<{ items: ContactMessage[] }>(
       "/api/contact",
@@ -162,8 +145,6 @@ export function AdminPanel() {
     if (error || !data) return;
     setAdminYears(data.items);
   }, [setAdminYears]);
-
-  // ---- Loading state -------------------------------------------------------
 
   if (auth.status === "loading") {
     return (
@@ -404,10 +385,6 @@ export function AdminPanel() {
   );
 }
 
-/**
- * AdminStatCard - compact metric card for the dashboard overview row.
- * Shows an icon + big number + label, with gold or navy accent.
- */
 function AdminStatCard({
   label,
   value,

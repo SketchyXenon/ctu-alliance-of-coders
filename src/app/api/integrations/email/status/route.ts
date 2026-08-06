@@ -4,11 +4,6 @@ import { isSmtpConfigured } from "@/lib/email";
 import { withPrismaError } from "@/lib/route-helpers";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
 
-/**
- * GET /api/integrations/email/status - admin only.
- * Returns whether SMTP is configured (does NOT expose credentials).
- * Per 06 section 8: secrets stay server-side. The response is a boolean.
- */
 export const GET = withPrismaError(async function GET() {
   try {
     await requireAdmin();

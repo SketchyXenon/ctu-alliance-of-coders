@@ -3,10 +3,6 @@ import { siteConfig } from "@/lib/site-config";
 
 const siteUrl = siteConfig.url;
 
-/**
- * sitemap.xml - generated dynamically at /sitemap.xml.
- * Lists the single user-facing route plus all policy pages.
- */
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
@@ -17,7 +13,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     "Cookie Policy",
   ].map((p) => p.toLowerCase().replace(/\s+/g, "-"));
 
-  // FAQ is a content section, not a policy, but still worth indexing.
   const contentRoutes = ["faq"];
 
   const routes = [

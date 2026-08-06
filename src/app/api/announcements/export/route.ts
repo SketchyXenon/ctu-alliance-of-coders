@@ -1,20 +1,27 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { rateLimit } from "@/lib/security";
 import { buildCsv } from "@/lib/csv";
 import { withPrismaError } from "@/lib/route-helpers";
 
-/**
- * GET /api/announcements/export - admin only, returns CSV.
- * Uses buildCsv so every cell is run through csvEscape (defense-in-depth
- * against formula injection, per 06 A05). No cell is interpolated raw.
- * Wrapped with withPrismaError so DB-down returns a clean 503 (03 §6).
- */
 export const GET = withPrismaError(async function GET() {
+  let user;
   try {
-    await requireAdmin();
+    user = await requireAdmin();
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rl = rateLimit(`csv-export:${user.id}`, 5, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many exports. Please slow down." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+      },
+    );
   }
 
   const rows = await db.announcement.findMany({

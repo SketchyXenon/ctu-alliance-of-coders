@@ -13,14 +13,8 @@ import {
   type UploadBucket,
 } from "@/lib/upload";
 
-// Dev upload root: public/uploads/<bucket>/<file>.webp, served as /uploads/...
-// In prod (Supabase configured) processImageUpload uploads to Storage instead.
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
-/** POST /api/upload - admin-only image upload with 9-layer defense.
- *  The auth + rate-limit + size + bucket layers live here; the magic-byte,
- *  sharp re-encode, dimension-cap, and storage layers live in lib/upload.ts.
- *  */
 export const POST = withPrismaError(async function POST(request: Request) {
   let user;
   try {
@@ -64,9 +58,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Validate bucket before processing (path-traversal defense). The lib
-  // re-validates, but checking here keeps the error message consistent and
-  // avoids touching sharp/supabase for obviously bad input.
   const bucketRaw = String(formData.get("bucket") ?? "");
   if (!VALID_BUCKETS.includes(bucketRaw as UploadBucket)) {
     return withCache(
@@ -78,8 +69,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Size check before decoding (DoS defense). file.size is the declared size;
-  // lib/upload re-checks the buffer length after read.
   if (file.size > MAX_FILE_SIZE) {
     return withCache(
       NextResponse.json(

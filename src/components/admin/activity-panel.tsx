@@ -63,9 +63,6 @@ const ENTITY_LABELS: Record<string, string> = {
 
 type FilterValue = "all" | "create" | "update" | "delete" | "login" | "logout";
 
-/**
- * ActivityPanel - shows recent admin actions with search + filter.
- */
 export function ActivityPanel() {
   const [entries, setEntries] = React.useState<ActivityEntry[]>([]);
   const [total, setTotal] = React.useState<number | null>(null);
@@ -200,8 +197,6 @@ export function ActivityPanel() {
         </Button>
       </div>
 
-      {/* Count: shows loaded vs total so the admin knows how many more are
-          available via "Load more". Per 05 section 6: state what's there. */}
       <p className="text-sm text-muted-foreground" aria-live="polite">
         {filtered.length === entries.length
           ? `Showing ${filtered.length} of ${total ?? filtered.length} ${filtered.length === 1 ? "entry" : "entries"}`

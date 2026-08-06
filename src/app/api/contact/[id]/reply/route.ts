@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { validateText, rateLimit } from "@/lib/security";
+import { validateText, rateLimit, sanitizeForHeader } from "@/lib/security";
 import { logActivity } from "@/lib/activity";
 import { withPrismaError } from "@/lib/route-helpers";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
@@ -11,22 +11,6 @@ import { formatDateTime } from "@/lib/security";
 const MAX_REPLY_BODY = 4000;
 const MAX_REPLY_SUBJECT = 200;
 
-/**
- * POST /api/contact/[id]/reply - admin only, sends a reply email to the
- * message submitter via SMTP.
- *
- * Security per 06-security-architecture.md:
- *   - requireAdmin (section 3: re-authorize every object access)
- *   - rate limited per admin user (section 7: rate limit expensive operations)
- *   - input validated via validateText (section 5: validate all external input)
- *   - SMTP credentials stay server-side (section 8: secrets in env, not client)
- *   - audit logged (section 11: log security-relevant events)
- *
- * Reliability per 02-system-design.md:
- *   - withPrismaError wraps the handler (section 6: graceful degradation)
- *   - SMTP has connection + socket timeouts (section 6: no unbounded waits)
- *   - sends plain text only (no HTML XSS surface)
- */
 export const POST = withPrismaError(async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -41,8 +25,6 @@ export const POST = withPrismaError(async function POST(
     );
   }
 
-  // Rate limit: 10 replies per admin per hour. SMTP is expensive and
-  // outbound email is a high-value target for abuse if a session is stolen.
   const rl = rateLimit(`reply:${user.id}`, 10, 60 * 60_000);
   if (!rl.allowed) {
     return withCache(
@@ -69,7 +51,6 @@ export const POST = withPrismaError(async function POST(
     );
   }
 
-  // Validate the reply body (the email content).
   const bodyCheck = validateText(body.replyBody, {
     required: true,
     minLen: 5,
@@ -82,13 +63,6 @@ export const POST = withPrismaError(async function POST(
     );
   }
 
-  // Validate the subject (optional; defaults to "Re: <original>").
-  // Per A05-2: run through validateText (XSS blocklist) even though the
-  // subject becomes an email header — defense-in-depth against header
-  // injection via nodemailer's Subject field.
-  // Per A06 fix: rejectCRLF — CR/LF in a header field enables header
-  // injection (CWE-93). Nodemailer typically sanitizes, but we reject
-  // early so the admin gets a clear 400 rather than a silently-mangled email.
   let subject: string | null = null;
   if (body.subject) {
     const subjectCheck = validateText(body.subject, {
@@ -104,7 +78,6 @@ export const POST = withPrismaError(async function POST(
     subject = String(body.subject).trim();
   }
 
-  // Fetch the original message (re-authorize: confirm it exists).
   const existing = await db.contactMessage.findUnique({ where: { id } });
   if (!existing) {
     return withCache(
@@ -113,24 +86,22 @@ export const POST = withPrismaError(async function POST(
     );
   }
 
-  const replySubject = subject || `Re: ${existing.subject}`;
+  const safeSubject = sanitizeForHeader(subject || `Re: ${existing.subject}`);
+  const safeToName = sanitizeForHeader(existing.name);
   const replyBody = String(body.replyBody).trim();
 
-  // Send the email via SMTP.
   const result = await sendReplyEmail({
     to: existing.email,
-    toName: existing.name,
-    subject: replySubject,
+    toName: safeToName,
+    subject: safeSubject,
     body: replyBody,
     originalMessage: existing.message,
-    originalSubject: existing.subject,
+    originalSubject: sanitizeForHeader(existing.subject),
     originalDate: formatDateTime(existing.createdAt.toISOString()),
     adminEmail: user.email,
   });
 
   if (!result.ok) {
-    // SMTP failed. Do NOT mark the message as resolved. Return the error
-    // so the admin can see what went wrong. Per 03 section 6: fail loud.
     return withCache(
       NextResponse.json(
         { error: result.error || "Failed to send reply email." },
@@ -140,8 +111,6 @@ export const POST = withPrismaError(async function POST(
     );
   }
 
-  // Email sent successfully. Update the message status to "resolved" so
-  // the inbox reflects that it's been handled.
   const updated = await db.contactMessage.update({
     where: { id },
     data: { status: "resolved" },

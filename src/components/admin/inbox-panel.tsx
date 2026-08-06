@@ -309,9 +309,6 @@ function MessageCard({
         </div>
       </CardContent>
 
-      {/* H15: destructive action confirmation per 05-ui-ux-design.md §6.
-          AlertDialog (not Dialog) so it requires explicit Action — does not
-          close on outside click or Escape, preventing accidental data loss. */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -340,10 +337,6 @@ function MessageCard({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reply dialog: sends an email to the message submitter via SMTP.
-          Plain text only (no HTML XSS surface). Per 05 §6: the form is
-          non-blocking (Dialog, not AlertDialog) so the admin can reference
-          other tabs while composing. */}
       <Dialog open={replyOpen} onOpenChange={setReplyOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>

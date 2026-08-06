@@ -4,13 +4,6 @@ import * as React from "react";
 import { ArrowUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/**
- * BackToTop - floating button that appears after scrolling down.
- * Smooth-scrolls to the top on click. Respects reduced motion.
- *
- * Shows a circular progress ring indicating scroll depth, and uses a
- * navy-to-gold gradient for brand consistency.
- */
 export function BackToTop() {
   const [visible, setVisible] = React.useState(false);
   const [progress, setProgress] = React.useState(0);
@@ -36,7 +29,6 @@ export function BackToTop() {
     window.scrollTo({ top: 0, behavior: prefersReduced ? "auto" : "smooth" });
   }
 
-  // SVG circle geometry for the progress ring.
   const size = 44;
   const stroke = 2.5;
   const radius = (size - stroke) / 2;
@@ -58,7 +50,7 @@ export function BackToTop() {
         "active:scale-90",
         visible
           ? "translate-y-0 opacity-100 pointer-events-auto"
-          : "translate-y-4 opacity-0 pointer-events-none"
+          : "translate-y-4 opacity-0 pointer-events-none",
       )}
     >
       {/* Progress ring (SVG overlay) */}

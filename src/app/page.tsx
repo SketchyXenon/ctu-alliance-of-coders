@@ -264,6 +264,7 @@ export default function Home() {
       body: ann.body,
       type: ann.type,
       image: ann.image,
+      links: ann.links,
       pinned: ann.pinned,
     };
     const { data, error } = await api.post<{ item: Announcement }>(
@@ -288,6 +289,7 @@ export default function Home() {
         body: ann.body,
         type: ann.type,
         image: ann.image,
+        links: ann.links,
         pinned: ann.pinned,
       },
     );
@@ -523,7 +525,9 @@ export default function Home() {
       <CookieConsent />
       {/* Anonymous page-view beacon. Honors Do-Not-Track, no cookies, daily
           visitor hash on the server. See src/components/analytics-beacon.tsx. */}
-      <AnalyticsBeacon />
+      <AnalyticsBeacon
+        section={activeAnnouncementId ? "Announcements" : activeNav}
+      />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}

@@ -42,34 +42,104 @@ interface CommandItem {
 }
 
 const COMMANDS: CommandItem[] = [
-  { id: "home", label: "Home", description: "Landing page with hero and recent activity", section: "Home", icon: Home, keywords: ["home", "landing", "start"], group: "Navigate" },
-  { id: "announcements", label: "Announcements", description: "News, awards, and organization updates", section: "Announcements", icon: Megaphone, keywords: ["news", "announcements", "posts", "updates"], group: "Navigate" },
-  { id: "officers", label: "Officers", description: "Leadership team by academic year", section: "Officers", icon: Users, keywords: ["officers", "team", "leadership", "org", "chart"], group: "Navigate" },
-  { id: "contact", label: "Contact", description: "Send a message to the admin team", section: "Contact", icon: MessageSquare, keywords: ["contact", "message", "feedback", "support", "help"], group: "Navigate" },
-  { id: "admin", label: "Admin Panel", description: "Manage content, inbox, and settings", section: "Admin Panel", icon: LayoutDashboard, keywords: ["admin", "dashboard", "manage", "login"], group: "Navigate" },
-  { id: "privacy", label: "Privacy Policy", description: "What data we collect and how we use it", section: "Privacy Policy", icon: ShieldCheck, keywords: ["privacy", "policy", "data", "gdpr"], group: "Policies" },
-  { id: "data-protection", label: "Data Protection", description: "How we safeguard your information", section: "Data Protection", icon: Database, keywords: ["data", "protection", "security"], group: "Policies" },
-  { id: "terms", label: "Terms of Use", description: "Usage guidelines and agreements", section: "Terms of Use", icon: FileText, keywords: ["terms", "use", "agreement"], group: "Policies" },
-  { id: "cookie", label: "Cookie Policy", description: "Local storage and tracking details", section: "Cookie Policy", icon: Cookie, keywords: ["cookie", "tracking", "storage"], group: "Policies" },
+  {
+    id: "home",
+    label: "Home",
+    description: "Landing page with hero and recent activity",
+    section: "Home",
+    icon: Home,
+    keywords: ["home", "landing", "start"],
+    group: "Navigate",
+  },
+  {
+    id: "announcements",
+    label: "Announcements",
+    description: "News, awards, and organization updates",
+    section: "Announcements",
+    icon: Megaphone,
+    keywords: ["news", "announcements", "posts", "updates"],
+    group: "Navigate",
+  },
+  {
+    id: "officers",
+    label: "Officers",
+    description: "Leadership team by academic year",
+    section: "Officers",
+    icon: Users,
+    keywords: ["officers", "team", "leadership", "org", "chart"],
+    group: "Navigate",
+  },
+  {
+    id: "contact",
+    label: "Contact",
+    description: "Send a message to the admin team",
+    section: "Contact",
+    icon: MessageSquare,
+    keywords: ["contact", "message", "feedback", "support", "help"],
+    group: "Navigate",
+  },
+  {
+    id: "admin",
+    label: "Admin Panel",
+    description: "Manage content, inbox, and settings",
+    section: "Admin Panel",
+    icon: LayoutDashboard,
+    keywords: ["admin", "dashboard", "manage", "login"],
+    group: "Navigate",
+  },
+  {
+    id: "privacy",
+    label: "Privacy Policy",
+    description: "What data we collect and how we use it",
+    section: "Privacy Policy",
+    icon: ShieldCheck,
+    keywords: ["privacy", "policy", "data", "gdpr"],
+    group: "Policies",
+  },
+  {
+    id: "data-protection",
+    label: "Data Protection",
+    description: "How we safeguard your information",
+    section: "Data Protection",
+    icon: Database,
+    keywords: ["data", "protection", "security"],
+    group: "Policies",
+  },
+  {
+    id: "terms",
+    label: "Terms of Use",
+    description: "Usage guidelines and agreements",
+    section: "Terms of Use",
+    icon: FileText,
+    keywords: ["terms", "use", "agreement"],
+    group: "Policies",
+  },
+  {
+    id: "cookie",
+    label: "Cookie Policy",
+    description: "Local storage and tracking details",
+    section: "Cookie Policy",
+    icon: Cookie,
+    keywords: ["cookie", "tracking", "storage"],
+    group: "Policies",
+  },
 ];
 
-/**
- * CommandPalette - Cmd+K / Ctrl+K quick navigation dialog.
- * Fuzzy-filters commands by label + keywords. Arrow keys navigate,
- * Enter selects, Escape closes.
- */
-export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  onNavigate,
+}: CommandPaletteProps) {
   const [query, setQuery] = React.useState("");
   const [activeIndex, setActiveIndex] = React.useState(0);
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
 
-  // Reset query + focus input when opened.
   React.useEffect(() => {
     if (open) {
       setQuery("");
       setActiveIndex(0);
-      // Defer focus so the input is mounted.
+
       const t = window.setTimeout(() => inputRef.current?.focus(), 50);
       return () => window.clearTimeout(t);
     }
@@ -84,7 +154,6 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
     });
   }, [query]);
 
-  // Reset active index when filter changes.
   React.useEffect(() => {
     setActiveIndex(0);
   }, [query]);
@@ -138,7 +207,10 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
 
         {/* Search input */}
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <Search
+            className="h-4 w-4 shrink-0 text-muted-foreground"
+            aria-hidden="true"
+          />
           <input
             ref={inputRef}
             type="text"
@@ -193,7 +265,7 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
                         "flex w-full items-center gap-3 rounded-md px-2.5 py-2.5 text-left transition-colors",
                         isActive
                           ? "bg-primary/10 text-primary"
-                          : "text-foreground hover:bg-accent/60"
+                          : "text-foreground hover:bg-accent/60",
                       )}
                     >
                       <span
@@ -201,7 +273,7 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
                           "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
                           isActive
                             ? "bg-primary/15 text-primary"
-                            : "bg-muted text-muted-foreground"
+                            : "bg-muted text-muted-foreground",
                         )}
                       >
                         <Icon className="h-4 w-4" aria-hidden="true" />
@@ -213,7 +285,10 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
                         </span>
                       </span>
                       {isActive && (
-                        <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                        <CornerDownLeft
+                          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
                       )}
                     </button>
                   );
@@ -226,11 +301,15 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
         {/* Footer hint */}
         <div className="flex items-center justify-between border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px]">↑↓</kbd>
+            <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px]">
+              ↑↓
+            </kbd>
             navigate
           </span>
           <span className="flex items-center gap-1.5">
-            <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px]">↵</kbd>
+            <kbd className="rounded border border-border bg-muted px-1 py-0.5 text-[10px]">
+              ↵
+            </kbd>
             select
           </span>
         </div>

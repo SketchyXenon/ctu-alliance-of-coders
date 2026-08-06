@@ -22,12 +22,8 @@ import { validateEmail } from "@/lib/security";
 import { validatePassword } from "@/lib/validation";
 import type { AdminUserPublic } from "@/lib/types";
 
-// OWASP A07: keep login error generic (anti-enumeration). The server already
-// returns identical messages for unknown emails and wrong passwords. We mirror
-// that on the client so a passive observer can't infer which field failed.
 const GENERIC_ERROR = "Invalid email or password.";
 
-// Client-side rate limit (server has its own). 5 attempts per 60 seconds.
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 60_000;
 
@@ -40,11 +36,9 @@ export function LoginForm() {
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
 
-  // Sliding-window attempt timestamps kept in a ref so they survive re-renders.
   const attemptsRef = React.useRef<number[]>([]);
   const [retryIn, setRetryIn] = React.useState(0);
 
-  // Countdown ticker for the rate-limit lockout window.
   React.useEffect(() => {
     if (retryIn <= 0) return;
     const id = window.setInterval(() => {
@@ -54,8 +48,6 @@ export function LoginForm() {
   }, [retryIn]);
 
   const showFieldError = (valid: boolean, _msg: string) => {
-    // We deliberately show the same generic error for both fields to avoid
-    // telling an attacker which one was wrong.
     if (!valid) {
       setError(GENERIC_ERROR);
       return false;
@@ -67,7 +59,6 @@ export function LoginForm() {
     e.preventDefault();
     if (submitting) return;
 
-    // Apply client-side rate limit.
     const now = Date.now();
     attemptsRef.current = attemptsRef.current.filter(
       (t) => now - t < WINDOW_MS,
@@ -80,10 +71,6 @@ export function LoginForm() {
       return;
     }
 
-    // Validate locally. Both checks produce the same generic message so an
-    // observer can't tell which field failed validation.
-    // NOTE: use validatePassword (not validateText) so strong passwords that
-    // happen to contain "<script" etc. are not rejected client-side (S2).
     const emailOk = validateEmail(email);
     const passOk = validatePassword(password, { minLen: 1, maxLen: 128 });
     if (!showFieldError(emailOk.valid, emailOk.error ?? "")) return;
@@ -99,9 +86,6 @@ export function LoginForm() {
       }>("/api/auth/login", { email, password });
 
       if (apiError || !data) {
-        // Server returns 401 with the same generic message for both wrong
-        // user and wrong password. Surface 429 (rate-limited) distinctly so the
-        // user knows to wait; everything else collapses to GENERIC_ERROR.
         const msg =
           apiError && apiError.status === 429
             ? apiError.message
@@ -122,7 +106,7 @@ export function LoginForm() {
       setError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
-      // Clear the password from memory as soon as we're done with it.
+
       setPassword("");
     }
   }
@@ -228,7 +212,7 @@ export function LoginForm() {
 
           <div className="mt-5">
             <p className="text-center text-[11px] text-muted-foreground">
-              For security, failed attempts are rate-limited.
+              With built-in security.
             </p>
           </div>
         </CardContent>
