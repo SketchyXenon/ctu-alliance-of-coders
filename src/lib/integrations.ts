@@ -21,7 +21,6 @@ export interface IntegrationDef {
   desc: string;
   icon: string;
   kind: IntegrationKind;
-
   fields: IntegrationField[];
 }
 export interface IntegrationStatus {
@@ -31,11 +30,8 @@ export interface IntegrationStatus {
   icon: string;
   kind: IntegrationKind;
   enabled: boolean;
-
   secretPreview: string | null;
-
   config: Record<string, string>;
-
   updatedAt: string | null;
 }
 
@@ -180,6 +176,7 @@ export function parseConfig(
     return {};
   }
 }
+
 export interface ConfigValidationResult {
   valid: boolean;
   error: string | null;
@@ -195,9 +192,8 @@ function validateField(
   field: IntegrationField,
   raw: unknown,
 ): { ok: boolean; error: string | null; value: string } {
-  if (typeof raw !== "string") raw = "";
-  let value = raw;
-  if (field.type !== "secret") value = (raw as string).trim();
+  const str = typeof raw === "string" ? raw : "";
+  const value = field.type !== "secret" ? str.trim() : str;
 
   if (field.required && !value) {
     return { ok: false, error: `${field.label} is required.`, value: "" };
@@ -273,9 +269,7 @@ export function validateConfig(
 
   const src = input as Record<string, unknown>;
   const clean: Record<string, string> = {};
-  // Secret-type fields are validated + stored separately (single `secret`
-  // column per integration), so skip them here. The route checks required
-  // secret presence against the `secret` value it receives.
+
   for (const field of def.fields) {
     if (field.type === "secret") continue;
     const r = validateField(field, src[field.name]);
@@ -356,6 +350,7 @@ export function generateWebhookSecret(): string {
 
 export const WEBHOOK_SIGNATURE_HEADER = "x-aoc-signature";
 export const WEBHOOK_TIMESTAMP_HEADER = "x-aoc-timestamp";
+
 export function signWebhook(
   body: string,
   timestamp: string,
@@ -365,6 +360,7 @@ export function signWebhook(
   hmac.update(`${timestamp}.${body}`);
   return hmac.digest("hex");
 }
+
 export function verifyWebhookSignature(
   body: string,
   timestamp: string,
@@ -393,11 +389,12 @@ export function isWebhookTimestampFresh(
 ): boolean {
   const ts = Number(timestamp);
   if (!Number.isFinite(ts)) return false;
-  // If the value looks like seconds (< 10^12), treat as seconds.
+
   const ms = ts < 1e12 ? ts * 1000 : ts;
   const age = Math.abs(now - ms);
   return age <= WEBHOOK_MAX_AGE_MS;
 }
+
 export function toStatus(
   row: {
     id: string;

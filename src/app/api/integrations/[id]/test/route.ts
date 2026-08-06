@@ -56,18 +56,18 @@ export const POST = withPrismaError(async function POST(
     body = await request.json();
   } catch {}
 
-  // ---- webhook -----------------------------------------------------------
   if (def.kind === "webhook") {
     let row = await db.integrationConfig.findUnique({ where: { id } });
     let secret = row?.secret ?? "";
     if (!secret) {
+      // No stored key yet (or row missing): generate one + enable.
       secret = generateWebhookSecret();
       row = await db.integrationConfig.upsert({
         where: { id },
         update: { enabled: true, secret },
         create: { id, enabled: true, secret },
       });
-    } else if (!row.enabled) {
+    } else if (row && !row.enabled) {
       row = await db.integrationConfig.update({
         where: { id },
         data: { enabled: true },
@@ -110,7 +110,6 @@ export const POST = withPrismaError(async function POST(
       ? body.secret.trim()
       : (stored?.secret ?? "");
 
-  // Required-field presence check (BOPLA / mass-assignment defense).
   for (const field of def.fields) {
     if (field.required) {
       const has =
@@ -180,7 +179,6 @@ async function checkConnectivity(
         headers: { Authorization: `Bot ${secret}` },
         signal: AbortSignal.timeout(8_000),
       });
-      s;
       if (res.ok)
         return {
           ok: true,
