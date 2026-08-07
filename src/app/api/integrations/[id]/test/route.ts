@@ -54,7 +54,9 @@ export const POST = withPrismaError(async function POST(
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
-  } catch {}
+  } catch {
+    // Empty body is fine for webhook (uses stored key).
+  }
 
   if (def.kind === "webhook") {
     let row = await db.integrationConfig.findUnique({ where: { id } });
@@ -132,7 +134,9 @@ export const POST = withPrismaError(async function POST(
     secret,
   );
 
-  const enabled = connectivity.ok;
+  const enabled = connectivity.skipped
+    ? (stored?.enabled ?? false)
+    : connectivity.ok;
   await db.integrationConfig.upsert({
     where: { id },
     update: {

@@ -7,10 +7,14 @@ const EXTRA_ORIGINS = (process.env.CSRF_ALLOWED_ORIGINS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+const IS_PROD = process.env.NODE_ENV === "production";
+const LOCAL_ORIGINS = IS_PROD
+  ? []
+  : ["http://localhost:3000", "http://127.0.0.1:3000"];
 const ALLOWED_ORIGINS = new Set<string>([
   PROD_ORIGIN,
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
+  ...LOCAL_ORIGINS,
   ...EXTRA_ORIGINS,
 ]);
 

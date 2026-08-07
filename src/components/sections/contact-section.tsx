@@ -46,6 +46,7 @@ interface ContactSectionProps {
     category: string;
     message: string;
   }) => Promise<void>;
+
   isAdmin?: boolean;
 }
 
@@ -96,6 +97,7 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
       required: true,
       minLen: 2,
       maxLen: 80,
+      rejectCRLF: true,
     });
     if (!nameCheck.valid) nextErrors.name = nameCheck.error!;
 
@@ -106,6 +108,7 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
       required: true,
       minLen: 3,
       maxLen: 120,
+      rejectCRLF: true,
     });
     if (!subjectCheck.valid) nextErrors.subject = subjectCheck.error!;
 
@@ -123,7 +126,6 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (submitting) return;
-
 
     const now = Date.now();
     submitTimesRef.current = submitTimesRef.current.filter(
@@ -237,7 +239,7 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
                       Location
                     </p>
                     <p className="text-sm text-navy-100/90">
-                      CTU Danao Campus, Cebu
+                      CTU Danao Campus, Danao City, Cebu
                     </p>
                   </div>
                 </div>
@@ -259,6 +261,7 @@ export function ContactSection({ onSubmit, isAdmin }: ContactSectionProps) {
             </CardContent>
           </Card>
         </div>
+
         {isAdmin ? (
           <Card className="border-2 border-amber-500/40 bg-amber-50/50 shadow-md dark:border-amber-500/30 dark:bg-amber-950/20">
             <CardContent className="flex flex-col items-start gap-4 p-8">

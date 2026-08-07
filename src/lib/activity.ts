@@ -3,7 +3,7 @@ import { logger } from "./logger";
 
 export async function logActivity(params: {
   userId: string;
-  action: "create" | "update" | "delete" | "login" | "logout";
+  action: "create" | "update" | "delete" | "login" | "logout" | "view";
   entity:
     | "announcement"
     | "officer"
@@ -11,7 +11,8 @@ export async function logActivity(params: {
     | "message"
     | "session"
     | "upload"
-    | "integration";
+    | "integration"
+    | "admin_user";
   entityId?: string;
   summary: string;
 }): Promise<void> {

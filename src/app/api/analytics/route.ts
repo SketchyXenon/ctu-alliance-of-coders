@@ -1,15 +1,31 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { rateLimit } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
 import { withCache, CACHE_NO_STORE } from "@/lib/cache";
 
 export const GET = withPrismaError(async function GET(request: Request) {
+  let user;
   try {
-    await requireAdmin();
+    user = await requireAdmin();
   } catch {
     return withCache(
       NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      CACHE_NO_STORE,
+    );
+  }
+
+  const rl = rateLimit(`analytics:${user.id}`, 10, 60_000);
+  if (!rl.allowed) {
+    return withCache(
+      NextResponse.json(
+        { error: "Too many requests. Please slow down." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
+        },
+      ),
       CACHE_NO_STORE,
     );
   }
@@ -34,7 +50,7 @@ export const GET = withPrismaError(async function GET(request: Request) {
       db.pageView.findMany({
         where: { createdAt: { gte: since } },
         select: { visitorHash: true, createdAt: true },
-        take: 100_000,
+        take: 10_000,
       }),
       db.pageView.groupBy({
         by: ["path"],

@@ -1,15 +1,10 @@
-# Gateway for the sandbox. Listens on :81 and forwards to the Next.js app
-# (localhost:3000) or to a mini-service when ?XTransformPort=<port> is set.
-# Security headers are set as defense-in-depth. The app (src/proxy.ts) also
-# sets these on HTML responses; Caddy sets them on everything it proxies.
-
 :81 {
-        
+       
         request_body {
                 max_length 10MB
         }
 
-     
+      
         log {
                 output stdout
                 format json
@@ -19,7 +14,7 @@
                 X-Content-Type-Options "nosniff"
                 X-Frame-Options "DENY"
                 Referrer-Policy "strict-origin-when-cross-origin"
-                Permissions-Policy "camera=(), microphone=(), geolocation=()"
+                Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()"
                 # HSTS is honored by browsers only over HTTPS; harmless on HTTP dev.
                 Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
         }

@@ -14,7 +14,7 @@ function doNotTrack(): boolean {
 }
 
 function send(path: string): void {
-  if (doNotTrack()) return;
+  if (doNotTrack()) return; // honor the user's opt-out (06 section 8).
   const payload = JSON.stringify({
     path,
     referrer: typeof document !== "undefined" ? document.referrer : null,
@@ -41,9 +41,18 @@ function send(path: string): void {
     }).catch(() => {});
   } catch {}
 }
+
 export function AnalyticsBeacon({ section }: { section: string }) {
   React.useEffect(() => {
     if (typeof window === "undefined") return;
+
+    try {
+      const raw = localStorage.getItem("aoc-cookie-consent");
+      const rec = raw ? (JSON.parse(raw) as { choice?: string }) : null;
+      if (!rec || rec.choice !== "accepted") return;
+    } catch {
+      return;
+    }
     const base = window.location.pathname + window.location.search;
     const path =
       section && section !== "Home"

@@ -9,46 +9,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { FAQ_ITEMS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-
-interface FAQItem {
-  question: string;
-  answer: string;
-}
-
-const FAQ_ITEMS: FAQItem[] = [
-  {
-    question: "Why was this website created?",
-    answer:
-      "This website was created so members, alumni, and partners can fully access the latest information and latest updates from the Alliance of Coders. Announcements, officer rosters, and organizational activities are published here as they happen - no more relying on scattered social media posts or word of mouth.",
-  },
-  {
-    question: "What kind of updates can I find here?",
-    answer:
-      "You will find awards, recognitions, accomplishment reports, general announcements, and the current leadership roster. The Announcements section is updated whenever there is new news, and the Officers section reflects the current academic year's leadership team.",
-  },
-  {
-    question: "How often is the information updated?",
-    answer:
-      "The admin team publishes updates as events happen - there is no fixed schedule. When the organization earns an award, holds a general assembly, or changes leadership, the site is updated within a few days. Check the Announcements section for the most recent posts.",
-  },
-  {
-    question: "Can I contact the organization through this site?",
-    answer:
-      "Yes. The Contact section has a form that sends a message directly to the admin team. Choose the topic that best fits your inquiry so it reaches the right person. Expect a response within 1-3 school days.",
-  },
-  {
-    question: "Who manages the content on this site?",
-    answer:
-      "Content is managed by authenticated administrators of the Alliance of Coders. Every change is logged in an audit trail, and only authorized admins can create, edit, or delete announcements and officer records.",
-  },
-  {
-    question: "Is my data safe when I use the contact form?",
-    answer:
-      "Your contact submission is stored securely and accessible only to authenticated admins. We do not sell personal data, and we do not use third-party tracking cookies. See our Privacy Policy and Data Protection pages for full details.",
-  },
-];
-
 export function FaqSection() {
   return (
     <section

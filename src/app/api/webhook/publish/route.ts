@@ -12,11 +12,9 @@ import {
 } from "@/lib/integrations";
 import type { Announcement, AnnouncementType } from "@/lib/types";
 import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
-import { serializeLinks } from "@/lib/announcements";
+import { serializeLinks, validateAnnouncementLinks } from "@/lib/announcements";
 
 export const POST = withPrismaError(async function POST(request: Request) {
-  // Rate limit BEFORE signature verification so brute-force attempts on the
-  // signature are bounded (§7).
   const ip = getClientIp(request.headers);
   const rl = rateLimit(`webhook-publish:${ip}`, 30, 60_000);
   if (!rl.allowed) {
@@ -75,7 +73,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Signature verified — parse + validate the payload (§5: validate all input).
   let payload: Record<string, unknown>;
   try {
     payload = JSON.parse(rawBody);
@@ -120,33 +117,14 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Links: re-validate each {url,label} (http/https only, §5 + §8).
-  let linksJson = "[]";
-  if (Array.isArray(payload.links)) {
-    const links = payload.links
-      .filter(
-        (l): l is { url: string; label: string } =>
-          typeof l === "object" &&
-          l !== null &&
-          typeof (l as Record<string, unknown>).url === "string" &&
-          typeof (l as Record<string, unknown>).label === "string",
-      )
-      .slice(0, 10)
-      .map((l) => {
-        try {
-          const u = new URL((l as { url: string }).url);
-          if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-          return {
-            url: (l as { url: string }).url,
-            label: (l as { label: string }).label,
-          };
-        } catch {
-          return null;
-        }
-      })
-      .filter((l): l is { url: string; label: string } => l !== null);
-    linksJson = serializeLinks(links);
+  const linksCheck = validateAnnouncementLinks(payload.links);
+  if (!linksCheck.valid) {
+    return withCache(
+      NextResponse.json({ error: linksCheck.error }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
   }
+  const linksJson = serializeLinks(linksCheck.normalized);
 
   const pinned = typeof payload.pinned === "boolean" ? payload.pinned : false;
   const date =
@@ -179,7 +157,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     date: created.date,
   };
 
-  // Audit log with a synthetic actor (no admin session for a webhook).
   try {
     await db.activityLog.create({
       data: {

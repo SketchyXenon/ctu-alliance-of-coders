@@ -7,7 +7,6 @@ const nextConfig: NextConfig = {
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
-      // Only allow Supabase Storage URLs for remote images.
       { protocol: "https", hostname: "*.supabase.co" },
       { protocol: "https", hostname: "*.supabase.in" },
     ],
@@ -16,11 +15,6 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
   async headers() {
-    // Base security headers for ALL responses, including static assets that
-    // the proxy (src/proxy.ts) matcher skips. The proxy sets a stricter CSP
-    // for HTML pages (dev adds unsafe-eval for Turbopack), overriding these.
-    // H6 fix: CSP + HSTS were missing from next.config.ts, leaving static
-    // asset responses without the primary XSS defense or SSL-strip protection.
     const csp = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline'",
@@ -48,7 +42,8 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value:
+              "camera=(), microphone=(), geolocation=(), payment=(), usb=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()",
           },
         ],
       },

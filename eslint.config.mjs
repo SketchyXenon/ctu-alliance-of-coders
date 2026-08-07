@@ -23,6 +23,8 @@ const eslintConfig = [
 
       "react-hooks/exhaustive-deps": "warn",
       "react-hooks/purity": "off",
+
+      "react-hooks/set-state-in-effect": "warn",
       "react/no-unescaped-entities": "off",
       "react/display-name": "off",
       "react/prop-types": "off",
@@ -58,9 +60,9 @@ const eslintConfig = [
       "upload/**",
       "download/**",
       "agent-ctx/**",
+      "extracted-tar/**",
     ],
   },
 ];
 
 export default eslintConfig;
-s;

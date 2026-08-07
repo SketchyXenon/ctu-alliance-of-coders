@@ -65,8 +65,8 @@ export const GET = withPrismaError(async function GET() {
 
   await logActivity({
     userId: user.id,
-    action: "login",
-    entity: "session",
+    action: "view",
+    entity: "admin_user",
     summary: `Viewed admin users list (${items.length} accounts)`,
   });
 

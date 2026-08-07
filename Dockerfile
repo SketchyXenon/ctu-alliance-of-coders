@@ -1,8 +1,4 @@
 # Dockerfile for the Alliance of Coders app.
-# Multi-stage build: install deps + build in stage 1, copy standalone to a
-# minimal runtime image in stage 2. Per 02-system-design.md section 5
-# (stateless services) and 06-security-architecture.md section 9 (network
-# posture). No emojis (Z.md).
 
 # --- Stage 1: build ---
 FROM oven/bun:1.3 AS build
