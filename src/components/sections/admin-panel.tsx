@@ -5,6 +5,7 @@ import {
   Activity,
   AlertCircle,
   BarChart3,
+  Bot,
   Calendar,
   Download,
   LayoutDashboard,
@@ -48,6 +49,7 @@ import { LoginForm } from "@/components/admin/login-form";
 import { InboxPanel } from "@/components/admin/inbox-panel";
 import { OfficersManager } from "@/components/admin/officers-manager";
 import { IntegrationsPanel } from "@/components/admin/integrations-panel";
+import { ChatbotSettings } from "@/components/admin/chatbot-settings";
 import { ActivityPanel } from "@/components/admin/activity-panel";
 import { AdminUsersPanel } from "@/components/admin/admin-users-panel";
 import { AnalyticsPanel } from "@/components/admin/analytics-panel";
@@ -130,6 +132,7 @@ export function AdminPanel() {
     setForbiddenUser(null);
     toast.success("Signed out");
   }
+
   const refreshMessages = React.useCallback(async () => {
     const { data, error } = await api.get<{ items: ContactMessage[] }>(
       "/api/contact",
@@ -164,13 +167,9 @@ export function AdminPanel() {
     );
   }
 
-  // ---- Anonymous -----------------------------------------------------------
-
   if (auth.status === "anonymous") {
     return <LoginForm />;
   }
-
-  // ---- Signed in but not an admin -----------------------------------------
 
   if (auth.status === "forbidden") {
     return (
@@ -208,8 +207,6 @@ export function AdminPanel() {
       </div>
     );
   }
-
-  // ---- Admin dashboard ----------------------------------------------------
 
   const user = auth.user;
   const initials = (user.email ?? "").split("@")[0].slice(0, 2).toUpperCase();
@@ -341,6 +338,10 @@ export function AdminPanel() {
                 <RefreshCw className="size-3.5" aria-hidden="true" />
                 Integrations
               </TabsTrigger>
+              <TabsTrigger value="assistant">
+                <Bot className="size-3.5" aria-hidden="true" />
+                AI Assistant
+              </TabsTrigger>
               <TabsTrigger value="activity">
                 <Activity className="size-3.5" aria-hidden="true" />
                 Activity
@@ -367,6 +368,11 @@ export function AdminPanel() {
           </TabsContent>
           <TabsContent value="integrations" className="mt-4">
             <IntegrationsPanel />
+          </TabsContent>
+          <TabsContent value="assistant" className="mt-4">
+            <div className="mx-auto max-w-2xl">
+              <ChatbotSettings />
+            </div>
           </TabsContent>
           <TabsContent value="activity" className="mt-4">
             <ActivityPanel />
