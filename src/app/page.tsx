@@ -19,11 +19,17 @@ import { ReadingProgress } from "@/components/reading-progress";
 import { RecentActivity } from "@/components/recent-activity";
 import { SectionTransition } from "@/components/section-transition";
 import { ShortcutHelp } from "@/components/shortcut-help";
-import { AnnouncementPost, AnnouncementNotFound } from "@/components/sections/announcement-post";
+import {
+  AnnouncementPost,
+  AnnouncementNotFound,
+} from "@/components/sections/announcement-post";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import { ChatbotWidget } from "@/components/chatbot-widget";
-import { parseAnnouncementHash, buildAnnouncementHash } from "@/lib/announcement-nav";
+import {
+  parseAnnouncementHash,
+  buildAnnouncementHash,
+} from "@/lib/announcement-nav";
 import type {
   Announcement,
   ContactMessage,
@@ -34,31 +40,43 @@ import type {
 
 const HeroSection = dynamic(
   () => import("@/components/sections/hero-section").then((m) => m.HeroSection),
-  { ssr: false }
+  { ssr: false },
 );
 const AnnouncementsSection = dynamic(
-  () => import("@/components/sections/announcements-section").then((m) => m.AnnouncementsSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/announcements-section").then(
+      (m) => m.AnnouncementsSection,
+    ),
+  { ssr: false },
 );
 const OfficersSection = dynamic(
-  () => import("@/components/sections/officers-section").then((m) => m.OfficersSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/officers-section").then(
+      (m) => m.OfficersSection,
+    ),
+  { ssr: false },
 );
 const ContactSection = dynamic(
-  () => import("@/components/sections/contact-section").then((m) => m.ContactSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/contact-section").then(
+      (m) => m.ContactSection,
+    ),
+  { ssr: false },
 );
 const PolicyPageSection = dynamic(
-  () => import("@/components/sections/policy-page").then((m) => m.PolicyPageSection),
-  { ssr: false }
+  () =>
+    import("@/components/sections/policy-page").then(
+      (m) => m.PolicyPageSection,
+    ),
+  { ssr: false },
 );
 const FaqSection = dynamic(
   () => import("@/components/sections/faq-section").then((m) => m.FaqSection),
-  { ssr: false }
+  { ssr: false },
 );
 const AdminPanel = dynamic(
   () => import("@/components/sections/admin-panel").then((m) => m.AdminPanel),
-  { ssr: false }
+  { ssr: false },
 );
 
 export default function Home() {
@@ -82,24 +100,39 @@ export default function Home() {
   const [paletteOpen, setPaletteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
 
-  const [activeAnnouncementId, setActiveAnnouncementId] = React.useState<string | null>(null);
-  const [confirmDeleteAnnouncement, setConfirmDeleteAnnouncement] = React.useState<Announcement | null>(null);
+  const [activeAnnouncementId, setActiveAnnouncementId] = React.useState<
+    string | null
+  >(null);
+  const [confirmDeleteAnnouncement, setConfirmDeleteAnnouncement] =
+    React.useState<Announcement | null>(null);
 
   // ---- Initial data fetch -----------------------------------------------
   React.useEffect(() => {
     let cancelled = false;
     async function load() {
       setSyncStatus({ ready: false, saving: false, error: null });
-      const { data, error } = await api.get<{ data: SiteData }>("/api/site-data");
+      const { data, error } = await api.get<{ data: SiteData }>(
+        "/api/site-data",
+      );
       if (cancelled) return;
       if (error || !data) {
-        setSyncStatus({ ready: true, saving: false, error: error?.message ?? "Failed to load site data", lastSavedAt: null });
+        setSyncStatus({
+          ready: true,
+          saving: false,
+          error: error?.message ?? "Failed to load site data",
+          lastSavedAt: null,
+        });
         setInitialized(true);
         return;
       }
       setAnnouncements(data.data.announcements);
       setAdminYears(data.data.adminYears);
-      setSyncStatus({ ready: true, saving: false, error: null, lastSavedAt: Date.now() });
+      setSyncStatus({
+        ready: true,
+        saving: false,
+        error: null,
+        lastSavedAt: Date.now(),
+      });
       setInitialized(true);
     }
     void load();
@@ -111,15 +144,22 @@ export default function Home() {
   React.useEffect(() => {
     let cancelled = false;
     async function check() {
-      const { data } = await api.get<{ user: { id: string; email: string; name: string | null; role: string } | null }>(
-        "/api/auth/session"
-      );
+      const { data } = await api.get<{
+        user: {
+          id: string;
+          email: string;
+          name: string | null;
+          role: string;
+        } | null;
+      }>("/api/auth/session");
       if (cancelled) return;
       if (data?.user && data.user.role === "admin") {
         setIsAdmin(true);
         setAdminEmail(data.user.email);
         // Load admin-only inbox.
-        const inbox = await api.get<{ items: ContactMessage[] }>("/api/contact");
+        const inbox = await api.get<{ items: ContactMessage[] }>(
+          "/api/contact",
+        );
         if (!cancelled && inbox.data) {
           setPendingMessages(inbox.data.items);
         }
@@ -131,23 +171,28 @@ export default function Home() {
     };
   }, []);
 
-
   const { setTheme, theme } = useTheme();
   const toggleTheme = React.useCallback(() => {
     setTheme(theme === "dark" ? "light" : "dark");
   }, [setTheme, theme]);
 
-  const handleNav = React.useCallback((section: SectionKey) => {
-    setActiveNav(section);
-    setActiveAnnouncementId(null);
-    if (typeof window !== "undefined") {
-     
-      if (window.location.hash) {
-        history.replaceState(null, "", window.location.pathname + window.location.search);
+  const handleNav = React.useCallback(
+    (section: SectionKey) => {
+      setActiveNav(section);
+      setActiveAnnouncementId(null);
+      if (typeof window !== "undefined") {
+        if (window.location.hash) {
+          history.replaceState(
+            null,
+            "",
+            window.location.pathname + window.location.search,
+          );
+        }
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
-  }, [setActiveNav]);
+    },
+    [setActiveNav],
+  );
 
   React.useEffect(() => {
     if (typeof window === "undefined") return;
@@ -183,7 +228,11 @@ export default function Home() {
   const handleCloseAnnouncement = React.useCallback(() => {
     setActiveAnnouncementId(null);
     if (typeof window !== "undefined" && window.location.hash) {
-      history.pushState(null, "", window.location.pathname + window.location.search);
+      history.pushState(
+        null,
+        "",
+        window.location.pathname + window.location.search,
+      );
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
@@ -191,7 +240,9 @@ export default function Home() {
   useKeyboardShortcuts(handleNav, toggleTheme, () => setHelpOpen((o) => !o));
   useCommandPaletteShortcut(() => setPaletteOpen((o) => !o));
 
-  async function addAnnouncement(ann: Omit<Announcement, "date"> & { date?: string }) {
+  async function addAnnouncement(
+    ann: Omit<Announcement, "date"> & { date?: string },
+  ) {
     setSyncStatus({ saving: true, error: null });
     const payload = {
       title: ann.title,
@@ -201,8 +252,15 @@ export default function Home() {
       links: ann.links,
       pinned: ann.pinned,
     };
-    const { data, error } = await api.post<{ item: Announcement }>("/api/announcements", payload);
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    const { data, error } = await api.post<{ item: Announcement }>(
+      "/api/announcements",
+      payload,
+    );
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error || !data) return;
     setAnnouncements([data.item, ...usePageStore.getState().announcements]);
   }
@@ -211,22 +269,33 @@ export default function Home() {
     setSyncStatus({ saving: true, error: null });
     const { data, error } = await api.patch<{ item: Announcement }>(
       `/api/announcements/${ann.id}`,
-      { title: ann.title, body: ann.body, type: ann.type, image: ann.image, links: ann.links, pinned: ann.pinned }
+      {
+        title: ann.title,
+        body: ann.body,
+        type: ann.type,
+        image: ann.image,
+        links: ann.links,
+        pinned: ann.pinned,
+      },
     );
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error || !data) return;
     setAnnouncements(
-      usePageStore.getState().announcements.map((a) => (a.id === ann.id ? data.item : a))
+      usePageStore
+        .getState()
+        .announcements.map((a) => (a.id === ann.id ? data.item : a)),
     );
   }
-
 
   function deleteAnnouncement(id: string): Promise<boolean> {
     const ann = usePageStore.getState().announcements.find((a) => a.id === id);
     if (!ann) return Promise.resolve(false);
     setConfirmDeleteAnnouncement(ann);
     return new Promise<boolean>((resolve) => {
- 
       deleteResolverRef.current = resolve;
     });
   }
@@ -237,11 +306,17 @@ export default function Home() {
     if (!ann) return;
     setSyncStatus({ saving: true, error: null });
     const { error } = await api.delete(`/api/announcements/${ann.id}`);
-    setSyncStatus({ saving: false, error: error?.message ?? null, lastSavedAt: Date.now() });
+    setSyncStatus({
+      saving: false,
+      error: error?.message ?? null,
+      lastSavedAt: Date.now(),
+    });
     if (error) {
       throw new Error(error.message);
     }
-    setAnnouncements(usePageStore.getState().announcements.filter((a) => a.id !== ann.id));
+    setAnnouncements(
+      usePageStore.getState().announcements.filter((a) => a.id !== ann.id),
+    );
     // If the dedicated view was showing this announcement, go back to the list.
     if (activeAnnouncementId === ann.id) {
       handleCloseAnnouncement();
@@ -258,8 +333,10 @@ export default function Home() {
     category: string;
     message: string;
   }) {
- 
-    const { data, error } = await api.post<{ ok?: true }>("/api/contact", message);
+    const { data, error } = await api.post<{ ok?: true }>(
+      "/api/contact",
+      message,
+    );
     if (error || !data) {
       throw new Error(error?.message ?? "Failed to send message.");
     }
@@ -267,7 +344,10 @@ export default function Home() {
 
   const heroStats: HeroStats[] = React.useMemo(() => {
     const currentYear = adminYears[adminYears.length - 1];
-    const totalOfficerRecords = adminYears.reduce((sum, y) => sum + y.officers.length, 0);
+    const totalOfficerRecords = adminYears.reduce(
+      (sum, y) => sum + y.officers.length,
+      0,
+    );
     return [
       { value: announcements.length, label: "Announcements" },
       { value: currentYear?.officers.length ?? 0, label: "Current Officers" },
@@ -280,7 +360,6 @@ export default function Home() {
     if (activeAnnouncementId) {
       const ann = announcements.find((a) => a.id === activeAnnouncementId);
       if (!ann) {
-      
         if (!syncStatus.ready) {
           return (
             <div className="mx-auto w-full max-w-3xl px-4 py-20 text-center text-sm text-muted-foreground">
@@ -297,14 +376,22 @@ export default function Home() {
           onBack={handleCloseAnnouncement}
           isAdmin={isAdmin}
           onEdit={(a) => {
-            
             handleCloseAnnouncement();
-            is back in the DOM.
             setTimeout(() => editRequestRef.current?.(a), 0);
           }}
-          onDelete={(id) => { void deleteAnnouncement(id); }}
-          onPrev={idx > 0 ? () => handleOpenAnnouncement(announcements[idx - 1]) : undefined}
-          onNext={idx >= 0 && idx < announcements.length - 1 ? () => handleOpenAnnouncement(announcements[idx + 1]) : undefined}
+          onDelete={(id) => {
+            void deleteAnnouncement(id);
+          }}
+          onPrev={
+            idx > 0
+              ? () => handleOpenAnnouncement(announcements[idx - 1])
+              : undefined
+          }
+          onNext={
+            idx >= 0 && idx < announcements.length - 1
+              ? () => handleOpenAnnouncement(announcements[idx + 1])
+              : undefined
+          }
           hasPrev={idx > 0}
           hasNext={idx >= 0 && idx < announcements.length - 1}
           position={idx >= 0 ? `${idx + 1} / ${announcements.length}` : null}
@@ -346,16 +433,21 @@ export default function Home() {
       case "Terms of Use":
       case "Cookie Policy": {
         const policy = getPolicyPage(activeNav);
-        return policy ? <PolicyPageSection policy={policy} /> : <HeroSection stats={heroStats} onNav={handleNav} />;
+        return policy ? (
+          <PolicyPageSection policy={policy} />
+        ) : (
+          <HeroSection stats={heroStats} onNav={handleNav} />
+        );
       }
       default:
         return <HeroSection stats={heroStats} onNav={handleNav} />;
     }
   }
 
-  const editRequestRef = React.useRef<((ann: Announcement) => void) | null>(null);
+  const editRequestRef = React.useRef<((ann: Announcement) => void) | null>(
+    null,
+  );
 
-  
   const showReadingProgress =
     activeAnnouncementId !== null ||
     activeNav === "Announcements" ||
@@ -371,7 +463,7 @@ export default function Home() {
   ) : (
     <div className="flex min-h-screen flex-col bg-background">
       <ReadingProgress active={showReadingProgress} />
-    
+
       <a
         href="#main-content"
         className="sr-only z-[70] rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:shadow-lg"
@@ -387,10 +479,12 @@ export default function Home() {
       <SiteFooter />
       <BackToTop />
       <CookieConsent />
-      
+
       <ChatbotWidget />
-      
-      <AnalyticsBeacon section={activeAnnouncementId ? "Announcements" : activeNav} />
+
+      <AnalyticsBeacon
+        section={activeAnnouncementId ? "Announcements" : activeNav}
+      />
       <CommandPalette
         open={paletteOpen}
         onOpenChange={setPaletteOpen}
@@ -398,7 +492,6 @@ export default function Home() {
       />
       <ShortcutHelp open={helpOpen} onOpenChange={setHelpOpen} />
 
-   
       <ConfirmDialog
         open={confirmDeleteAnnouncement !== null}
         onOpenChange={(o) => {
