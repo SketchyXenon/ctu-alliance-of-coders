@@ -106,7 +106,6 @@ export default function Home() {
   const [confirmDeleteAnnouncement, setConfirmDeleteAnnouncement] =
     React.useState<Announcement | null>(null);
 
-  // ---- Initial data fetch -----------------------------------------------
   React.useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -156,7 +155,7 @@ export default function Home() {
       if (data?.user && data.user.role === "admin") {
         setIsAdmin(true);
         setAdminEmail(data.user.email);
-        // Load admin-only inbox.
+
         const inbox = await api.get<{ items: ContactMessage[] }>(
           "/api/contact",
         );
@@ -211,7 +210,6 @@ export default function Home() {
     }
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpenAnnouncement = React.useCallback((ann: Announcement) => {
@@ -237,9 +235,11 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  // ---- Keyboard shortcuts (1-5 nav, T theme) -----------------------------
   useKeyboardShortcuts(handleNav, toggleTheme, () => setHelpOpen((o) => !o));
   useCommandPaletteShortcut(() => setPaletteOpen((o) => !o));
 
+  // ---- Announcement CRUD -------------------------------------------------
   async function addAnnouncement(
     ann: Omit<Announcement, "date"> & { date?: string },
   ) {
@@ -317,7 +317,7 @@ export default function Home() {
     setAnnouncements(
       usePageStore.getState().announcements.filter((a) => a.id !== ann.id),
     );
-    // If the dedicated view was showing this announcement, go back to the list.
+
     if (activeAnnouncementId === ann.id) {
       handleCloseAnnouncement();
     }
@@ -325,6 +325,7 @@ export default function Home() {
     deleteResolverRef.current = null;
   }
 
+  // ---- Contact submit ----------------------------------------------------
   async function submitContact(message: {
     clientId: string;
     name: string;
@@ -341,7 +342,6 @@ export default function Home() {
       throw new Error(error?.message ?? "Failed to send message.");
     }
   }
-
   const heroStats: HeroStats[] = React.useMemo(() => {
     const currentYear = adminYears[adminYears.length - 1];
     const totalOfficerRecords = adminYears.reduce(
@@ -377,6 +377,7 @@ export default function Home() {
           isAdmin={isAdmin}
           onEdit={(a) => {
             handleCloseAnnouncement();
+
             setTimeout(() => editRequestRef.current?.(a), 0);
           }}
           onDelete={(id) => {
