@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin, ROLE_SUPER_ADMIN } from "@/lib/auth";
 import { rateLimit } from "@/lib/security";
 import { withPrismaError } from "@/lib/route-helpers";
 import { logActivity } from "@/lib/activity";
@@ -38,6 +38,7 @@ export const GET = withPrismaError(async function GET() {
       email: true,
       name: true,
       role: true,
+      active: true,
       createdAt: true,
       sessions: {
         orderBy: { createdAt: "desc" },
@@ -47,6 +48,7 @@ export const GET = withPrismaError(async function GET() {
     },
   });
 
+  const viewerIsSuperAdmin = user.role === ROLE_SUPER_ADMIN;
   const items = admins.map((a) => {
     const lastSession = a.sessions[0];
     return {
@@ -54,12 +56,15 @@ export const GET = withPrismaError(async function GET() {
       email: a.email,
       name: a.name,
       role: a.role,
+      active: a.active,
       createdAt: a.createdAt.toISOString(),
       lastActiveAt: lastSession ? lastSession.createdAt.toISOString() : null,
       sessionExpiresAt: lastSession
         ? lastSession.expiresAt.toISOString()
         : null,
       isSelf: a.id === user.id,
+      canManage:
+        viewerIsSuperAdmin && a.id !== user.id && a.role !== ROLE_SUPER_ADMIN,
     };
   });
 
@@ -70,5 +75,8 @@ export const GET = withPrismaError(async function GET() {
     summary: `Viewed admin users list (${items.length} accounts)`,
   });
 
-  return withCache(NextResponse.json({ items }), CACHE_NO_STORE);
+  return withCache(
+    NextResponse.json({ items, viewerIsSuperAdmin }),
+    CACHE_NO_STORE,
+  );
 });

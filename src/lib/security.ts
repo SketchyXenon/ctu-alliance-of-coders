@@ -74,7 +74,6 @@ export function validateEmail(value: unknown): ValidationResult {
   }
   return { valid: true, error: null };
 }
-
 export function generateToken(bytes = 32): string {
   const buf = new Uint8Array(bytes);
   crypto.getRandomValues(buf);
@@ -180,6 +179,7 @@ export function truncate(str: unknown, maxLen = 100): string {
   if (typeof str !== "string") return "";
   return str.length <= maxLen ? str : str.slice(0, maxLen - 1) + "…";
 }
+
 export function formatDate(dateStr: string): string {
   try {
     return new Date(dateStr + "T00:00:00").toLocaleDateString("en-PH", {
@@ -208,7 +208,6 @@ export function getClientIp(headers: Headers): string {
   }
   return headers.get("x-real-ip") || "unknown";
 }
-
 export function maskEmail(email: string): string {
   const at = email.indexOf("@");
   if (at <= 0) return "***";
@@ -232,4 +231,10 @@ export function formatDateTime(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+export function _resetRateLimitForTesting(): void {
+  rateLimitStore.clear();
+  lockoutStore.clear();
+  lastEvictionRun = 0;
 }

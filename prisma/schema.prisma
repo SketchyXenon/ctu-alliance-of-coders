@@ -1,8 +1,3 @@
-// Alliance of Coders - production schema (PostgreSQL / Supabase).
-// Prisma 7: the datasource URL is no longer in the schema. It lives in
-// prisma.config.ts (for CLI) and is passed as an adapter to PrismaClient
-// (for runtime). See prisma.config.ts and src/lib/db.ts.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -17,7 +12,7 @@ model Announcement {
   title     String
   body      String   @db.Text
   image     String?  @map("image_url")
-  links     String   @default("")  @db.Text  // JSON-encoded array of {url, label} objects
+  links     String   @default("")  @db.Text  
   pinned    Boolean  @default(false)
   date      String
   createdAt DateTime @default(now()) @map("created_at")
@@ -49,9 +44,7 @@ model Officer {
   role      String    @default("Open Position")
   image     String?   @map("image_url")
   sortOrder Int       @default(0) @map("sort_order")
-  // Self-relation: who this officer reports to (org-chart hierarchy).
-  // Nullable so legacy rows + vacant slots work without a parent. The API
-  // validates the parent exists in the same year and rejects cycles.
+
   reportsToId String? @map("reports_to_id") @db.Uuid
   reportsTo   Officer?  @relation("OfficerHierarchy", fields: [reportsToId], references: [id], onDelete: SetNull)
   directReports Officer[] @relation("OfficerHierarchy")
@@ -84,14 +77,17 @@ model ContactMessage {
 }
 
 model AdminUser {
-  id           String         @id @default(uuid()) @db.Uuid
-  email        String         @unique
-  name         String?
-  passwordHash String         @map("password_hash")
-  role         String         @default("admin")
-  sessions     AdminSession[]
-  createdAt    DateTime       @default(now()) @map("created_at")
-  updatedAt    DateTime       @updatedAt @map("updated_at")
+  id             String              @id @default(uuid()) @db.Uuid
+  email          String              @unique
+  name           String?
+  passwordHash   String              @map("password_hash")
+  role           String              @default("admin")
+  active         Boolean             @default(true)
+  sessions       AdminSession[]
+  mfaChallenges  AdminMfaChallenge[]
+  invitesCreated AdminInvite[]
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
 
   @@map("admin_users")
 }
@@ -106,6 +102,40 @@ model AdminSession {
   @@index([userId])
   @@index([expiresAt])
   @@map("admin_sessions")
+}
+
+model AdminMfaChallenge {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @map("code_hash")
+  attempts  Int       @default(0)
+  consumed  Boolean   @default(false)
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_mfa_challenges")
+}
+
+model AdminInvite {
+  id        String     @id @default(uuid()) @db.Uuid
+  email     String
+  role      String     @default("admin")
+  tokenHash String     @unique @map("token_hash")
+  createdBy String     @map("created_by") @db.Uuid
+  creator   AdminUser  @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  expiresAt DateTime   @map("expires_at")
+  usedAt    DateTime?  @map("used_at")
+  usedBy    String?    @map("used_by")
+  revokedAt DateTime?  @map("revoked_at")
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([createdBy])
+  @@index([expiresAt])
+  @@map("admin_invites")
 }
 
 model ActivityLog {
@@ -123,9 +153,6 @@ model ActivityLog {
   @@map("activity_logs")
 }
 
-// Privacy-first page-view analytics. Per 06 section 8 (data minimization):
-// daily visitor hash (SHA-256 of IP + day), NEVER raw IP. No cookies, no PII.
-// Per Z.md: no external analytics SDK.
 model PageView {
   id          String   @id @default(uuid()) @db.Uuid
   visitorHash String?  @map("visitor_hash")

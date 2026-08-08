@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { verifyPassword, createSession } from "@/lib/auth";
+import { verifyPassword, isAdminRole } from "@/lib/auth";
+import { createMfaChallenge } from "@/lib/mfa";
 import {
   validateEmail,
   rateLimit,
@@ -11,7 +12,6 @@ import {
   clearLoginFailures,
 } from "@/lib/security";
 import { validatePassword } from "@/lib/validation";
-import { logActivity } from "@/lib/activity";
 import { logger } from "@/lib/logger";
 import { withPrismaError } from "@/lib/route-helpers";
 import { CACHE_NO_STORE, withCache } from "@/lib/cache";
@@ -59,7 +59,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
   const emailCheck = validateEmail(body.email);
   const passCheck = validatePassword(body.password, { minLen: 1, maxLen: 128 });
   if (!emailCheck.valid || !passCheck.valid || !passCheck.value) {
-    // Enumeration-safe: same response for invalid format.
     return loginFailureResponse();
   }
 
@@ -106,39 +105,35 @@ export const POST = withPrismaError(async function POST(request: Request) {
 
   if (!user || !ok) {
     recordLoginFailure(email);
-
     logger.warn("Failed login attempt", { email: maskEmail(email), ip });
     return loginFailureResponse();
   }
 
-  if (user.role !== "admin") {
+  if (!isAdminRole(user.role) || user.active === false) {
     recordLoginFailure(email);
-    logger.warn("Non-admin login attempt", {
+    logger.warn("Disqualified login attempt", {
       email: maskEmail(email),
       ip,
       role: user.role,
+      active: user.active,
     });
     return loginFailureResponse();
   }
 
   clearLoginFailures(email);
 
-  await createSession(user.id);
-  await logActivity({
+  const mfa = await createMfaChallenge(user.id, user.email);
+  logger.info("MFA challenge issued", {
     userId: user.id,
-    action: "login",
-    entity: "session",
-    summary: `Admin signed in: ${user.email}`,
+    email: maskEmail(email),
   });
 
   return withCache(
     NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
+      requiresMfa: true,
+      challengeId: mfa.challengeId,
+      emailMasked: maskEmail(email),
+      delivered: mfa.delivered,
     }),
     CACHE_NO_STORE,
   );

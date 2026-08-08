@@ -11,16 +11,24 @@ const scrypt = promisify(scryptCallback) as (
 ) => Promise<Buffer>;
 
 export const SESSION_COOKIE = "aoc_admin_session";
-const SESSION_TTL_MS = 1000 * 60 * 60 * 8; // 8 hours
+const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
 const MAX_SESSIONS_PER_USER = 5;
 
-/** Hash a password with a per-user salt using async scrypt. */
+export const ROLE_SUPER_ADMIN = "super_admin";
+export const ROLE_ADMIN = "admin";
+export type AdminRole = typeof ROLE_SUPER_ADMIN | typeof ROLE_ADMIN;
+
+export function isAdminRole(role: string): role is AdminRole {
+  return role === ROLE_SUPER_ADMIN || role === ROLE_ADMIN;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
   const hash = await scrypt(password, salt, 64);
   return `${salt}:${hash.toString("hex")}`;
 }
 
+/** Verify a password against a stored salt:hash string. Constant-time. */
 export async function verifyPassword(
   password: string,
   stored: string,
@@ -36,7 +44,6 @@ export async function verifyPassword(
     return false;
   }
 }
-
 export async function createSession(userId: string): Promise<string> {
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
@@ -96,7 +103,6 @@ export class SessionNotFoundError extends Error {
 
 export async function rotateSession(currentSessionId: string): Promise<void> {
   const newId = crypto.randomUUID();
-
   const result = await db.$transaction(async (tx) => {
     const existing = await tx.adminSession.findUnique({
       where: { id: currentSessionId },
@@ -150,14 +156,39 @@ export async function getCurrentUser() {
     }
     return null;
   }
+  if (session.user.active === false) {
+    try {
+      await db.adminSession.deleteMany({ where: { userId: session.user.id } });
+    } catch (e) {
+      logger.warn("Failed to purge sessions for inactive user", {
+        error: String(e),
+      });
+    }
+    return null;
+  }
   return session.user;
 }
 
 export async function requireAdmin() {
   const user = await getCurrentUser();
-  if (!user || user.role !== "admin") {
+  if (!user || !isAdminRole(user.role)) {
     const error = new Error("Unauthorized");
     (error as Error & { status: number }).status = 401;
+    throw error;
+  }
+  return user;
+}
+
+export async function requireSuperAdmin() {
+  const user = await getCurrentUser();
+  if (!user) {
+    const error = new Error("Unauthorized");
+    (error as Error & { status: number }).status = 401;
+    throw error;
+  }
+  if (user.role !== ROLE_SUPER_ADMIN) {
+    const error = new Error("Forbidden");
+    (error as Error & { status: number }).status = 403;
     throw error;
   }
   return user;

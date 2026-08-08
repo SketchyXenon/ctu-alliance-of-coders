@@ -41,14 +41,26 @@ Health check for monitoring.
 
 ### POST /api/auth/login
 **Body**: `{ email, password }`
-**Response**: `{ user: { id, email, name, role } }` (200) or `{ error: "Invalid email or password." }` (401)
+**Response**: `{ requiresMfa: true, challengeId, emailMasked, delivered }` (200) — an MFA challenge is issued; the session is NOT created until the code is verified. Or `{ error: "Invalid email or password." }` (401).
 **Rate limit**: 5/min per IP, 10/hour per email
-**Enumeration-safe**: identical 401 response for wrong email, wrong password, or non-admin role
+**Enumeration-safe**: identical 401 response for wrong email, wrong password, non-admin role, or inactive account
+**Roles**: accepts both `admin` and `super_admin`
+
+### POST /api/auth/mfa/verify
+**Body**: `{ challengeId, code }` (6-digit code)
+**Response**: `{ user: { id, email, name, role }, attemptsLeft }` (200) — sets session cookie. Or `{ error }` (401 — wrong/expired code; 429 — too many attempts, locked).
+**Rate limit**: 10/min per IP
+**Security**: 5-attempt lockout per challenge, single-use (consumed flag), 5-minute TTL
+
+### POST /api/auth/mfa/resend
+**Body**: `{ challengeId }`
+**Response**: `{ challengeId, delivered, resendAvailableIn }` (200). Or 429 (cooldown or rate limit).
+**Rate limit**: 3 per 10 min per IP, 30s cooldown between resends
 
 ### POST /api/auth/logout
 Destroys the current session.
 **Response**: `{ ok: true }`
-**Rate limit**: 20/min per admin (bounds audit-log noise from a stolen session)
+**Rate limit**: 20/min per admin
 
 ### GET /api/auth/session
 Check current session.
@@ -147,6 +159,75 @@ Auto-publishes an announcement from an external system. **Authorization is the H
 **Rate limit**: 30/min per IP (before signature verification, bounds brute-force)
 **Audit**: logged with synthetic `userId: "webhook"` actor
 **Security**: rate-limited per IP before sig verify; timestamp freshness (replay protection); timing-safe signature compare; full payload validation (title 5-200, body 10-5000, type allowlist, links http/https only)
+
+## Admin Account Management (super_admin only)
+
+### GET /api/admin-users
+List all admin accounts with role, active status, and last-active time.
+**Auth**: any admin (`admin` or `super_admin`)
+**Response**: `{ items: AdminUserEntry[], viewerIsSuperAdmin: boolean }`
+**Rate limit**: 30/min per admin
+
+### PATCH /api/admin-users/[id]
+Activate or deactivate an admin account.
+**Auth**: `super_admin` only (403 for regular admins)
+**Body**: `{ active: boolean }`
+**Response**: `{ ok: true, id, active }` (200)
+**Guards**: cannot target self (409); cannot target another super_admin (409); no-op if already in that state (409)
+**Side effects**: deactivation purges all sessions + MFA challenges for the target
+**Rate limit**: 20/min per super_admin
+
+### DELETE /api/admin-users/[id]
+Permanently delete an admin account.
+**Auth**: `super_admin` only
+**Response**: `{ ok: true }` (200)
+**Guards**: cannot target self (409); cannot target another super_admin (409)
+**Side effects**: transactional removal of sessions, MFA challenges, and the user
+**Rate limit**: 20/min per super_admin
+**UI**: double-confirmation — requires typing the admin's email to arm the delete button
+
+## Admin Invites
+
+### GET /api/admin-invites
+List all invites (active, used, revoked, expired).
+**Auth**: any admin
+**Response**: `{ items: InviteView[], viewerIsSuperAdmin: boolean }`
+**Rate limit**: 30/min per admin
+
+### POST /api/admin-invites
+Create a single-use invite link for a new admin.
+**Auth**: `super_admin` only (403 for regular admins)
+**Body**: `{ email, ttlDays? }` (role is hardcoded to `admin`)
+**Response**: `{ invite: { id, email, role, expiresAt, createdAt }, token }` (201) — the token is shown once
+**Rate limit**: 5/hr per super_admin + 10/hr per IP
+**Guards**: rejects if email is already an admin (409); rejects if 20 pending invites exist (409)
+
+### DELETE /api/admin-invites/[id]
+Revoke a pending invite.
+**Auth**: `super_admin` only
+**Response**: `{ ok: true }` (200) or 409 (already used/revoked/expired)
+**Rate limit**: 20/min per super_admin
+
+### POST /api/admin-invites/redeem
+Public endpoint — create an admin account from an invite link.
+**Auth**: none (the token is the credential)
+**Body**: `{ token, name?, password }` (password min 8 chars)
+**Response**: `{ ok: true, email, message }` (200) or `{ error }` (400 — invalid/expired/used/revoked token, weak password)
+**Rate limit**: 5/hr per IP
+**Security**: single-use (transactional claim guard), invitees always created as `admin` role
+
+## Chatbot
+
+### GET /api/chat
+Public status probe.
+**Response**: `{ enabled: boolean }`
+
+### POST /api/chat
+Public, content-grounded chat.
+**Body**: `{ messages: { role: "user"|"assistant", content: string }[] }`
+**Response**: `{ reply: string }` (200) or `{ error }` (400/429/502/503)
+**Rate limit**: 6/min per IP + 30/hour per IP
+**Security**: prompt-injection detection (`isPromptInjection`), abuse detection (`isAbuseRequest`), client system-role messages rejected, output sanitized (code blocks refused, context leaks refused), 20s LLM timeout. Grounded on full site context (announcements, officers, FAQ, policies, contact, socials).
 
 ## Error Responses
 

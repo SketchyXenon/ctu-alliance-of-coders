@@ -10,7 +10,9 @@ import {
   callChatCompletion,
   sanitizeReply,
   isAbuseRequest,
+  isPromptInjection,
   REFUSAL_ABUSE,
+  REFUSAL_INJECTION,
   CHAT_MAX_TURNS,
   CHAT_HISTORY_TURNS,
   CHAT_MAX_MSG_LEN,
@@ -162,6 +164,14 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  if (isPromptInjection(last.content)) {
+    logger.info("chat: prompt injection refused", {});
+    return withCache(
+      NextResponse.json({ reply: REFUSAL_INJECTION }),
+      CACHE_NO_STORE,
+    );
+  }
+
   if (isAbuseRequest(last.content)) {
     logger.info("chat: abuse request refused", {});
     return withCache(
@@ -185,7 +195,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  // Send the system prompt + the most recent turns (bounded) to the model.
   const history = cleaned.slice(-CHAT_HISTORY_TURNS);
   const llmMessages = [
     { role: "system" as const, content: systemPrompt },

@@ -78,6 +78,13 @@ const AdminPanel = dynamic(
   () => import("@/components/sections/admin-panel").then((m) => m.AdminPanel),
   { ssr: false },
 );
+const InviteRedeemForm = dynamic(
+  () =>
+    import("@/components/admin/invite-redeem-form").then(
+      (m) => m.InviteRedeemForm,
+    ),
+  { ssr: false },
+);
 
 export default function Home() {
   const {
@@ -105,6 +112,7 @@ export default function Home() {
   >(null);
   const [confirmDeleteAnnouncement, setConfirmDeleteAnnouncement] =
     React.useState<Announcement | null>(null);
+  const [inviteToken, setInviteToken] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -152,7 +160,10 @@ export default function Home() {
         } | null;
       }>("/api/auth/session");
       if (cancelled) return;
-      if (data?.user && data.user.role === "admin") {
+      if (
+        data?.user &&
+        (data.user.role === "admin" || data.user.role === "super_admin")
+      ) {
         setIsAdmin(true);
         setAdminEmail(data.user.email);
 
@@ -235,11 +246,28 @@ export default function Home() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  // ---- Keyboard shortcuts (1-5 nav, T theme) -----------------------------
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("invite");
+    if (token && /^[0-9a-f]{8,}$/i.test(token)) {
+      setInviteToken(token);
+    }
+  }, []);
+
+  const handleInviteRedeemDone = React.useCallback(() => {
+    setInviteToken(null);
+    if (typeof window !== "undefined") {
+      const url = window.location.pathname;
+      window.history.replaceState(null, "", url);
+    }
+    setActiveNav("Admin Panel");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [setActiveNav]);
+
   useKeyboardShortcuts(handleNav, toggleTheme, () => setHelpOpen((o) => !o));
   useCommandPaletteShortcut(() => setPaletteOpen((o) => !o));
 
-  // ---- Announcement CRUD -------------------------------------------------
   async function addAnnouncement(
     ann: Omit<Announcement, "date"> & { date?: string },
   ) {
@@ -317,7 +345,6 @@ export default function Home() {
     setAnnouncements(
       usePageStore.getState().announcements.filter((a) => a.id !== ann.id),
     );
-
     if (activeAnnouncementId === ann.id) {
       handleCloseAnnouncement();
     }
@@ -342,6 +369,7 @@ export default function Home() {
       throw new Error(error?.message ?? "Failed to send message.");
     }
   }
+
   const heroStats: HeroStats[] = React.useMemo(() => {
     const currentYear = adminYears[adminYears.length - 1];
     const totalOfficerRecords = adminYears.reduce(
@@ -377,7 +405,6 @@ export default function Home() {
           isAdmin={isAdmin}
           onEdit={(a) => {
             handleCloseAnnouncement();
-
             setTimeout(() => editRequestRef.current?.(a), 0);
           }}
           onDelete={(id) => {
@@ -444,7 +471,6 @@ export default function Home() {
         return <HeroSection stats={heroStats} onNav={handleNav} />;
     }
   }
-
   const editRequestRef = React.useRef<((ann: Announcement) => void) | null>(
     null,
   );
@@ -464,7 +490,6 @@ export default function Home() {
   ) : (
     <div className="flex min-h-screen flex-col bg-background">
       <ReadingProgress active={showReadingProgress} />
-
       <a
         href="#main-content"
         className="sr-only z-[70] rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:shadow-lg"
@@ -473,16 +498,21 @@ export default function Home() {
       </a>
       <SiteNav />
       <main id="main-content" className="flex-1" tabIndex={-1}>
-        <SectionTransition sectionKey={activeAnnouncementId ?? activeNav}>
-          {renderSection()}
-        </SectionTransition>
+        {inviteToken ? (
+          <InviteRedeemForm
+            token={inviteToken}
+            onDone={handleInviteRedeemDone}
+          />
+        ) : (
+          <SectionTransition sectionKey={activeAnnouncementId ?? activeNav}>
+            {renderSection()}
+          </SectionTransition>
+        )}
       </main>
       <SiteFooter />
       <BackToTop />
       <CookieConsent />
-
       <ChatbotWidget />
-
       <AnalyticsBeacon
         section={activeAnnouncementId ? "Announcements" : activeNav}
       />

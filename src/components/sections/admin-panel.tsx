@@ -71,7 +71,6 @@ export function AdminPanel() {
   const adminYears = usePageStore((s) => s.adminYears);
   const announcements = usePageStore((s) => s.announcements);
   const setAdminYears = usePageStore((s) => s.setAdminYears);
-
   const [checked, setChecked] = React.useState(false);
   const [forbiddenUser, setForbiddenUser] =
     React.useState<AdminUserPublic | null>(null);
@@ -86,7 +85,7 @@ export function AdminPanel() {
       );
       if (cancelled) return;
       if (data?.user) {
-        if (data.user.role !== "admin") {
+        if (data.user.role !== "admin" && data.user.role !== "super_admin") {
           setForbiddenUser(data.user);
           setIsAdmin(false);
           setAdminEmail(data.user.email);
@@ -269,7 +268,6 @@ export function AdminPanel() {
           </div>
         </div>
 
-        {/* Quick actions row */}
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
@@ -284,7 +282,6 @@ export function AdminPanel() {
           </Button>
         </div>
 
-        {/* Stats overview */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <AdminStatCard
             label="Announcements"

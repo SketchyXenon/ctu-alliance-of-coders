@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { GearLogo } from "@/components/gear-logo";
+import { MfaVerifyForm } from "@/components/admin/mfa-verify-form";
 import { api } from "@/lib/api-client";
 import { usePageStore } from "@/lib/store";
 import { validateEmail } from "@/lib/security";
@@ -23,9 +24,14 @@ import { validatePassword } from "@/lib/validation";
 import type { AdminUserPublic } from "@/lib/types";
 
 const GENERIC_ERROR = "Invalid email or password.";
-
 const MAX_ATTEMPTS = 5;
 const WINDOW_MS = 60_000;
+
+interface MfaState {
+  challengeId: string;
+  emailMasked: string;
+  delivered: boolean;
+}
 
 export function LoginForm() {
   const setIsAdmin = usePageStore((s) => s.setIsAdmin);
@@ -35,6 +41,7 @@ export function LoginForm() {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [mfa, setMfa] = React.useState<MfaState | null>(null);
 
   const attemptsRef = React.useRef<number[]>([]);
   const [retryIn, setRetryIn] = React.useState(0);
@@ -46,6 +53,28 @@ export function LoginForm() {
     }, 1000);
     return () => window.clearInterval(id);
   }, [retryIn]);
+
+  if (mfa) {
+    return (
+      <MfaVerifyForm
+        initialChallengeId={mfa.challengeId}
+        emailMasked={mfa.emailMasked}
+        delivered={mfa.delivered}
+        onBack={() => {
+          setMfa(null);
+          setPassword("");
+          setError(null);
+        }}
+        onSuccess={(user) => {
+          setIsAdmin(true);
+          setAdminEmail(user.email);
+          toast.success("Signed in", {
+            description: `Welcome back, ${user.email}.`,
+          });
+        }}
+      />
+    );
+  }
 
   const showFieldError = (valid: boolean, _msg: string) => {
     if (!valid) {
@@ -82,7 +111,11 @@ export function LoginForm() {
 
     try {
       const { data, error: apiError } = await api.post<{
-        user: AdminUserPublic;
+        user?: AdminUserPublic;
+        requiresMfa?: boolean;
+        challengeId?: string;
+        emailMasked?: string;
+        delivered?: boolean;
       }>("/api/auth/login", { email, password });
 
       if (apiError || !data) {
@@ -97,16 +130,27 @@ export function LoginForm() {
         return;
       }
 
-      setIsAdmin(true);
-      setAdminEmail(data.user.email);
-      toast.success("Signed in", {
-        description: `Welcome back, ${data.user.email}.`,
-      });
+      if (data.requiresMfa && data.challengeId) {
+        setMfa({
+          challengeId: data.challengeId,
+          emailMasked: data.emailMasked ?? "",
+          delivered: data.delivered ?? false,
+        });
+        setPassword("");
+        return;
+      }
+
+      if (data.user) {
+        setIsAdmin(true);
+        setAdminEmail(data.user.email);
+        toast.success("Signed in", {
+          description: `Welcome back, ${data.user.email}.`,
+        });
+      }
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
       setSubmitting(false);
-
       setPassword("");
     }
   }
@@ -118,7 +162,6 @@ export function LoginForm() {
     <div className="flex min-h-[50vh] items-center justify-center px-4 py-12 pb-32 sm:px-6">
       <Card className="w-full max-w-md border-border/60 shadow-lg">
         <CardHeader className="items-center gap-3 text-center">
-          {/* CardHeader is a grid; wrap logo in a full-width flex row to center it. */}
           <div className="flex w-full justify-center">
             <GearLogo size={56} />
           </div>
@@ -209,12 +252,6 @@ export function LoginForm() {
               )}
             </Button>
           </form>
-
-          <div className="mt-5">
-            <p className="text-center text-[11px] text-muted-foreground">
-              With built-in security.
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

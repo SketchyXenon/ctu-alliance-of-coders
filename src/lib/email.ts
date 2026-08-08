@@ -52,7 +52,6 @@ async function getTransporter(): Promise<Transporter> {
     port: cfg.port,
     secure: cfg.port === 465,
     auth: { user: cfg.user, pass: cfg.pass },
-
     connectionTimeout: 10_000,
     greetingTimeout: 10_000,
     socketTimeout: 30_000,
@@ -154,6 +153,7 @@ function mapSmtpError(msg: string): string {
   if (/ssl|tls|cert|self-signed/i.test(lower)) {
     return "SMTP TLS/SSL error. Check SMTP_PORT (587 for STARTTLS, 465 for TLS) and the server's certificate.";
   }
+  // Generic fallback — no internal details leaked.
   return "Failed to send email. Check the server logs for details.";
 }
 
@@ -187,6 +187,32 @@ export async function sendTestEmail(to: string): Promise<SendEmailResult> {
     const rawMsg =
       error instanceof Error ? error.message : "Unknown SMTP error";
     logger.error("SMTP test email failed", { error: rawMsg, to });
+    return { ok: false, error: mapSmtpError(rawMsg) };
+  }
+}
+export async function sendSecurityEmail(
+  to: string,
+  subject: string,
+  text: string,
+): Promise<SendEmailResult> {
+  const cfg = getSmtpConfig();
+  if (!cfg) {
+    return { ok: false, error: "SMTP is not configured." };
+  }
+  try {
+    const transporter = await getTransporter();
+    const info = await transporter.sendMail({
+      from: `"${cfg.fromName}" <${cfg.fromEmail}>`,
+      to,
+      replyTo: cfg.fromEmail,
+      subject,
+      text,
+    });
+    return { ok: true, messageId: info.messageId };
+  } catch (error) {
+    const rawMsg =
+      error instanceof Error ? error.message : "Unknown SMTP error";
+    logger.error("Security email send failed", { error: rawMsg, to });
     return { ok: false, error: mapSmtpError(rawMsg) };
   }
 }
