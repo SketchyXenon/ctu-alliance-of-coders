@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db, withDbRetry } from "@/lib/db";
-import { requireAdmin, getCurrentUser } from "@/lib/auth";
+import { requireAdmin, getCurrentUser, isAdminRole } from "@/lib/auth";
 import type { AdminUser } from "@prisma/client";
 import {
   validateText,
@@ -40,7 +40,7 @@ export function buildDedupResponse(
   existing: PrismaContactMessage,
   admin: Pick<AdminUser, "id" | "role"> | null,
 ): NextResponse {
-  if (admin && admin.role === "admin") {
+  if (admin && isAdminRole(admin.role)) {
     return withCache(
       NextResponse.json({
         item: toContactMessageDTO(existing),
@@ -87,9 +87,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
       },
     );
   }
-
   const admin = await getCurrentUser();
-  if (admin && admin.role === "admin") {
+  if (admin && isAdminRole(admin.role)) {
     return withCache(
       NextResponse.json(
         {
@@ -184,7 +183,6 @@ export const POST = withPrismaError(async function POST(request: Request) {
       CACHE_NO_STORE,
     );
   }
-
   const clientIdInput =
     typeof body.clientId === "string" && body.clientId
       ? String(body.clientId).slice(0, 128)

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyMfaChallenge, MFA_MAX_ATTEMPTS } from "@/lib/mfa";
-import { createSession } from "@/lib/auth";
+import { createSession, isAdminRole } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { rateLimit, getClientIp, maskEmail } from "@/lib/security";
 import { logActivity } from "@/lib/activity";
@@ -77,9 +77,9 @@ export const POST = withPrismaError(async function POST(request: Request) {
 
   const user = await db.adminUser.findUnique({
     where: { id: result.userId },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true, active: true },
   });
-  if (!user || user.role !== "admin") {
+  if (!user || !isAdminRole(user.role) || user.active === false) {
     return withCache(
       NextResponse.json({ error: GENERIC_FAIL }, { status: 401 }),
       CACHE_NO_STORE,

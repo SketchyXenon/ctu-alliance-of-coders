@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { isAdminRole } from "@/lib/auth";
 import { createMfaChallenge, MFA_RESEND_COOLDOWN_MS } from "@/lib/mfa";
 import { rateLimit, getClientIp, maskEmail } from "@/lib/security";
 import { logger } from "@/lib/logger";
@@ -58,7 +59,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     },
   });
 
-  if (!challenge || !challenge.user || challenge.user.role !== "admin") {
+  if (!challenge || !challenge.user || !isAdminRole(challenge.user.role)) {
     return withCache(
       NextResponse.json({ error: "Invalid request." }, { status: 400 }),
       CACHE_NO_STORE,
