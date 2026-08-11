@@ -58,6 +58,7 @@ import { Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 6;
 const TITLE_MAX = 200;
+
 const BODY_MAX = 5000;
 const IMAGE_URL_MAX = 500;
 
@@ -99,7 +100,6 @@ export interface AnnouncementsSectionProps {
   onDelete: (id: string) => void | Promise<boolean>;
   syncStatus: SyncStatus;
   onOpen?: (ann: Announcement) => void;
-
   editRequestRef?: React.MutableRefObject<((ann: Announcement) => void) | null>;
 }
 
@@ -360,7 +360,7 @@ export function AnnouncementsSection({
 
       <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 sm:flex-none">
+          <div className="relative w-full sm:w-[260px]">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
@@ -374,7 +374,7 @@ export function AnnouncementsSection({
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full pl-9 sm:w-[260px]"
+              className="w-full pl-9"
               aria-label="Search announcements"
             />
             {search && (
@@ -398,11 +398,13 @@ export function AnnouncementsSection({
           >
             <SelectTrigger
               id="announcement-sort"
-              className="h-10 w-auto gap-1.5"
+              className="h-10 w-10 justify-center px-0 sm:w-auto sm:justify-start sm:px-3"
               aria-label="Sort announcements"
             >
               <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
-              <SelectValue />
+              <span className="hidden sm:inline">
+                <SelectValue />
+              </span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="date-desc">Newest first</SelectItem>

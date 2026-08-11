@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
+const isVercel = process.env.VERCEL === "1";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(isVercel ? {} : { output: "standalone" as const }),
   reactStrictMode: true,
-  allowedDevOrigins: ["*.space-z.ai", "*.z.ai"],
+  allowedDevOrigins: ["*.space-z.ai", "*.z.ai", "127.0.0.1", "localhost"],
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
