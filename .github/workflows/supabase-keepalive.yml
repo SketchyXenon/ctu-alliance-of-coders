@@ -25,16 +25,28 @@ jobs:
             echo "::error::SUPABASE_URL or SUPABASE_ANON_KEY secret is not set. Add them under Settings > Secrets and variables > Actions."
             exit 1
           fi
+          # Strip any trailing whitespace/newlines from secrets (common cause
+          # of 401 when a key is pasted into GitHub's secret UI with a newline).
+          SUPABASE_URL="$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]')"
+          SUPABASE_ANON_KEY="$(printf '%s' "$SUPABASE_ANON_KEY" | tr -d '[:space:]')"
           echo "Pinging Supabase at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          # The keep-alive's goal is to PREVENT inactivity pause, not to verify
+          # auth. ANY HTTP response (2xx/3xx/4xx) proves the project is awake
+          # and processing requests. Only a connection failure (000) or a 5xx
+          # response means the project is paused or down. Per 02-system-design
+          # section 6: fail loud on real failures, not on auth rejections.
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             --max-time 30 \
             -X GET "${SUPABASE_URL%/}/rest/v1/" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
           echo "Supabase REST API responded with HTTP ${STATUS}"
-          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
-            echo "Supabase is awake and reachable."
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 500 ]; then
+            echo "Supabase is awake (HTTP ${STATUS} = server responded)."
+            if [ "$STATUS" -eq 401 ] || [ "$STATUS" -eq 403 ]; then
+              echo "::warning::Supabase returned ${STATUS} (auth rejected). The project IS awake, but the anon key may be wrong or have trailing whitespace. Verify SUPABASE_ANON_KEY in the repo secrets."
+            fi
           else
-            echo "::warning::Supabase REST API returned HTTP ${STATUS} (non-2xx). The project may be paused, the URL may be wrong, or the anon key may be invalid."
+            echo "::error::Supabase REST API returned HTTP ${STATUS} (5xx or connection failure). The project may be paused or down."
             exit 1
           fi
