@@ -1,0 +1,40 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    - cron: "0 0 * * 2,5"
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping_supabase:
+    name: Ping Supabase REST API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query Supabase REST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::SUPABASE_URL or SUPABASE_ANON_KEY secret is not set. Add them under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Pinging Supabase at $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            -X GET "${SUPABASE_URL%/}/rest/v1/" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
+          echo "Supabase REST API responded with HTTP ${STATUS}"
+          if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            echo "Supabase is awake and reachable."
+          else
+            echo "::warning::Supabase REST API returned HTTP ${STATUS} (non-2xx). The project may be paused, the URL may be wrong, or the anon key may be invalid."
+            exit 1
+          fi
