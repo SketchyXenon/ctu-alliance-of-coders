@@ -1,3 +1,8 @@
+# CI pipeline for the Next.js app.
+# Per 03-software-engineering.md section 10: run build, lint, test before merge;
+# keep the pipeline fast. No emojis (Z.md). Clear step names so a failing step
+# is obvious in the UI.
+
 name: CI
 
 on:
@@ -6,6 +11,7 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel a superseded run on the same ref so the pipeline stays fast.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -22,9 +28,17 @@ jobs:
       - name: Setup bun
         uses: oven-sh/setup-bun@v2
         with:
+          # Pin to the exact bun version that generated bun.lock. Prevents
+          # lockfile drift when a new bun release changes the resolution
+          # algorithm (--frozen-lockfile would then fail). Per 03 section 10:
+          # reproducible pipeline. Matches "packageManager" in package.json.
+          bun-version: "1.3.14"
           registry-url: https://registry.npmjs.org/
 
       - name: Install dependencies
+        # --frozen-lockfile: CI must fail if bun.lock is out of sync with
+        # package.json rather than silently rewriting it. Catches uncommitted
+        # lockfile drift before it reaches prod.
         run: bun install --frozen-lockfile
 
       - name: Lint
