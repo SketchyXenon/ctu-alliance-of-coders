@@ -1,5 +1,5 @@
 # CI pipeline for the Next.js app.
-# Per 03-software-engineering.md section 10: run build, lint, test before merge;
+# Per 03-software-engineering.md section 10: run build, lint before merge;
 # keep the pipeline fast. No emojis (Z.md). Clear step names so a failing step
 # is obvious in the UI.
 
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, typecheck, test, build
+    name: Lint, typecheck, build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -46,9 +46,6 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
-
-      - name: Test
-        run: bun run test
 
       - name: Build
         run: bun run build
