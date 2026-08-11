@@ -68,7 +68,6 @@
 :root {
   --radius: 0.625rem;
 
-  /* Brand palette - Alliance of Coders: navy + gold */
   --navy-950: #01081e;
   --navy-900: #020d30;
   --navy-800: #04194f;
@@ -126,7 +125,6 @@
   --sidebar-border: #dde4f5;
   --sidebar-ring: #0f318f;
 
-  /* Custom semantic tokens */
   --color-text-secondary: #3a4d78;
   --color-text-muted: #7a8db5;
   --color-bg-raised: #f0f3fb;
@@ -145,7 +143,6 @@
   --color-info-fg: #1e40af;
   --color-info-border: #93c5fd;
 
-  /* Badge tokens */
   --badge-award-bg: #fef9c3;
   --badge-award-fg: #713f12;
   --badge-award-border: #fde047;
@@ -171,14 +168,12 @@
   --surface-banner-bg: linear-gradient(135deg, #0a2470 0%, #0f318f 100%);
   --surface-banner-fg: #ffffff;
 
-  /* Hero */
   --hero-overlay-start: rgba(3, 12, 35, 0.82);
   --hero-overlay-mid: rgba(10, 36, 112, 0.6);
   --hero-overlay-end: rgba(20, 58, 140, 0.34);
   --hero-copy: rgba(244, 248, 255, 0.9);
   --hero-copy-muted: rgba(244, 248, 255, 0.78);
 
-  /* Shadows */
   --shadow-sm:
     0 1px 6px rgba(10, 36, 112, 0.08), 0 1px 2px rgba(10, 36, 112, 0.04);
   --shadow-md:
@@ -302,12 +297,11 @@
     background-color: var(--gold-300);
     color: var(--navy-900);
   }
-  /* Consistent focus-visible ring on all interactive elements */
+
   :focus-visible {
     outline: 2px solid var(--gold-500);
     outline-offset: 2px;
   }
-  /* Smooth focus transitions */
   button,
   a,
   input,
@@ -357,7 +351,6 @@
   }
 }
 
-/* Announcement badge classes */
 .badge-award {
   background-color: var(--badge-award-bg);
   color: var(--badge-award-fg);
@@ -384,9 +377,6 @@
   border-color: var(--gold-300);
 }
 
-/* Accent bars for the announcement modal - saturated type colors that read
-   clearly as a thin top stripe. Light mode uses the badge border colors
-   (stronger than the pale badge backgrounds); dark mode uses brighter variants. */
 .accent-bar-award {
   background: linear-gradient(90deg, var(--gold-400), var(--gold-500));
 }
@@ -414,7 +404,6 @@
   border-color: rgba(212, 160, 23, 0.35);
 }
 
-/* Spinning gear logo animation */
 @keyframes gear-spin {
   from {
     transform: rotate(0deg);
@@ -427,14 +416,12 @@
   animation: gear-spin 18s linear infinite;
 }
 
-/* Shimmer for skeleton loading states */
 @keyframes shimmer {
   100% {
     transform: translateX(100%);
   }
 }
 
-/* Subtle pulse for status indicators */
 @keyframes status-pulse {
   0%,
   100% {
@@ -448,7 +435,6 @@
   animation: status-pulse 2s ease-in-out infinite;
 }
 
-/* Card lift on hover - reusable depth effect */
 .card-lift {
   transition:
     transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
@@ -458,7 +444,6 @@
   transform: translateY(-4px);
 }
 
-/* Gold underline grow for nav links */
 .nav-underline {
   position: relative;
 }
@@ -495,15 +480,14 @@
   html {
     scroll-behavior: auto;
   }
-  /* Stop react-spinners (ClockLoader) hand rotation; keep the static ring. */
+
   .page-loader-spinner span[style*="animation"] {
     animation: none !important;
   }
-  /* Stop the skeleton shimmer sweep; block remains a static gray shape. */
   .skeleton::before {
     animation: none !important;
   }
-  /* Officer org-chart: no hover lift on tree nodes. */
+
   .officer-org-chart button {
     transition: none !important;
   }
@@ -511,8 +495,6 @@
     transform: none;
   }
 }
-
-/* Reading progress bar - fixed at top, shows scroll progress */
 .reading-progress {
   position: fixed;
   top: 0;
@@ -527,7 +509,6 @@
   border-bottom-right-radius: 2px;
 }
 
-/* Fade-in-up animation for banners (cookie consent, etc.) */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -539,7 +520,6 @@
   }
 }
 
-/* Line clamp utilities (used by recent activity feed) */
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -547,7 +527,6 @@
   overflow: hidden;
 }
 
-/* Gradient text shimmer for hero headline accent word */
 @keyframes gradient-shimmer {
   0% {
     background-position: 0% 50%;
@@ -582,7 +561,6 @@
   }
 }
 
-/* Print styles - hide nav/footer, show clean content */
 @media print {
   .no-print {
     display: none !important;
@@ -603,7 +581,6 @@
   }
 }
 
-/* Loading slide animation for page loader progress bar */
 @keyframes loadingSlide {
   0% {
     left: -50%;
@@ -622,4 +599,129 @@
 .officer-org-chart button:hover,
 .officer-org-chart button:focus-visible {
   cursor: pointer;
+}
+
+.error-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--navy-950), var(--navy-900));
+  color: #f6f8ff;
+  font-family:
+    var(--font-ibm-plex-sans),
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+.error-page__main {
+  position: relative;
+  z-index: 1;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.error-page__logo {
+  margin-bottom: 1.5rem;
+}
+.error-page__eyebrow {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--gold-300);
+}
+.error-page__eyebrow--destructive {
+  color: #fca5a5;
+}
+.error-page__title {
+  font-family: var(--font-space-grotesk), system-ui, sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0.75rem 0 0;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+}
+.error-page__body {
+  max-width: 24rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 1rem 0 0;
+  color: rgba(246, 248, 255, 0.72);
+}
+.error-page__actions {
+  margin-top: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.error-page__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  background: var(--gold-300);
+  color: var(--navy-900);
+  font-weight: 600;
+  font-size: 0.875rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+.error-page__button:hover {
+  background: var(--gold-400);
+}
+.error-page__button:focus-visible {
+  outline: 2px solid var(--gold-500);
+  outline-offset: 2px;
+}
+.error-page__button--outline {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+.error-page__button--outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.error-page__meta {
+  margin-top: 2rem;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(246, 248, 255, 0.4);
+}
+
+.loading-progress {
+  position: relative;
+  height: 2px;
+  width: 8rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.loading-progress__bar {
+  position: absolute;
+  inset-block: 0;
+  width: 50%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, var(--gold-500), var(--gold-300));
+  animation: loadingSlide 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-progress__bar {
+    animation: none;
+  }
 }

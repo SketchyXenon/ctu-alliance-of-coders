@@ -5,6 +5,7 @@ import {
   AlertCircle,
   ArrowDownUp,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Inbox,
@@ -12,6 +13,7 @@ import {
   Plus,
   Search,
   Send,
+  SlidersHorizontal,
   X,
 } from "lucide-react";
 
@@ -56,8 +58,6 @@ import { Trash2 } from "lucide-react";
 
 const PAGE_SIZE = 6;
 const TITLE_MAX = 200;
-// Match the server MAX_BODY (src/app/api/announcements/route.ts). A lower
-// client cap silently truncated bodies on save (F7 fix).
 const BODY_MAX = 5000;
 const IMAGE_URL_MAX = 500;
 
@@ -98,7 +98,6 @@ export interface AnnouncementsSectionProps {
   onUpdate: (ann: Announcement) => void | Promise<void>;
   onDelete: (id: string) => void | Promise<boolean>;
   syncStatus: SyncStatus;
-
   onOpen?: (ann: Announcement) => void;
 
   editRequestRef?: React.MutableRefObject<((ann: Announcement) => void) | null>;
@@ -121,6 +120,7 @@ export function AnnouncementsSection({
   >("date-desc");
   const [dateFrom, setDateFrom] = React.useState("");
   const [dateTo, setDateTo] = React.useState("");
+  const [showAdvanced, setShowAdvanced] = React.useState(false);
   const [showForm, setShowForm] = React.useState(false);
   const [draft, setDraft] = React.useState<AnnouncementDraft>(EMPTY_DRAFT);
   const [formError, setFormError] = React.useState<string | null>(null);
@@ -167,10 +167,22 @@ export function AnnouncementsSection({
   }, [sorted, filter, search, dateFrom, dateTo]);
 
   const hasDateFilter = Boolean(dateFrom || dateTo);
+  const hasSearch = Boolean(search.trim());
+  const hasNonDefaultFilter = filter !== "all" || hasSearch || hasDateFilter;
+  const advancedOpen = showAdvanced || hasDateFilter;
 
   function clearDateFilter() {
     setDateFrom("");
     setDateTo("");
+    setPage(1);
+  }
+
+  function clearAllFilters() {
+    setFilter("all");
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setShowAdvanced(false);
     setPage(1);
   }
 
@@ -183,7 +195,6 @@ export function AnnouncementsSection({
   const pageEnd = Math.min(pageStart + PAGE_SIZE, rest.length);
   const pagedRest = rest.slice(pageStart, pageEnd);
 
-  // Keep page in bounds when the list shrinks (filter change, delete).
   React.useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
@@ -347,104 +358,84 @@ export function AnnouncementsSection({
         iconLabel="Announcements"
       />
 
-      {/* Toolbar */}
-      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="space-y-2">
-            <Label
-              htmlFor="announcement-filter"
-              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
-            >
-              Filter by type
-            </Label>
-            <Select
-              value={filter}
-              onValueChange={(v) => {
-                setFilter(v as FilterValue);
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-0 flex-1 sm:flex-none">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              id="announcement-search"
+              type="search"
+              placeholder="Search announcements..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
                 setPage(1);
               }}
-            >
-              <SelectTrigger
-                id="announcement-filter"
-                className="w-[180px]"
-                aria-label="Filter announcements by type"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {FILTER_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label
-              htmlFor="announcement-search"
-              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
-            >
-              Search
-            </Label>
-            <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                aria-hidden="true"
-              />
-              <Input
-                id="announcement-search"
-                type="search"
-                placeholder="Search title or body..."
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
+              className="w-full pl-9 sm:w-[260px]"
+              aria-label="Search announcements"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
                   setPage(1);
                 }}
-                className="w-full pl-9 sm:w-[220px]"
-                aria-label="Search announcements"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label="Clear search"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label
-              htmlFor="announcement-sort"
-              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
-            >
-              Sort by
-            </Label>
-            <Select
-              value={sortBy}
-              onValueChange={(v) => setSortBy(v as typeof sortBy)}
-            >
-              <SelectTrigger
-                id="announcement-sort"
-                className="w-full sm:w-[160px]"
-                aria-label="Sort announcements"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Clear search"
               >
-                <ArrowDownUp
-                  className="mr-1.5 h-3.5 w-3.5"
-                  aria-hidden="true"
-                />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="date-desc">Newest first</SelectItem>
-                <SelectItem value="date-asc">Oldest first</SelectItem>
-                <SelectItem value="title-asc">Title A-Z</SelectItem>
-              </SelectContent>
-            </Select>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
+
+          <Select
+            value={sortBy}
+            onValueChange={(v) => setSortBy(v as typeof sortBy)}
+          >
+            <SelectTrigger
+              id="announcement-sort"
+              className="h-10 w-auto gap-1.5"
+              aria-label="Sort announcements"
+            >
+              <ArrowDownUp className="h-3.5 w-3.5" aria-hidden="true" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date-desc">Newest first</SelectItem>
+              <SelectItem value="date-asc">Oldest first</SelectItem>
+              <SelectItem value="title-asc">Title A-Z</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={advancedOpen}
+            aria-controls="announcement-advanced-filters"
+            className="h-10 gap-1.5"
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Filters</span>
+            {hasDateFilter && (
+              <span
+                className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-gold-500"
+                aria-hidden="true"
+              />
+            )}
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 transition-transform duration-200",
+                advancedOpen && "rotate-180",
+              )}
+              aria-hidden="true"
+            />
+          </Button>
+
           <span className="text-sm text-muted-foreground" aria-live="polite">
             {filtered.length} {filtered.length === 1 ? "post" : "posts"}
           </span>
@@ -462,8 +453,7 @@ export function AnnouncementsSection({
         )}
       </div>
 
-      {/* Visual filter chips */}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         {FILTER_OPTIONS.map((opt) => {
           const isActive = filter === opt.value;
           const count =
@@ -501,60 +491,76 @@ export function AnnouncementsSection({
             </button>
           );
         })}
-      </div>
-
-      {/* Date range filter */}
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="ann-date-from"
-            className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
-          >
-            From
-          </Label>
-          <Input
-            id="ann-date-from"
-            type="date"
-            value={dateFrom}
-            onChange={(e) => {
-              setDateFrom(e.target.value);
-              setPage(1);
-            }}
-            className="w-auto"
-            aria-label="Filter announcements from date"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label
-            htmlFor="ann-date-to"
-            className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
-          >
-            To
-          </Label>
-          <Input
-            id="ann-date-to"
-            type="date"
-            value={dateTo}
-            onChange={(e) => {
-              setDateTo(e.target.value);
-              setPage(1);
-            }}
-            className="w-auto"
-            aria-label="Filter announcements to date"
-          />
-        </div>
-        {hasDateFilter && (
+        {hasNonDefaultFilter && (
           <Button
+            type="button"
             variant="ghost"
             size="sm"
-            onClick={clearDateFilter}
-            className="h-9"
+            onClick={clearAllFilters}
+            className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
           >
-            <X className="mr-1 h-3.5 w-3.5" />
-            Clear dates
+            <X className="h-3 w-3" aria-hidden="true" />
+            Clear all
           </Button>
         )}
       </div>
+
+      {advancedOpen && (
+        <div
+          id="announcement-advanced-filters"
+          className="mt-3 flex flex-wrap items-end gap-3 rounded-lg border border-border bg-muted/30 p-3"
+        >
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="ann-date-from"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
+              From
+            </Label>
+            <Input
+              id="ann-date-from"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setPage(1);
+              }}
+              className="h-9 w-auto"
+              aria-label="Filter announcements from date"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label
+              htmlFor="ann-date-to"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
+              To
+            </Label>
+            <Input
+              id="ann-date-to"
+              type="date"
+              value={dateTo}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setPage(1);
+              }}
+              className="h-9 w-auto"
+              aria-label="Filter announcements to date"
+            />
+          </div>
+          {hasDateFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearDateFilter}
+              className="h-9"
+            >
+              <X className="mr-1 h-3.5 w-3.5" />
+              Clear dates
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Sync error */}
       {isAdmin && syncStatus.error && (
@@ -669,10 +675,6 @@ export function AnnouncementsSection({
                 bucket="announcement"
               />
 
-              {/* Specialized links — multiple URLs with labels (e.g. registration
-                  form, event page, PDF). Per 05-ui-ux-design.md §4: full state
-                  set (add/remove/edit). Per 06 §5: URLs validated client-side
-                  (http/https only) and re-validated server-side. */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
                   Specialized links (optional)
@@ -801,7 +803,6 @@ export function AnnouncementsSection({
         </Card>
       )}
 
-      {/* Featured lead story */}
       {featured && (
         <div className="mt-10">
           <div className="mb-3 flex items-center gap-2">
@@ -823,7 +824,6 @@ export function AnnouncementsSection({
         </div>
       )}
 
-      {/* Grid */}
       {pagedRest.length > 0 ? (
         <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {pagedRest.map((ann) => (
@@ -841,7 +841,6 @@ export function AnnouncementsSection({
         !featured && <EmptyState filter={filter} />
       )}
 
-      {/* Pagination */}
       {rest.length > PAGE_SIZE && (
         <nav
           className="mt-10 flex flex-col items-center justify-between gap-4 border-t pt-6 sm:flex-row"
@@ -891,7 +890,6 @@ export function AnnouncementsSection({
         </nav>
       )}
 
-      {/* Detail modal */}
       <AnnouncementModal
         ann={modalAnn}
         open={modalOpen}

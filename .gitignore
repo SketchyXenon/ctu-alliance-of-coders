@@ -76,7 +76,6 @@ node_modules
 download
 docs
 .zscripts
-.github
 mini-services
 tests
 public/logo.svg
