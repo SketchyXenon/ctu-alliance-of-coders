@@ -10,8 +10,27 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { FAQ_ITEMS } from "@/lib/constants";
+import { usePageStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
+
+/**
+ * FaqSection - accordion-style frequently asked questions.
+ * Uses the shadcn/ui Accordion (Radix-based) for accessible expand/collapse.
+ * FAQ_ITEMS live in constants.ts so the chatbot shares the same source of truth.
+ * Per 05 §4: semantic HTML, keyboard accessible, full state set.
+ */
 export function FaqSection() {
+  // Navigate directly via the shared store. Dispatching a synthetic Cmd+K
+  // here opened the command palette instead of the contact section.
+  const setActiveNav = usePageStore((s) => s.setActiveNav);
+
+  function goToContact() {
+    setActiveNav("Contact");
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   return (
     <section
       id="faq"
@@ -36,14 +55,14 @@ export function FaqSection() {
               className={cn(
                 "rounded-lg border-2 border-border/60 bg-card px-4 sm:px-5",
                 "mb-3 shadow-sm transition-colors",
-                "data-[state=open]:border-gold-300/60",
+                "data-[state=open]:border-teal-300/60",
               )}
             >
               <AccordionTrigger
                 className={cn(
                   "text-left text-base font-semibold text-foreground",
-                  "hover:no-underline hover:text-gold-700 dark:hover:text-gold-300",
-                  "focus-visible:ring-2 focus-visible:ring-gold-400/40",
+                  "hover:no-underline hover:text-teal-700 dark:hover:text-teal-300",
+                  "focus-visible:ring-2 focus-visible:ring-teal-400/40",
                 )}
               >
                 {item.question}
@@ -59,12 +78,8 @@ export function FaqSection() {
           Still have questions?{" "}
           <button
             type="button"
-            onClick={() => {
-              window.dispatchEvent(
-                new KeyboardEvent("keydown", { key: "k", metaKey: true }),
-              );
-            }}
-            className="font-medium text-gold-600 underline-offset-2 hover:underline dark:text-gold-400"
+            onClick={goToContact}
+            className="font-medium text-teal-600 underline-offset-2 hover:underline dark:text-teal-400"
           >
             Use the contact form
           </button>{" "}

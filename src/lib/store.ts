@@ -21,7 +21,6 @@ interface PageState {
 
   pendingMessages: ContactMessage[];
   setPendingMessages: (items: ContactMessage[]) => void;
-  addPendingMessage: (item: ContactMessage) => void;
 
   isAdmin: boolean;
   setIsAdmin: (v: boolean) => void;
@@ -48,8 +47,6 @@ export const usePageStore = create<PageState>((set) => ({
 
   pendingMessages: [],
   setPendingMessages: (items) => set({ pendingMessages: items }),
-  addPendingMessage: (item) =>
-    set((s) => ({ pendingMessages: [item, ...s.pendingMessages] })),
 
   isAdmin: false,
   setIsAdmin: (v) => set({ isAdmin: v }),

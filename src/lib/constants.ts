@@ -1,3 +1,6 @@
+// Static site configuration: navigation, badges, filters, policies.
+// Kept in one place so the UI and API agree on enums.
+
 import type { AnnouncementType, SectionKey } from "./types";
 
 export interface NavLink {
@@ -17,6 +20,7 @@ export const NAV_LINKS: NavLink[] = [
 export interface BadgeConfig {
   className: string;
   label: string;
+  /** CSS class for the modal accent bar (saturated, readable as a thin stripe). */
   accentBar: string;
 }
 
@@ -133,6 +137,9 @@ export function getPolicyPage(key: string): PolicyPage | null {
   return POLICY_PAGES.find((p) => p.key === key) ?? null;
 }
 
+// FAQ items - single source of truth for both the FAQ section UI and the
+// chatbot grounding context (per Z.md: one source of truth). Per 05-ui-ux
+// section 8: FAQ content supports FAQPage structured data.
 export interface FaqItem {
   question: string;
   answer: string;
@@ -183,68 +190,4 @@ export const CONTACT_TOPICS: ContactTopic[] = [
   { value: "Technical Support", label: "Technical Support" },
   { value: "Partnerships", label: "Partnerships" },
   { value: "Other", label: "Other" },
-];
-
-export const CONTACT_POINTS = [
-  {
-    icon: "Mail",
-    label: "Email",
-    value: "Replies via admin dashboard",
-  },
-  {
-    icon: "Clock",
-    label: "Response Time",
-    value: "1-3 school days",
-  },
-  {
-    icon: "ShieldCheck",
-    label: "Privacy",
-    value: "Secure, admin-only access",
-  },
-];
-
-export interface Integration {
-  id: string;
-  label: string;
-  desc: string;
-  icon: string;
-}
-
-export const INTEGRATIONS: Integration[] = [
-  {
-    id: "webhook",
-    label: "REST API Webhook",
-    desc: "POST /api/announcements to auto-publish from external systems.",
-    icon: "Webhook",
-  },
-  {
-    id: "google-workspace",
-    label: "Google Workspace",
-    desc: "Sync Google Calendar events as announcements.",
-    icon: "Calendar",
-  },
-  {
-    id: "facebook",
-    label: "Facebook Page Feed",
-    desc: "Auto-post announcements via Meta Graph API.",
-    icon: "Facebook",
-  },
-  {
-    id: "google-forms",
-    label: "Google Forms",
-    desc: "Member registration webhook from Google Forms.",
-    icon: "ClipboardList",
-  },
-  {
-    id: "discord",
-    label: "Discord Bot",
-    desc: "Push announcements to a Discord server channel.",
-    icon: "MessageSquare",
-  },
-  {
-    id: "email",
-    label: "Email Newsletter",
-    desc: "Send announcements via Mailchimp or SendGrid SMTP.",
-    icon: "Send",
-  },
 ];

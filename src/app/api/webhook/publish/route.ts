@@ -12,9 +12,33 @@ import {
 } from "@/lib/integrations";
 import type { Announcement, AnnouncementType } from "@/lib/types";
 import { ANNOUNCEMENT_TYPES } from "@/lib/constants";
-import { serializeLinks, validateAnnouncementLinks } from "@/lib/announcements";
+import {
+  serializeLinks,
+  validateAnnouncementLinks,
+  localDateISO,
+} from "@/lib/announcements";
 
+/**
+ * POST /api/webhook/publish - PUBLIC (HMAC-signed). Auto-publishes an
+ * announcement from an external system (the webhook integration).
+ *
+ * Auth model (per 06-security-architecture.md):
+ *   - section 3: no admin session required; authorization is the HMAC signature.
+ *   - section 5: the raw body + timestamp are verified against the stored
+ *     webhook secret using a timing-safe compare. A missing/invalid signature
+ *     returns 401. A stale timestamp is rejected (replay protection, §6).
+ *   - section 7: rate limited per IP to bound abuse even with a valid signature.
+ *   - section 11: the publish is audit-logged via the ActivityLog with a
+ *     synthetic "webhook" actor summary.
+ *
+ * Body shape: { title, body, type?, links?, pinned?, date? }
+ * The signed payload is the raw request body (admin must sign exactly what
+ * they send). Links follow the same {url,label}[] schema as the announcements
+ * API and are re-validated here (never trust client input, §5).
+ */
 export const POST = withPrismaError(async function POST(request: Request) {
+  // Rate limit BEFORE signature verification so brute-force attempts on the
+  // signature are bounded (§7).
   const ip = getClientIp(request.headers);
   const rl = rateLimit(`webhook-publish:${ip}`, 30, 60_000);
   if (!rl.allowed) {
@@ -53,6 +77,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  // Look up the webhook integration's secret.
   const cfg = await db.integrationConfig.findUnique({
     where: { id: "webhook" },
   });
@@ -73,6 +98,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  // Signature verified — parse + validate the payload (§5: validate all input).
   let payload: Record<string, unknown>;
   try {
     payload = JSON.parse(rawBody);
@@ -117,6 +143,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  // Links: validate via the shared validator (matches /api/announcements contract).
   const linksCheck = validateAnnouncementLinks(payload.links);
   if (!linksCheck.valid) {
     return withCache(
@@ -130,7 +157,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
   const date =
     typeof payload.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.date)
       ? payload.date
-      : new Date().toISOString().slice(0, 10);
+      : localDateISO();
 
   const id = `ann-${crypto.randomUUID()}`;
   const created = await db.announcement.create({
@@ -157,6 +184,7 @@ export const POST = withPrismaError(async function POST(request: Request) {
     date: created.date,
   };
 
+  // Audit log with a synthetic actor (no admin session for a webhook).
   try {
     await db.activityLog.create({
       data: {

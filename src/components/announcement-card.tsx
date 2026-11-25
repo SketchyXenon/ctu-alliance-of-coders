@@ -40,6 +40,10 @@ export interface AnnouncementCardProps {
   onOpen: (ann: Announcement) => void;
 }
 
+/**
+ * Inline admin action buttons (Edit + Delete). Delete defers confirmation to
+ * the parent handler - per spec, the parent owns the confirm dialog.
+ */
 function AdminActions({
   ann,
   isAdmin,
@@ -87,6 +91,12 @@ function AdminActions({
   );
 }
 
+/**
+ * AnnouncementCard - a single editorial card in the news feed.
+ *
+ * Featured cards span two columns on large screens and use a side-by-side
+ * image / content layout. Regular cards stack the image above the content.
+ */
 export function AnnouncementCard({
   ann,
   isAdmin,
@@ -111,7 +121,7 @@ export function AnnouncementCard({
         "hover:shadow-lg hover:-translate-y-1",
         "focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/40",
         featured
-          ? "border-gold-300 ring-1 ring-gold-300/50 hover:shadow-gold lg:col-span-2 lg:grid lg:grid-cols-[1.05fr_1fr] lg:items-stretch"
+          ? "border-teal-300 ring-1 ring-teal-300/50 hover:shadow-teal lg:col-span-2 lg:grid lg:grid-cols-[1.05fr_1fr] lg:items-stretch"
           : "border-border",
       )}
     >
@@ -135,10 +145,10 @@ export function AnnouncementCard({
               loading="lazy"
               className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-navy-950/70 via-navy-950/15 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-ink-950/70 via-ink-950/15 to-transparent" />
           </>
         ) : (
-          <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-navy-700 via-navy-800 to-navy-950">
+          <div className="relative flex h-full w-full items-center justify-center bg-gradient-to-br from-ink-700 via-ink-800 to-ink-950">
             <div
               className="pointer-events-none absolute inset-0 opacity-30"
               style={{
@@ -213,6 +223,8 @@ export function AnnouncementCard({
           {preview}
         </p>
 
+        {/* Specialized links — shown on the card so end users see them without
+            opening the modal. Per 05 section 5: icon supports the label. */}
         {ann.links && ann.links.length > 0 && (
           <ul className="flex flex-wrap gap-x-4 gap-y-1.5 pt-1">
             {ann.links.slice(0, featured ? 6 : 3).map((link, i) => (
@@ -229,6 +241,7 @@ export function AnnouncementCard({
                     aria-hidden="true"
                   />
                   {link.label}
+                  <span className="sr-only">(opens in a new tab)</span>
                 </a>
               </li>
             ))}

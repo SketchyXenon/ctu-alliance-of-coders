@@ -125,6 +125,11 @@ const COMMANDS: CommandItem[] = [
   },
 ];
 
+/**
+ * CommandPalette - Cmd+K / Ctrl+K quick navigation dialog.
+ * Fuzzy-filters commands by label + keywords. Arrow keys navigate,
+ * Enter selects, Escape closes.
+ */
 export function CommandPalette({
   open,
   onOpenChange,
@@ -135,11 +140,12 @@ export function CommandPalette({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const listRef = React.useRef<HTMLDivElement | null>(null);
 
+  // Reset query + focus input when opened.
   React.useEffect(() => {
     if (open) {
       setQuery("");
       setActiveIndex(0);
-
+      // Defer focus so the input is mounted.
       const t = window.setTimeout(() => inputRef.current?.focus(), 50);
       return () => window.clearTimeout(t);
     }
@@ -154,6 +160,7 @@ export function CommandPalette({
     });
   }, [query]);
 
+  // Reset active index when filter changes.
   React.useEffect(() => {
     setActiveIndex(0);
   }, [query]);
@@ -220,6 +227,12 @@ export function CommandPalette({
             onKeyDown={handleKeyDown}
             className="flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             aria-label="Search commands"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-listbox"
+            aria-activedescendant={
+              filtered.length > 0 ? `command-option-${activeIndex}` : undefined
+            }
             autoComplete="off"
             spellCheck={false}
           />
@@ -231,6 +244,7 @@ export function CommandPalette({
         {/* Results */}
         <div
           ref={listRef}
+          id="command-palette-listbox"
           className="max-h-[320px] overflow-y-auto scrollbar-thin p-2"
           role="listbox"
           aria-label="Available commands"
@@ -253,6 +267,7 @@ export function CommandPalette({
                   return (
                     <button
                       key={cmd.id}
+                      id={`command-option-${idx}`}
                       type="button"
                       role="option"
                       aria-selected={isActive}

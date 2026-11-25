@@ -60,6 +60,14 @@ function splitParagraphs(body: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * AnnouncementModal - full-screen reader for a single announcement.
+ *
+ * Renders inside a shadcn Dialog (Radix). The Dialog handles focus trap and
+ * Escape-to-close. We just provide the layout: optional image hero, meta row
+ * + title, paragraph body (scrollable), and a footer with close + admin
+ * actions.
+ */
 export function AnnouncementModal({
   ann,
   open,
@@ -72,10 +80,12 @@ export function AnnouncementModal({
 }: AnnouncementModalProps) {
   const [deleting, setDeleting] = React.useState(false);
 
+  // Reset the deleting flag whenever the modal closes so reopens start fresh.
   React.useEffect(() => {
     if (!open) setDeleting(false);
   }, [open]);
 
+  // Compute current index in the optional list (for prev/next navigation).
   const hasList = Boolean(list && list.length > 1);
   const currentIndex = React.useMemo(() => {
     if (!ann || !list) return -1;
@@ -97,6 +107,7 @@ export function AnnouncementModal({
     }
   }, [canNext, list, currentIndex, onNavigate]);
 
+  // Keyboard navigation: ArrowLeft/ArrowRight to move between announcements.
   React.useEffect(() => {
     if (!open || !hasList) return;
     function onKey(e: KeyboardEvent) {
@@ -209,13 +220,17 @@ function AnnouncementModalBody({
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch {}
+      } catch {
+        // User cancelled - no action needed.
+      }
     } else if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
         await navigator.clipboard.writeText(`${ann.title}\n${shareUrl}`);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 2000);
-      } catch {}
+      } catch {
+        // Clipboard API not available.
+      }
     }
   }
 
@@ -228,7 +243,7 @@ function AnnouncementModalBody({
       {ann.image && (
         <div className="relative aspect-[16/9] w-full shrink-0 overflow-hidden">
           <img src={ann.image} alt="" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-navy-950/70 via-navy-950/15 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/70 via-ink-950/15 to-transparent" />
           <Badge
             variant="outline"
             className={cn(
@@ -293,6 +308,10 @@ function AnnouncementModalBody({
               {p}
             </p>
           ))}
+
+          {/* Specialized links — displayed as a list with external-link icons.
+              Per 05-ui-ux-design.md §5: icon supports a label, doesn't replace
+              it. Per 06 §5: URLs are http/https only (validated server-side). */}
           {ann.links && ann.links.length > 0 && (
             <div className="space-y-2 border-t pt-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -312,6 +331,7 @@ function AnnouncementModalBody({
                         aria-hidden="true"
                       />
                       {link.label}
+                      <span className="sr-only">(opens in a new tab)</span>
                     </a>
                   </li>
                 ))}

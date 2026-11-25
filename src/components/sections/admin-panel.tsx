@@ -61,6 +61,17 @@ type AuthState =
   | { status: "forbidden"; user: AdminUserPublic }
   | { status: "admin"; user: AdminUserPublic };
 
+/**
+ * AdminPanel - orchestrates the admin console.
+ *
+ * On mount we check the session. The three valid branches are:
+ *   - anonymous  -> LoginForm
+ *   - forbidden  -> access-restricted card (signed in but not an admin)
+ *   - admin      -> dashboard with Tabs (Inbox / Officers / Integrations)
+ *
+ * Children receive store data + a refresh callback. They call the API and
+ * trigger refresh themselves; the store stays the single source of truth.
+ */
 export function AdminPanel() {
   const isAdmin = usePageStore((s) => s.isAdmin);
   const adminEmail = usePageStore((s) => s.adminEmail);
@@ -71,6 +82,10 @@ export function AdminPanel() {
   const adminYears = usePageStore((s) => s.adminYears);
   const announcements = usePageStore((s) => s.announcements);
   const setAdminYears = usePageStore((s) => s.setAdminYears);
+
+  // `checked` flips true after the first session probe completes. Until then
+  // we show a loading state. The derived `auth` value reacts to the store so
+  // LoginForm's setIsAdmin(true) immediately promotes us to the dashboard.
   const [checked, setChecked] = React.useState(false);
   const [forbiddenUser, setForbiddenUser] =
     React.useState<AdminUserPublic | null>(null);
@@ -132,6 +147,8 @@ export function AdminPanel() {
     toast.success("Signed out");
   }
 
+  // ---- Refresh helpers (children call these to re-sync the store) ---------
+
   const refreshMessages = React.useCallback(async () => {
     const { data, error } = await api.get<{ items: ContactMessage[] }>(
       "/api/contact",
@@ -148,6 +165,17 @@ export function AdminPanel() {
     setAdminYears(data.items);
   }, [setAdminYears]);
 
+  // After a fresh LOGIN (not a page load with an existing session), the
+  // page-level inbox fetch has already run with user=null, so the inbox
+  // starts empty. Pull it once as soon as the panel becomes authenticated.
+  React.useEffect(() => {
+    if (checked && isAdmin) {
+      void refreshMessages();
+    }
+  }, [checked, isAdmin, refreshMessages]);
+
+  // ---- Loading state -------------------------------------------------------
+
   if (auth.status === "loading") {
     return (
       <div
@@ -157,8 +185,8 @@ export function AdminPanel() {
       >
         <div className="flex flex-col items-center gap-4 text-center">
           <div className="relative h-12 w-12" aria-hidden="true">
-            <span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gold-500 animate-ping" />
-            <span className="absolute left-1/2 top-0 h-2 w-2 -translate-x-1/2 rounded-full bg-gold-400 animate-[spin_1.4s_linear_infinite] [transform-origin:center_24px]" />
+            <span className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-teal-500 animate-ping" />
+            <span className="absolute left-1/2 top-0 h-2 w-2 -translate-x-1/2 rounded-full bg-teal-400 animate-[spin_1.4s_linear_infinite] [transform-origin:center_24px]" />
           </div>
           <p className="text-sm text-muted-foreground">Verifying session...</p>
         </div>
@@ -166,9 +194,13 @@ export function AdminPanel() {
     );
   }
 
+  // ---- Anonymous -----------------------------------------------------------
+
   if (auth.status === "anonymous") {
     return <LoginForm />;
   }
+
+  // ---- Signed in but not an admin -----------------------------------------
 
   if (auth.status === "forbidden") {
     return (
@@ -206,6 +238,8 @@ export function AdminPanel() {
       </div>
     );
   }
+
+  // ---- Admin dashboard ----------------------------------------------------
 
   const user = auth.user;
   const initials = (user.email ?? "").split("@")[0].slice(0, 2).toUpperCase();
@@ -268,6 +302,7 @@ export function AdminPanel() {
           </div>
         </div>
 
+        {/* Quick actions row */}
         <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
@@ -282,6 +317,7 @@ export function AdminPanel() {
           </Button>
         </div>
 
+        {/* Stats overview */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <AdminStatCard
             label="Announcements"
@@ -388,6 +424,10 @@ export function AdminPanel() {
   );
 }
 
+/**
+ * AdminStatCard - compact metric card for the dashboard overview row.
+ * Shows an icon + big number + label, with gold or navy accent.
+ */
 function AdminStatCard({
   label,
   value,
@@ -407,7 +447,7 @@ function AdminStatCard({
           className={
             "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg " +
             (accent === "gold"
-              ? "bg-gold-500/15 text-gold-600 dark:text-gold-400"
+              ? "bg-teal-500/15 text-teal-600 dark:text-teal-400"
               : "bg-primary/10 text-primary")
           }
         >

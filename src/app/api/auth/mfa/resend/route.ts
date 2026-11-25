@@ -55,11 +55,19 @@ export const POST = withPrismaError(async function POST(request: Request) {
       createdAt: true,
       consumed: true,
       expiresAt: true,
-      user: { select: { id: true, email: true, role: true } },
+      user: { select: { id: true, email: true, role: true, active: true } },
     },
   });
 
   if (!challenge || !challenge.user || !isAdminRole(challenge.user.role)) {
+    return withCache(
+      NextResponse.json({ error: "Invalid request." }, { status: 400 }),
+      CACHE_NO_STORE,
+    );
+  }
+  // Inactive accounts must not be able to re-trigger code emails
+  // (mirrors the active check in mfa/verify).
+  if (!challenge.user.active) {
     return withCache(
       NextResponse.json({ error: "Invalid request." }, { status: 400 }),
       CACHE_NO_STORE,

@@ -28,12 +28,21 @@ import { usePageStore } from "@/lib/store";
 import type { SectionKey } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/**
+ * Icon registry mapping each social icon name to a Lucide component.
+ * Resolves the string icon names from getSocialLinks() to components.
+ */
 const SOCIAL_ICONS: Record<string, LucideIcon> = {
   Facebook,
   Github,
   Mail,
 };
 
+/**
+ * Icon registry mapping each section key to a Lucide icon.
+ * Kept here (not in constants.ts) because only the footer surfaces these
+ * icons today; the nav uses pure text + underline indicator.
+ */
 const NAV_ICONS: Partial<Record<SectionKey, LucideIcon>> = {
   Home: Home,
   Announcements: Megaphone,
@@ -43,6 +52,10 @@ const NAV_ICONS: Partial<Record<SectionKey, LucideIcon>> = {
   "Admin Panel": LayoutDashboard,
 };
 
+/**
+ * Policy icon registry. The `icon` field on POLICY_PAGES is a string
+ * (kept serializable in constants.ts), so we resolve it to a component here.
+ */
 const POLICY_ICONS: Record<string, LucideIcon> = {
   ShieldCheck,
   Database,
@@ -50,9 +63,21 @@ const POLICY_ICONS: Record<string, LucideIcon> = {
   Cookie,
 };
 
+/**
+ * SiteFooter - site-wide footer with brand, quick links, socials, and policies.
+ *
+ * The root <footer> uses `mt-auto` so that when the page wrapper is
+ * `min-h-screen flex flex-col`, this footer pins to the viewport bottom on
+ * short pages and stacks naturally after long content.
+ */
 export function SiteFooter() {
   const setActiveNav = usePageStore((s) => s.setActiveNav);
-  const year = React.useMemo(() => new Date().getFullYear(), []);
+  // Resolve the year after mount: computing it during SSR render can mismatch
+  // client hydration across the New Year boundary.
+  const [year, setYear] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
   const socialLinks = React.useMemo(() => getSocialLinks(), []);
 
   return (
@@ -104,7 +129,7 @@ export function SiteFooter() {
                     >
                       {Icon ? (
                         <Icon
-                          className="size-4 shrink-0 text-gold-500 transition-transform duration-200 group-hover:scale-110"
+                          className="size-4 shrink-0 text-teal-500 transition-transform duration-200 group-hover:scale-110"
                           aria-hidden="true"
                         />
                       ) : null}
@@ -141,10 +166,13 @@ export function SiteFooter() {
                         )}
                       >
                         <Icon
-                          className="size-4 shrink-0 text-gold-500 transition-transform duration-200 group-hover:scale-110"
+                          className="size-4 shrink-0 text-teal-500 transition-transform duration-200 group-hover:scale-110"
                           aria-hidden="true"
                         />
                         {social.label}
+                        {social.href && !social.href.startsWith("mailto:") && (
+                          <span className="sr-only">(opens in a new tab)</span>
+                        )}
                       </a>
                     </li>
                   );
@@ -173,7 +201,7 @@ export function SiteFooter() {
                       )}
                     >
                       <Icon
-                        className="size-4 shrink-0 text-gold-500 transition-transform duration-200 group-hover:scale-110"
+                        className="size-4 shrink-0 text-teal-500 transition-transform duration-200 group-hover:scale-110"
                         aria-hidden="true"
                       />
                       {policy.title}
@@ -190,7 +218,7 @@ export function SiteFooter() {
 
       <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
         <p className="text-center text-xs text-muted-foreground">
-          &copy; {year} Alliance of Coders - CTU Danao Campus. All rights
+          &copy; {year ?? ""} Alliance of Coders - CTU Danao Campus. All rights
           reserved.
         </p>
       </div>
@@ -206,7 +234,7 @@ interface FooterHeadingProps {
 function FooterHeading({ icon: Icon, children }: FooterHeadingProps) {
   return (
     <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
-      <Icon className="size-4 text-gold-500" aria-hidden="true" />
+      <Icon className="size-4 text-teal-500" aria-hidden="true" />
       {children}
     </h3>
   );

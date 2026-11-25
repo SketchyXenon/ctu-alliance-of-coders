@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Award,
   FileText,
@@ -29,6 +29,11 @@ interface RecentActivityProps {
   onNav: (section: SectionKey) => void;
 }
 
+/**
+ * RecentActivity - a compact feed of the latest 4 announcements,
+ * shown on the home page below the hero. Each item is clickable and
+ * navigates to the Announcements section.
+ */
 export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
   const recent = React.useMemo(
     () =>
@@ -38,14 +43,22 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
     [announcements],
   );
 
+  const prefersReducedMotion = useReducedMotion();
+
   if (recent.length === 0) return null;
 
+  // Honor prefers-reduced-motion: skip the entrance animation entirely.
   const container = {
     hidden: {},
-    show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+    show: {
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.08,
+        delayChildren: prefersReducedMotion ? 0 : 0.1,
+      },
+    },
   };
   const item = {
-    hidden: { opacity: 0, y: 12 },
+    hidden: prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 12 },
     show: {
       opacity: 1,
       y: 0,
@@ -61,7 +74,7 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-600 dark:text-gold-400 font-display">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400 font-display">
               Stay Updated
             </span>
           </div>
@@ -100,7 +113,7 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
               onClick={() => onNav("Announcements")}
               className={cn(
                 "group flex items-start gap-4 rounded-xl border border-border bg-card p-4 text-left",
-                "transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-gold-300/60",
+                "transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-teal-300/60",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               )}
             >
@@ -135,7 +148,7 @@ export function RecentActivity({ announcements, onNav }: RecentActivityProps) {
                 </p>
               </div>
               <ArrowRight
-                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-gold-500"
+                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-teal-500"
                 aria-hidden="true"
               />
             </motion.button>

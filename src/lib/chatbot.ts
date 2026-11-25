@@ -1,3 +1,22 @@
+// Generative chatbot: server-only logic for a content-grounded site assistant.
+//
+// Design goals (per uploaded markdowns):
+//  - 06-security-architecture: secrets never reach the client (apiKey stored in
+//    IntegrationConfig.secret, masked in responses), rate limiting at the route,
+//    all input validated server-side, fail closed, defense in depth.
+//  - Flexible model provider: any OpenAI-compatible /chat/completions endpoint
+//    (OpenRouter, Groq, Together, HuggingFace, local Ollama, etc.). The admin
+//    supplies baseUrl + apiKey + model name, so free/open-source keys work.
+//  - Strict grounding: the assistant answers ONLY from website content
+//    (announcements, officers, FAQ, policies, contact info). It refuses
+//    off-topic requests and never generates code, images, or malicious scripts.
+//
+// Config is stored in the IntegrationConfig table (id "chatbot"): the JSON
+// `config` column holds baseUrl/model/maxTokens/temperature; the opaque
+// `secret` column holds the provider API key. This reuses the existing
+// secret-masking + admin-only access pattern (per 06 section 8) without a new
+// table.
+
 import { db, withDbRetry } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { siteConfig, getSocialLinks } from "@/lib/site-config";
@@ -11,15 +30,59 @@ import { parseLinks } from "@/lib/announcements";
 
 export const CHATBOT_CONFIG_ID = "chatbot";
 
-export const CHAT_MAX_TURNS = 12;
-export const CHAT_HISTORY_TURNS = 8;
-export const CHAT_MAX_MSG_LEN = 1000;
-export const CHAT_MAX_REPLY_LEN = 1500;
+// Conversation + message limits (06 section 7: bound resource consumption).
+export const CHAT_MAX_TURNS = 12; // max messages in submitted history
+export const CHAT_HISTORY_TURNS = 8; // turns actually sent to the model
+export const CHAT_MAX_MSG_LEN = 1000; // per-message char cap
+export const CHAT_MAX_REPLY_LEN = 1500; // reply char cap (defense in depth)
 
+// Rate limits (applied in the route). LLM calls are expensive, so tighter than
+// the rest of the app. Per 06 section 7: per-IP + a longer-window cap.
 export const CHAT_RATE_PER_MIN = 6;
 export const CHAT_RATE_PER_HOUR = 30;
 
+// LLM call timeout (02 section 6: no unbounded waits).
 const LLM_TIMEOUT_MS = 20_000;
+
+/**
+ * SSRF guard: reject hostnames that resolve to private, link-local, or
+ * cloud-metadata ranges (06 section 5). Pure hostname checks; DNS-rebinding
+ * is out of scope here because egress runs from the server's own network.
+ */
+function isPrivateOrReservedHost(host: string): boolean {
+  if (
+    host.endsWith(".local") ||
+    host.endsWith(".internal") ||
+    host === "metadata.google.internal"
+  )
+    return true;
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (a === 0 || a === 10 || a === 127) return true; // this-network, private, loopback
+    if (a === 169 && b === 254) return true; // link-local + EC2 metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 168) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    if (a >= 224) return true; // multicast + reserved
+    return false;
+  }
+  // IPv6 literals: loopback (::/0: prefixes), link-local (fe80::/10),
+  // unique-local (fc00::/7), documentation (2001:db8::/32).
+  const v6 = host.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!v6.includes(":")) return false; // regular hostname, not an IP literal
+  return (
+    v6.startsWith("::") ||
+    v6.startsWith("0:") ||
+    v6.startsWith("fc") ||
+    v6.startsWith("fd") ||
+    v6.startsWith("fe8") ||
+    v6.startsWith("fe9") ||
+    v6.startsWith("fea") ||
+    v6.startsWith("feb") ||
+    v6.startsWith("2001:db8")
+  );
+}
 
 export interface ChatbotConfig {
   enabled: boolean;
@@ -30,6 +93,7 @@ export interface ChatbotConfig {
   apiKey: string;
 }
 
+/** Client-safe config projection (never includes the raw API key). */
 export interface ChatbotStatus {
   enabled: boolean;
   baseUrl: string;
@@ -70,6 +134,8 @@ function toNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
+/** Load the chatbot config + raw API key for server-side LLM calls.
+ *  Returns null when the row is missing or the API key is not set. */
 export async function getChatbotConfig(): Promise<ChatbotConfig | null> {
   const row = await withDbRetry(() =>
     db.integrationConfig.findUnique({ where: { id: CHATBOT_CONFIG_ID } }),
@@ -88,6 +154,7 @@ export async function getChatbotConfig(): Promise<ChatbotConfig | null> {
   };
 }
 
+/** Masked config for the admin UI (never exposes the raw key). */
 export async function getChatbotStatus(): Promise<ChatbotStatus> {
   const row = await withDbRetry(() =>
     db.integrationConfig.findUnique({ where: { id: CHATBOT_CONFIG_ID } }),
@@ -130,6 +197,7 @@ export interface ChatbotConfigValidation {
   apiKey: string | null; // null = keep existing
 }
 
+/** Validate admin-submitted chatbot config. apiKey null/empty means "keep". */
 export function validateChatbotConfig(input: unknown): ChatbotConfigValidation {
   const empty = { baseUrl: "", model: "", maxTokens: 512, temperature: 0.3 };
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
@@ -170,17 +238,36 @@ export function validateChatbotConfig(input: unknown): ChatbotConfigValidation {
       apiKey: null,
     };
   }
-
-  const host = base.hostname.toLowerCase();
+  // SSRF defense (06 section 5): production is https-only and rejects private,
+  // link-local, and cloud-metadata targets the key would otherwise be sent to.
+  // Loopback stays allowed in dev for local LLM runtimes (e.g. Ollama).
+  const isDev = process.env.NODE_ENV !== "production";
+  if (base.protocol === "http:" && !isDev) {
+    return {
+      valid: false,
+      error: "API base URL must use https in production.",
+      config: empty,
+      apiKey: null,
+    };
+  }
+  const host = base.hostname.toLowerCase().replace(/\.$/, "");
   const isLoopback =
     host === "localhost" ||
     host === "127.0.0.1" ||
     host === "::1" ||
     host.endsWith(".localhost");
-  if (isLoopback && process.env.NODE_ENV === "production") {
+  if (isLoopback && !isDev) {
     return {
       valid: false,
       error: "Loopback base URLs are not allowed in production.",
+      config: empty,
+      apiKey: null,
+    };
+  }
+  if (!isDev && !isLoopback && isPrivateOrReservedHost(host)) {
+    return {
+      valid: false,
+      error: "API base URL must not point to a private or internal address.",
       config: empty,
       apiKey: null,
     };
@@ -235,6 +322,12 @@ export function validateChatbotConfig(input: unknown): ChatbotConfigValidation {
     apiKey,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Context grounding: build a compact text snapshot of public website content.
+// The model answers ONLY from this. Per 06 section 8 (data minimization): no
+// admin-only or PII fields are included.
+// ---------------------------------------------------------------------------
 
 const MAX_CONTEXT_CHARS = 6000;
 
@@ -341,6 +434,10 @@ export async function buildChatContext(): Promise<string> {
   return clamp(lines.join("\n"), MAX_CONTEXT_CHARS);
 }
 
+// ---------------------------------------------------------------------------
+// System prompt: strict grounding + refusal of off-scope/generative requests.
+// ---------------------------------------------------------------------------
+
 export function buildSystemPrompt(context: string): string {
   return [
     "You are the Alliance of Coders (AoC) website assistant for CTU Danao Campus.",
@@ -415,10 +512,15 @@ export function sanitizeReply(reply: string): string {
   return clamp(trimmed, CHAT_MAX_REPLY_LEN);
 }
 
+// ---------------------------------------------------------------------------
+// OpenAI-compatible chat completions client.
+// Works with any provider that exposes POST {baseUrl}/chat/completions.
+// ---------------------------------------------------------------------------
+
 export interface LLMResult {
   ok: boolean;
   reply?: string;
-  error?: string;
+  error?: string; // client-safe message
 }
 
 interface ChatMessage {
@@ -426,6 +528,8 @@ interface ChatMessage {
   content: string;
 }
 
+/** Call the configured OpenAI-compatible endpoint. Never throws; returns a
+ *  client-safe error string on failure (06 A10: no internals leaked). */
 export async function callChatCompletion(
   config: ChatbotConfig,
   messages: ChatMessage[],
@@ -484,6 +588,10 @@ export async function callChatCompletion(
     clearTimeout(timeout);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function clampInt(n: number, min: number, max: number): number {
   if (!Number.isFinite(n)) return min;

@@ -1,14 +1,35 @@
 // Helpers for the Announcement links field.
+// Links are stored as a JSON-encoded array of {url, label} in the DB (a single
+// String column). This module handles serialization, parsing, and validation.
+// Per 06-security-architecture.md section 5: validate all external input.
+// Per 03 section 6: fail fast with clear messages.
+
 import type { AnnouncementLink } from "./types";
 
 const MAX_LINKS = 10;
 const MAX_URL_LENGTH = 2048;
 const MAX_LABEL_LENGTH = 120;
 
+/** Today's date as a local YYYY-MM-DD string (not UTC) so announcements
+ *  created before 08:00 UTC+8 are not labeled with the previous day. */
+export function localDateISO(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Serialize an array of AnnouncementLink to the DB string format. */
 export function serializeLinks(links: AnnouncementLink[]): string {
   return JSON.stringify(links);
 }
 
+/**
+ * Parse the DB string back into an array of AnnouncementLink.
+ * Defensive: handles null, empty string, and malformed JSON (returns []).
+ * Per 06 section 1: fail safe — a corrupt links field should not crash the
+ * page render.
+ */
 export function parseLinks(raw: string | null | undefined): AnnouncementLink[] {
   if (!raw) return [];
   try {
@@ -34,6 +55,12 @@ export interface LinkValidationResult {
   normalized: AnnouncementLink | null;
 }
 
+/**
+ * Validate a single announcement link.
+ * Accepts http/https URLs only (rejects javascript:, data:, file:, etc.).
+ * Per 06 section 5: never trust external input. Per 06 section 8: reject
+ * non-https schemes that could be used for XSS or SSRF.
+ */
 export function validateAnnouncementLink(
   url: unknown,
   label: unknown,
@@ -56,6 +83,7 @@ export function validateAnnouncementLink(
     return { valid: false, error: "Link URL is too long.", normalized: null };
   }
 
+  // Parse the URL to check the scheme. Only http and https are allowed.
   let parsed: URL;
   try {
     parsed = new URL(trimmedUrl);
@@ -72,6 +100,7 @@ export function validateAnnouncementLink(
     };
   }
 
+  // Label is optional — default to the URL hostname.
   const finalLabel = trimmedLabel || parsed.hostname;
 
   if (finalLabel.length > MAX_LABEL_LENGTH) {
@@ -89,6 +118,10 @@ export function validateAnnouncementLink(
   };
 }
 
+/**
+ * Validate an array of links (from the API request body).
+ * Returns { valid, error, normalized } where normalized is the clean array.
+ */
 export function validateAnnouncementLinks(input: unknown): {
   valid: boolean;
   error: string | null;

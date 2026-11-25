@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { siteConfig, getSameAsUrls } from "@/lib/site-config";
@@ -25,6 +24,8 @@ const geistMono = Geist_Mono({
   display: "swap",
 });
 
+// Single source of truth: siteUrl comes from NEXT_PUBLIC_SITE_URL env var
+// (via siteConfig). Falls back to localhost:3000 in dev. Per Z.md + 03 §1 (DRY).
 const siteUrl = siteConfig.url;
 
 export const metadata: Metadata = {
@@ -34,11 +35,10 @@ export const metadata: Metadata = {
     template: "%s | Alliance of Coders",
   },
   description:
-    "Building the future, one commit at a time. The official site of the Alliance of Coders (AOC) at Cebu Technological University - Danao Campus: announcements, officers, and contact.",
+    "Building the future, one commit at a time. The official site of the Alliance of Coders at Cebu Technological University - Danao Campus: announcements, officers, and contact.",
   keywords: [
     "Alliance of Coders",
     "CTU Danao",
-    "AOC",
     "Cebu Technological University",
     "student tech organization",
     "coding club",
@@ -48,8 +48,11 @@ export const metadata: Metadata = {
   authors: [{ name: "Alliance of Coders" }],
   creator: "Alliance of Coders",
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: [
+      { url: "/favicon.png", type: "image/png", sizes: "32x32" },
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [{ url: "/icon-192.png", sizes: "192x192" }],
   },
   openGraph: {
     title: "Alliance of Coders - CTU Danao Campus",
@@ -66,12 +69,12 @@ export const metadata: Metadata = {
     description:
       "A community of developers, innovators, and tech leaders at CTU Danao.",
   },
+  verification: {
+    google: "xGoFsD35EJOooX2sRmirf64phBcPBMeRSe7izICboX8",
+  },
   robots: {
     index: true,
     follow: true,
-  },
-  verification: {
-    google: "xGoFsD35EJOooX2sRmirf64phBcPBMeRSe7izICboX8",
   },
 };
 
@@ -86,7 +89,7 @@ export default function RootLayout({
     name: "Alliance of Coders",
     alternateName: "AoC",
     url: siteUrl,
-    logo: `${siteUrl}/logo.png`,
+    logo: `${siteUrl}/logo.svg`,
     description:
       "A community of passionate developers, innovators, and tech leaders at Cebu Technological University - Danao Campus, united by code.",
     foundingLocation: {
@@ -105,17 +108,19 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Theme flash prevention is handled by next-themes' own inline script. */}
         <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('aoc-theme-v1');var m=window.matchMedia('(prefers-color-scheme: dark)').matches;if(t==='dark'||(!t&&m)){document.documentElement.classList.add('dark')}}catch(e){}})()`,
-          }}
-        />
-        <script
+          type="application/ld+json"
+          // A9 fix: escape '<' so an admin-controlled env value containing
+          // '</script><script>evil</script>' can't break out of the JSON-LD
+          // block. JSON.stringify alone does not escape '<'. Per 06 §5 (XSS,
+          // defense in depth) — env vars are admin-controlled so this is low
+          // severity, but the escaping is cheap and correct.
           dangerouslySetInnerHTML={{
             __html: JSON.stringify(orgJsonLd).replace(/</g, "\\u003c"),
           }}
         />
-
+        {/* LLM crawler guide (llms.txt standard). Per 05-ui-ux-design.md section 8. */}
         <link rel="llms.txt" href="/llms.txt" />
       </head>
       <body
@@ -129,7 +134,6 @@ export default function RootLayout({
           storageKey="aoc-theme-v1"
         >
           {children}
-          <Toaster />
           <SonnerToaster position="bottom-right" />
         </ThemeProvider>
       </body>

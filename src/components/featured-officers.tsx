@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Users, ArrowRight, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,11 @@ interface FeaturedOfficersProps {
   onNav: (section: SectionKey) => void;
 }
 
+/**
+ * FeaturedOfficers - highlights the current leadership team on the home page.
+ * Shows the latest year's theme + a compact grid of key officers (President,
+ * VP, Secretary, Treasurer). Each card shows avatar initials + name + role.
+ */
 export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
   const latestYear = React.useMemo(() => {
     if (adminYears.length === 0) return null;
@@ -22,6 +27,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
     return sorted[0];
   }, [adminYears]);
 
+  // Pick the 4 key roles to highlight. Use exact match to avoid VP matching President.
   const keyRoles = React.useMemo(() => {
     if (!latestYear) return [];
     const rolePriority = [
@@ -43,7 +49,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
         seen.add(officer.id);
       }
     }
-
+    // Fill remaining slots with other officers if we have fewer than 4.
     if (result.length < 4) {
       for (const officer of latestYear.officers) {
         if (result.length >= 4) break;
@@ -56,14 +62,22 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
     return result.slice(0, 4);
   }, [latestYear]);
 
+  const prefersReducedMotion = useReducedMotion();
+
   if (!latestYear || keyRoles.length === 0) return null;
 
+  // Honor prefers-reduced-motion: skip the entrance animation entirely.
   const container = {
     hidden: {},
-    show: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
+    show: {
+      transition: {
+        staggerChildren: prefersReducedMotion ? 0 : 0.08,
+        delayChildren: prefersReducedMotion ? 0 : 0.1,
+      },
+    },
   };
   const item = {
-    hidden: { opacity: 0, y: 12 },
+    hidden: prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 12 },
     show: {
       opacity: 1,
       y: 0,
@@ -81,13 +95,13 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       >
-        <div className="absolute left-1/2 top-0 h-64 w-[600px] -translate-x-1/2 rounded-full bg-gold-500/5 blur-3xl" />
+        <div className="absolute left-1/2 top-0 h-64 w-[600px] -translate-x-1/2 rounded-full bg-teal-500/5 blur-3xl" />
       </div>
 
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-600 dark:text-gold-400 font-display">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-600 dark:text-teal-400 font-display">
               Meet the Team
             </span>
           </div>
@@ -148,15 +162,15 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
               onClick={() => onNav("Officers")}
               className={cn(
                 "group relative flex flex-col items-center gap-3 rounded-xl border bg-card p-5 text-center",
-                "transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-1 hover:ring-gold-300/40",
+                "transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-1 hover:ring-teal-300/40",
                 isPresident
-                  ? "border-gold-300/60 ring-1 ring-gold-300/30"
-                  : "border-border hover:border-gold-300/60",
+                  ? "border-teal-300/60 ring-1 ring-teal-300/30"
+                  : "border-border hover:border-teal-300/60",
               )}
             >
               {isPresident && (
                 <span className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                  <Badge className="gap-1 bg-gold-500 text-navy-950 hover:bg-gold-500">
+                  <Badge className="gap-1 bg-teal-500 text-ink-950 hover:bg-teal-500">
                     <Crown className="h-3 w-3" aria-hidden="true" />
                     Lead
                   </Badge>
@@ -167,8 +181,8 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
                 className={cn(
                   "flex h-16 w-16 items-center justify-center rounded-full ring-2 ring-offset-2 ring-offset-card",
                   isPresident
-                    ? "bg-gradient-to-br from-gold-400 to-gold-600 ring-gold-300"
-                    : "bg-gradient-to-br from-navy-700 to-navy-900 ring-gold-400/30",
+                    ? "bg-gradient-to-br from-teal-400 to-teal-600 ring-teal-300"
+                    : "bg-gradient-to-br from-ink-700 to-ink-900 ring-teal-400/30",
                 )}
               >
                 {officer.image ? (
@@ -181,7 +195,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
                   <span
                     className={cn(
                       "font-display text-xl font-bold",
-                      isPresident ? "text-navy-950" : "text-gold-400",
+                      isPresident ? "text-ink-950" : "text-teal-400",
                     )}
                   >
                     {initials}
@@ -198,7 +212,7 @@ export function FeaturedOfficers({ adminYears, onNav }: FeaturedOfficersProps) {
                 </p>
               </div>
               <ArrowRight
-                className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-gold-500"
+                className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0.5 group-hover:opacity-100 group-hover:text-teal-500"
                 aria-hidden="true"
               />
             </motion.button>

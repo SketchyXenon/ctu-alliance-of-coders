@@ -52,6 +52,22 @@ export interface AnnouncementPostProps {
   hasNext?: boolean;
   position?: string | null; // e.g. "3 / 12"
 }
+
+/**
+ * AnnouncementPost - full-page dedicated reader for a single announcement.
+ *
+ * Replaces the modal as the default "read full story" destination so the
+ * experience feels like a blog post (per the feature request): a real page
+ * with a back button, a hero image, meta row, paragraph body, links, and
+ * prev/next navigation. The URL hash (#announcement=<id>) makes it shareable
+ * + back-button friendly.
+ *
+ * Per 05-ui-ux-design.md:
+ *   - section 4: semantic article + header + time; one h1 per page view.
+ *   - section 5: icons support labels, never replace them.
+ *   - section 6: plain, specific copy on actions; destructive delete defers
+ *     confirmation to the parent (which owns the ConfirmDialog).
+ */
 export function AnnouncementPost({
   ann,
   onBack,
@@ -71,6 +87,8 @@ export function AnnouncementPost({
   const readingTime = Math.max(1, Math.ceil(wordCount / 200));
   const [copied, setCopied] = React.useState(false);
 
+  // Keyboard prev/next (mirrors the modal). Left/Right arrows move between
+  // announcements; Escape goes back to the list.
   React.useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -98,13 +116,17 @@ export function AnnouncementPost({
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch {}
+      } catch {
+        // User cancelled — no action needed.
+      }
     } else if (typeof navigator !== "undefined" && navigator.clipboard) {
       try {
         await navigator.clipboard.writeText(`${ann.title}\n${shareUrl}`);
         setCopied(true);
         window.setTimeout(() => setCopied(false), 2000);
-      } catch {}
+      } catch {
+        // Clipboard unavailable — silently ignore (no data loss).
+      }
     }
   }
 
@@ -137,7 +159,7 @@ export function AnnouncementPost({
       {ann.image && (
         <div className="relative mb-8 aspect-[16/9] w-full overflow-hidden rounded-xl border bg-muted shadow-sm">
           <img src={ann.image} alt="" className="h-full w-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-navy-950/60 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-ink-950/60 via-transparent to-transparent" />
           <Badge
             variant="outline"
             className={cn(
@@ -221,6 +243,7 @@ export function AnnouncementPost({
                     aria-hidden="true"
                   />
                   {link.label}
+                  <span className="sr-only">(opens in a new tab)</span>
                 </a>
               </li>
             ))}
@@ -308,6 +331,8 @@ export function AnnouncementPost({
     </article>
   );
 }
+
+/** Convenience empty-state for an invalid announcement id (e.g. stale link). */
 export function AnnouncementNotFound({ onBack }: { onBack: () => void }) {
   return (
     <section className="mx-auto w-full max-w-3xl scroll-mt-24 px-4 py-16 text-center sm:px-6">

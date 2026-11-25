@@ -12,6 +12,7 @@ interface PageLoaderProps {
   className?: string;
 }
 
+// ClockLoader: clock metaphor suits a loading wait; single-color ring fits the ink/teal system.
 export function PageLoader({
   title = "Loading",
   description = "",
@@ -35,17 +36,19 @@ export function PageLoader({
       aria-describedby={descriptionId}
     >
       <div className="flex flex-col items-center gap-5 px-6 text-center">
+        {/* react-spinners renders inline-styled spans; reduced-motion override in globals.css targets them via .page-loader-spinner. */}
         <div className="page-loader-spinner" aria-hidden="true">
-          <ClockLoader color="var(--gold-500)" size={56} />
+          <ClockLoader color="var(--teal-500)" size={56} />
         </div>
 
         <div className="space-y-1">
-          <h1
+          {/* Status text, not a heading: a transient loader must not claim h1. */}
+          <p
             id={titleId}
             className="font-display text-lg font-semibold text-foreground"
           >
             {title}
-          </h1>
+          </p>
           {description && (
             <p
               id={descriptionId}
