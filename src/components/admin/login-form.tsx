@@ -36,6 +36,7 @@ interface MfaState {
 export function LoginForm() {
   const setIsAdmin = usePageStore((s) => s.setIsAdmin);
   const setAdminEmail = usePageStore((s) => s.setAdminEmail);
+  const setAdminUser = usePageStore((s) => s.setAdminUser);
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -68,6 +69,7 @@ export function LoginForm() {
         onSuccess={(user) => {
           setIsAdmin(true);
           setAdminEmail(user.email);
+          setAdminUser(user);
           toast.success("Signed in", {
             description: `Welcome back, ${user.email}.`,
           });
@@ -143,6 +145,7 @@ export function LoginForm() {
       if (data.user) {
         setIsAdmin(true);
         setAdminEmail(data.user.email);
+        setAdminUser(data.user);
         toast.success("Signed in", {
           description: `Welcome back, ${data.user.email}.`,
         });
@@ -162,6 +165,7 @@ export function LoginForm() {
     <div className="flex min-h-[50vh] items-center justify-center px-4 py-12 pb-32 sm:px-6">
       <Card className="w-full max-w-md border-border/60 shadow-lg">
         <CardHeader className="items-center gap-3 text-center">
+          {/* CardHeader is a grid; wrap logo in a full-width flex row to center it. */}
           <div className="flex w-full justify-center">
             <GearLogo size={56} />
           </div>

@@ -19,6 +19,17 @@ export function localDateISO(now: Date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** True when `s` matches YYYY-MM-DD AND is a real calendar date.
+ *  The regex alone accepts "2024-02-31" / "9999-99-99"; the round-trip
+ *  through Date rejects impossible dates so stored rows always sort and
+ *  render correctly. */
+export function isValidDateISO(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === s;
+}
+
 /** Serialize an array of AnnouncementLink to the DB string format. */
 export function serializeLinks(links: AnnouncementLink[]): string {
   return JSON.stringify(links);

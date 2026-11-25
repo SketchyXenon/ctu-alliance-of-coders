@@ -40,8 +40,17 @@ export function validateImageUrl(value: unknown): {
   if (trimmed.length > MAX_IMAGE_URL_LEN) {
     return { valid: false, error: "Image URL is too long.", normalized: null };
   }
-  // Relative path: allow "/uploads/..." and "/<something>".
+  // Relative path: only server-generated upload paths are allowed. A bare
+  // leading "/" would also accept protocol-relative URLs ("//evil.com/x"),
+  // which browsers resolve against the current scheme (off-site request).
   if (trimmed.startsWith("/")) {
+    if (!trimmed.startsWith("/uploads/")) {
+      return {
+        valid: false,
+        error: "Image path must be an uploaded file.",
+        normalized: null,
+      };
+    }
     // Guard against path traversal in stored URLs.
     if (trimmed.includes("..")) {
       return { valid: false, error: "Invalid image path.", normalized: null };

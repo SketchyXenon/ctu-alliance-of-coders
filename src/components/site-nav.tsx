@@ -225,10 +225,10 @@ export function SiteNav() {
                 </SheetDescription>
               </SheetHeader>
 
-              <div
-                className="flex flex-1 flex-col gap-1 overflow-y-auto p-4"
-                role="menu"
-              >
+              {/* Plain list of links: role="menu" would promise an ARIA menu
+                  keyboard contract (arrow keys, typeahead) that buttons don't
+                  implement. Links + aria-current are the correct semantics. */}
+              <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
                 {NAV_LINKS.map((link) => {
                   const isActive = activeNav === link.key;
                   const isAdminLink = link.key === "Admin Panel";
@@ -239,7 +239,6 @@ export function SiteNav() {
                     <Button
                       key={link.key}
                       variant="ghost"
-                      role="menuitem"
                       onClick={() => handleNavigate(link.key)}
                       aria-current={isActive ? "page" : undefined}
                       className={cn(

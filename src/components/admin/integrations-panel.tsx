@@ -6,7 +6,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   CheckCircle2,
   Copy,
-  Eye,
   EyeOff,
   Loader2,
   Lock,
@@ -326,6 +325,9 @@ function IntegrationCard({
   const [clearOpen, setClearOpen] = React.useState(false);
   const [toggling, setToggling] = React.useState(false);
   const [testing, setTesting] = React.useState(false);
+  // A raw signing key shown once (on generation/rotation). The API never
+  // re-reveals an existing key, so this only holds a key from THIS session.
+  const [revealedKey, setRevealedKey] = React.useState<string | null>(null);
 
   async function handleToggle(next: boolean) {
     // Optimistic flip, revert on error. For outbound_api integrations,
@@ -362,7 +364,9 @@ function IntegrationCard({
       kind?: string;
       reason?: string | null;
       skipped?: boolean;
+      generated?: boolean;
       secret?: string;
+      secretPreview?: string | null;
       publishUrl?: string;
       header?: string;
     }>(`/api/integrations/${def.id}/test`, {});
@@ -371,10 +375,13 @@ function IntegrationCard({
       toast.error("Connection test failed", { description: error?.message });
       return;
     }
-    if (def.kind === "webhook" && data.secret) {
-      // Webhook test returns the signing key (first enable). Reveal + copy hint.
+    if (def.kind === "webhook" && data.generated && data.secret) {
+      // The key was just generated: show it once (docs: returned only once,
+      // never retrievable again). Copy hint tells the admin to act now.
+      setRevealedKey(data.secret);
       toast.success("Webhook ready", {
-        description: "Signing key generated. Copy it from the card below.",
+        description:
+          "Signing key generated. Copy it below now — it will not be shown again.",
       });
     } else if (data.ok) {
       toast.success(
@@ -428,7 +435,12 @@ function IntegrationCard({
       <CardContent className="mt-auto space-y-3">
         {/* Webhook: show publish URL + key reveal when enabled */}
         {def.kind === "webhook" && enabled && (
-          <WebhookKeyBox status={status} onRefresh={onRefresh} />
+          <WebhookKeyBox
+            status={status}
+            revealed={revealedKey}
+            onRevealed={setRevealedKey}
+            onRefresh={onRefresh}
+          />
         )}
 
         {/* Outbound: show masked secret + config summary when enabled */}
@@ -620,29 +632,18 @@ function StatusBadge({
 
 function WebhookKeyBox({
   status,
+  revealed,
+  onRevealed,
   onRefresh,
 }: {
   status: IntegrationStatus | null;
+  /** Raw key shown once (from generation/rotation in this session). */
+  revealed: string | null;
+  onRevealed: (key: string | null) => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [revealed, setRevealed] = React.useState<string | null>(null);
   const [rotating, setRotating] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-
-  async function handleReveal() {
-    // The key is only returned by the test/rotate endpoint, never by GET.
-    const { data, error } = await api.post<{ secret?: string }>(
-      "/api/integrations/webhook/test",
-      {},
-    );
-    if (error || !data?.secret) {
-      toast.error("Could not retrieve signing key", {
-        description: error?.message,
-      });
-      return;
-    }
-    setRevealed(data.secret);
-  }
 
   async function handleRotate() {
     setRotating(true);
@@ -655,7 +656,7 @@ function WebhookKeyBox({
       toast.error("Could not rotate key", { description: error?.message });
       return;
     }
-    setRevealed(data.secret ?? null);
+    onRevealed(data.secret ?? null);
     toast.success("Signing key rotated", {
       description:
         "The previous key is invalidated. Update your external systems.",
@@ -736,7 +737,7 @@ function WebhookKeyBox({
               variant="ghost"
               size="icon"
               className="size-6"
-              onClick={() => setRevealed(null)}
+              onClick={() => onRevealed(null)}
               aria-label="Hide signing key"
             >
               <EyeOff className="size-3" aria-hidden="true" />
@@ -752,18 +753,10 @@ function WebhookKeyBox({
                 variant="ghost"
                 size="icon"
                 className="size-6"
-                onClick={() => void handleReveal()}
-                aria-label="Reveal signing key"
-              >
-                <Eye className="size-3" aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-6"
                 onClick={() => void handleRotate()}
                 disabled={rotating}
                 aria-label="Rotate signing key"
+                title="Rotate to reissue the key (the new key is shown once)"
               >
                 <RefreshCw
                   className={cn("size-3", rotating && "animate-spin")}

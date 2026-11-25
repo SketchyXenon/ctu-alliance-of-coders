@@ -63,12 +63,16 @@ export async function createMfaChallenge(
   const codeHash = await hashCode(code);
   const expiresAt = new Date(Date.now() + MFA_TTL_MS);
 
-  await db.adminMfaChallenge.deleteMany({
-    where: { userId, consumed: false },
-  });
-
-  const challenge = await db.adminMfaChallenge.create({
-    data: { userId, codeHash, expiresAt },
+  // Transactional: purge stale challenges + create the new one atomically so
+  // two concurrent logins cannot leave two live unconsumed challenges for the
+  // same user (L5 fix).
+  const challenge = await db.$transaction(async (tx) => {
+    await tx.adminMfaChallenge.deleteMany({
+      where: { userId, consumed: false },
+    });
+    return tx.adminMfaChallenge.create({
+      data: { userId, codeHash, expiresAt },
+    });
   });
 
   const delivered = await deliverMfaCode(email, code);
@@ -138,12 +142,39 @@ export async function verifyMfaChallenge(
   const valid = await verifyCode(code, challenge.codeHash);
 
   if (!valid) {
-    const updated = await db.adminMfaChallenge.update({
-      where: { id: challengeId },
+    // Atomic conditional increment: the attempt only counts while the
+    // challenge is unconsumed and under the cap. Two concurrent wrong-code
+    // verifies can no longer both slip past the gate (L5 fix).
+    const updated = await db.adminMfaChallenge.updateMany({
+      where: {
+        id: challengeId,
+        consumed: false,
+        attempts: { lt: MFA_MAX_ATTEMPTS },
+      },
       data: { attempts: { increment: 1 } },
+    });
+    if (updated.count === 0) {
+      // The conditional update lost the race (or the row is gone). Re-read to
+      // return the precise reason instead of assuming "locked".
+      const row = await db.adminMfaChallenge.findUnique({
+        where: { id: challengeId },
+        select: { attempts: true, consumed: true, expiresAt: true },
+      });
+      if (!row) return { ok: false, reason: "not_found" };
+      if (row.consumed) return { ok: false, reason: "consumed" };
+      if (row.expiresAt < new Date()) return { ok: false, reason: "expired" };
+      return {
+        ok: false,
+        reason: "too_many_attempts",
+        locked: true,
+        retryAfterMs: MFA_TTL_MS,
+      };
+    }
+    const row = await db.adminMfaChallenge.findUnique({
+      where: { id: challengeId },
       select: { attempts: true },
     });
-    if (updated.attempts >= MFA_MAX_ATTEMPTS) {
+    if (row && row.attempts >= MFA_MAX_ATTEMPTS) {
       return {
         ok: false,
         reason: "too_many_attempts",

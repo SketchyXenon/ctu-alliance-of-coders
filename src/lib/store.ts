@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type {
   Announcement,
   AdminYear,
+  AdminUserPublic,
   ContactMessage,
   SectionKey,
   SyncStatus,
@@ -27,6 +28,10 @@ interface PageState {
 
   adminEmail: string | null;
   setAdminEmail: (v: string | null) => void;
+
+  /** The verified admin user (real id + role) once a session is confirmed. */
+  adminUser: AdminUserPublic | null;
+  setAdminUser: (v: AdminUserPublic | null) => void;
 
   syncStatus: SyncStatus;
   setSyncStatus: (patch: Partial<SyncStatus>) => void;
@@ -53,6 +58,9 @@ export const usePageStore = create<PageState>((set) => ({
 
   adminEmail: null,
   setAdminEmail: (v) => set({ adminEmail: v }),
+
+  adminUser: null,
+  setAdminUser: (v) => set({ adminUser: v }),
 
   syncStatus: { ready: false, saving: false, error: null, lastSavedAt: null },
   setSyncStatus: (patch) =>

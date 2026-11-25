@@ -1,3 +1,18 @@
+// Alliance of Coders - production schema (PostgreSQL / Supabase).
+// Prisma 7: the datasource URL is no longer in the schema. It lives in
+// prisma.config.ts (for CLI) and is passed as an adapter to PrismaClient
+// (for runtime). See prisma.config.ts and src/lib/db.ts.
+//
+// Supabase note: prisma db push / migrate do NOT work through PgBouncer
+// transaction pooling (pooler port 6543). The config's datasource.url is
+// set to DIRECT_URL when available (see prisma.config.ts). Runtime queries
+// use DATABASE_URL (the pooler) directly via the adapter in src/lib/db.ts.
+//
+// The dead-code `profiles` table (which had a cross-schema FK to auth.users)
+// was dropped in supabase/migrations/20260725000000_drop_profiles_dead_code.sql.
+// With that FK gone, Prisma no longer needs "auth" in the schemas list, and
+// db push will not try to drop Supabase's managed auth tables. Per ADR-0003.
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,7 +27,7 @@ model Announcement {
   title     String
   body      String   @db.Text
   image     String?  @map("image_url")
-  links     String   @default("")  @db.Text  
+  links     String   @default("")  @db.Text  // JSON-encoded array of {url, label} objects
   pinned    Boolean  @default(false)
   date      String
   createdAt DateTime @default(now()) @map("created_at")
@@ -44,7 +59,9 @@ model Officer {
   role      String    @default("Open Position")
   image     String?   @map("image_url")
   sortOrder Int       @default(0) @map("sort_order")
-
+  // Self-relation: who this officer reports to (org-chart hierarchy).
+  // Nullable so legacy rows + vacant slots work without a parent. The API
+  // validates the parent exists in the same year and rejects cycles.
   reportsToId String? @map("reports_to_id") @db.Uuid
   reportsTo   Officer?  @relation("OfficerHierarchy", fields: [reportsToId], references: [id], onDelete: SetNull)
   directReports Officer[] @relation("OfficerHierarchy")
@@ -140,7 +157,12 @@ model AdminInvite {
 
 model ActivityLog {
   id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @map("user_id") @db.Uuid
+  // Text (not @db.Uuid): the audit trail records synthetic actors for actions
+  // performed without an admin session — e.g. the webhook publisher writes
+  // userId: "webhook". A uuid column rejected those writes (invalid uuid
+  // syntax), silently dropping webhook audit rows in prod. No FK exists on
+  // this column; see supabase/migrations/20261125000000_activity_actor_text.sql.
+  userId    String   @map("user_id")
   action    String
   entity    String
   entityId  String?  @map("entity_id")
@@ -153,6 +175,9 @@ model ActivityLog {
   @@map("activity_logs")
 }
 
+// Privacy-first page-view analytics. Per 06 section 8 (data minimization):
+// daily visitor hash (SHA-256 of IP + day), NEVER raw IP. No cookies, no PII.
+// Per Z.md: no external analytics SDK.
 model PageView {
   id          String   @id @default(uuid()) @db.Uuid
   visitorHash String?  @map("visitor_hash")
@@ -168,6 +193,12 @@ model PageView {
   @@index([visitorHash])
   @@map("page_views")
 }
+
+// External integration configuration (webhook, discord, google-workspace, etc).
+// One row per integration id. `config` holds non-secret settings as JSON;
+// `secret` holds the opaque credential (API token, bot token). Per 06 section 8:
+// secrets are never returned to the client (only a masked preview). Per 06
+// section 5: all input validated server-side.
 model IntegrationConfig {
   id        String   @id
   enabled   Boolean  @default(false)
@@ -177,4 +208,331 @@ model IntegrationConfig {
   updatedAt DateTime @updatedAt     @map("updated_at")
 
   @@map("integration_configs")
+}
+
+// ===========================================================================
+// ERP MODULE: Campus Shop & Membership Platform (modular monolith module).
+// Blueprint: upload/Campus Shop & Membership Platform - System Design.pdf
+// Mirrors prisma/schema.sqlite.prisma (dev) — keep both in sync (ADR-0002).
+// Boundary rules (docs/erp/MODULES.md — the binding contract):
+//   1. A module reads/writes ONLY its own prefixed tables. No relations across
+//      prefixes — other modules are referenced by id only (plain text col,
+//      no FK). Within a module, FKs are fine.
+//   2. Cross-module calls go through the typed interfaces exported from
+//      src/modules/erp/index.ts. Deep imports of another module's internals
+//      fail the boundary test (tests/erp-boundaries.test.ts).
+//   3. State changes other modules care about are announced as events written
+//      to sys_outbox in the SAME transaction as the change.
+//   4. Money is an integer (minor units, centavos). Never floats.
+//   5. tenant_id is carried on every money table (single-tenant deployment
+//      today, defaulted to "campus"; extraction-ready per the blueprint).
+// ===========================================================================
+
+/// Identity & Access (iam_): org anchors. Members/students are referenced by
+/// id only (member_ref) until student SSO lands — no FK by design.
+model ErpOrg {
+  id        String   @id @default(uuid()) @db.Uuid
+  publicId  String   @unique @map("public_id")
+  tenantId  String   @default("campus") @map("tenant_id")
+  slug      String   @unique
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt     @map("updated_at")
+
+  @@map("iam_orgs")
+}
+
+/// Catalog (cat_): products + variants + prices.
+model ErpProduct {
+  id          String       @id @default(uuid()) @db.Uuid
+  publicId    String       @unique @map("public_id")
+  tenantId    String       @default("campus") @map("tenant_id")
+  orgId       String       @map("org_id")
+  name        String
+  description String       @default("") @db.Text
+  status      String       @default("DRAFT") // DRAFT | PUBLISHED | RETIRED
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt     @map("updated_at")
+  variants    ErpVariant[]
+
+  @@index([orgId])
+  @@index([status])
+  @@map("cat_products")
+}
+
+model ErpVariant {
+  id             String     @id @default(uuid()) @db.Uuid
+  productId      String     @map("product_id") @db.Uuid
+  product        ErpProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name           String
+  sku            String     @unique
+  unitPriceMinor Int        @default(0) @map("unit_price_minor") // centavos
+  currency       String     @default("PHP")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  @@index([productId])
+  @@map("cat_variants")
+}
+
+/// Inventory (inv_): stock counters + reservations. variant_id references
+/// cat_variants BY ID ONLY (cross-module — no FK per boundary rule 1).
+model ErpStock {
+  variantId String @id @map("variant_id")
+  onHand    Int    @default(0) @map("on_hand")
+  reserved  Int    @default(0)
+
+  @@map("inv_stock")
+}
+
+model ErpReservation {
+  id        String   @id @default(uuid()) @db.Uuid
+  orderId   String   @map("order_id")
+  variantId String   @map("variant_id")
+  qty       Int
+  status    String   @default("HELD") // HELD | COMMITTED | RELEASED
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([orderId, variantId])
+  @@index([variantId])
+  @@map("inv_reservations")
+}
+
+/// Orders (ord_): cart + order lifecycle. buyer_ref references the future
+/// iam member by id only.
+model ErpOrder {
+  id         String   @id @default(uuid()) @db.Uuid
+  publicId   String   @unique @map("public_id")
+  tenantId   String   @default("campus") @map("tenant_id")
+  orgId      String   @map("org_id")
+  buyerRef   String   @map("buyer_ref")
+  status     String   @default("PENDING_PAYMENT") // PENDING_PAYMENT | PAID | EXPIRED | CANCELLED | FULFILLED
+  totalMinor Int      @map("total_minor") // centavos
+  currency   String   @default("PHP")
+  expiresAt  DateTime @map("expires_at") // reservation deadline (15 min)
+  version    Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt     @map("updated_at")
+
+  @@index([tenantId, buyerRef, createdAt])
+  @@index([status])
+  @@map("ord_orders")
+}
+
+/// Membership (mem_): plans + memberships + entitlements.
+model ErpPlan {
+  id          String          @id @default(uuid()) @db.Uuid
+  publicId    String          @unique @map("public_id")
+  tenantId    String          @default("campus") @map("tenant_id")
+  orgId       String          @map("org_id")
+  name        String
+  amountMinor Int             @map("amount_minor") // centavos per period
+  currency    String          @default("PHP")
+  period      String          @default("MONTHLY") // MONTHLY | YEARLY
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt     @map("updated_at")
+  memberships ErpMembership[]
+
+  @@index([orgId])
+  @@map("mem_plans")
+}
+
+model ErpMembership {
+  id                 String      @id @default(uuid()) @db.Uuid
+  publicId           String      @unique @map("public_id")
+  planId             String      @map("plan_id") @db.Uuid
+  plan               ErpPlan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  memberRef          String      @map("member_ref")
+  status             String      @default("PENDING") // PENDING | ACTIVE | LAPSED | CANCELLED
+  currentPeriodStart DateTime?   @map("current_period_start")
+  currentPeriodEnd   DateTime?   @map("current_period_end")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt     @map("updated_at")
+
+  @@index([memberRef])
+  @@index([planId])
+  @@map("mem_memberships")
+}
+
+/// Billing (bil_): invoices + lease-based claiming. membership_id references
+/// mem_memberships BY ID ONLY (cross-module — no FK).
+model ErpInvoice {
+  id                 String    @id @default(uuid()) @db.Uuid
+  membershipId       String    @map("membership_id")
+  periodStart        DateTime  @map("period_start")
+  periodEnd          DateTime  @map("period_end")
+  amountMinor        Int       @map("amount_minor")
+  currency           String    @default("PHP")
+  status             String    @default("SCHEDULED") // SCHEDULED | DUE | PAID | FAILED | VOID
+  providerInvoiceRef String?   @map("provider_invoice_ref")
+  claimedBy          String?   @map("claimed_by") // push mode: worker holding the lease
+  leaseUntil         DateTime? @map("lease_until")
+  dueAt              DateTime  @map("due_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt     @map("updated_at")
+
+  // One invoice per membership per period: a scheduler that fires twice
+  // cannot bill one period twice (blueprint "uq_one_invoice_per_period").
+  @@unique([membershipId, periodStart])
+  @@index([status, dueAt])
+  @@map("bil_invoices")
+}
+
+/// Payments (pay_): methods (provider tokens only), attempts, webhook log,
+/// and the provider-key config (held by worker/ingress only — never the core).
+model ErpPaymentMethod {
+  id             String   @id @default(uuid()) @db.Uuid
+  publicId       String   @unique @map("public_id")
+  ownerRef       String   @map("owner_ref")
+  provider       String   @default("mock")
+  tokenRef       String   @map("token_ref") // provider token reference ONLY
+  brand          String?
+  last4          String?  @map("last4")
+  status         String   @default("ACTIVE") // ACTIVE | INACTIVE
+  consentVersion String   @default("v1") @map("consent_version")
+  consentedAt    DateTime @default(now()) @map("consented_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt     @map("updated_at")
+
+  @@index([ownerRef])
+  @@map("pay_methods")
+}
+
+model ErpPayAttempt {
+  id              String   @id @default(uuid()) @db.Uuid
+  publicId        String   @unique @map("public_id")
+  tenantId        String   @default("campus") @map("tenant_id")
+  payableType     String   @map("payable_type") // ORDER | INVOICE
+  payableId       String   @map("payable_id")
+  attemptNo       Int      @map("attempt_no")
+  methodId        String   @map("method_id") // pay_methods.id (token reference only)
+  amountMinor     Int      @map("amount_minor")
+  currency        String   @default("PHP")
+  status          String   @default("INITIATED") // INITIATED | SUBMITTED | UNKNOWN | SUCCEEDED | FAILED
+  activeSlot      Int?     @map("active_slot") // 1 while in flight, NULL once final
+  providerIdemKey String   @unique @map("provider_idem_key") // stored BEFORE the call
+  providerRef     String?  @map("provider_ref")
+  failureCode     String?  @map("failure_code")
+  version         Int      @default(0)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt     @map("updated_at")
+
+  @@unique([payableType, payableId, attemptNo])
+  // uq_one_in_flight: unique indexes allow many NULLs, so finished attempts
+  // (slot NULL) never collide while a second in-flight attempt for the same
+  // payable is rejected by the database itself.
+  @@unique([payableType, payableId, activeSlot])
+  @@index([status, updatedAt])
+  @@map("pay_attempts")
+}
+
+model ErpWebhookEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  provider   String
+  eventId    String   @map("event_id")
+  eventType  String   @map("event_type")
+  payload    String   @db.Text // raw JSON
+  status     String   @default("RECEIVED") // RECEIVED | PROCESSED | FAILED
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@unique([provider, eventId])
+  @@index([status, receivedAt])
+  @@map("pay_webhook_events")
+}
+
+/// Provider keys (secret + enabled) — ONLY the ingress + worker read this.
+/// The ERP core never touches provider secrets (blueprint: Secrets).
+model ErpProviderConfig {
+  id        String   @id // provider name, e.g. "mock"
+  enabled   Boolean  @default(false)
+  secret    String   @default("") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt     @map("updated_at")
+
+  @@map("pay_provider_config")
+}
+
+/// Ledger (gl_): chart of accounts + double-entry journal. Every journal
+/// posts balanced lines (sum debits == sum credits), checked in code before
+/// commit and by a nightly job.
+model ErpGlAccount {
+  id          String           @id @default(uuid()) @db.Uuid
+  code        String           @unique
+  name        String
+  type        String // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  journalLine ErpJournalLine[]
+}
+
+model ErpJournalEntry {
+  id        String           @id @default(uuid()) @db.Uuid
+  publicId  String           @unique @map("public_id")
+  tenantId  String           @default("campus") @map("tenant_id")
+  orgId     String           @map("org_id")
+  memo      String
+  createdAt DateTime         @default(now()) @map("created_at")
+  lines     ErpJournalLine[]
+
+  @@index([orgId])
+  @@map("gl_journal_entries")
+}
+
+model ErpJournalLine {
+  id          String          @id @default(uuid()) @db.Uuid
+  journalId   String          @map("journal_id") @db.Uuid
+  journal     ErpJournalEntry @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  accountId   String          @map("account_id") @db.Uuid
+  account     ErpGlAccount    @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  orgId       String          @map("org_id")
+  debitMinor  Int             @default(0) @map("debit_minor")
+  creditMinor Int             @default(0) @map("credit_minor")
+
+  @@index([journalId])
+  @@index([accountId])
+  @@map("gl_journal_lines")
+}
+
+/// Shared kernel (sys_): transactional outbox + consumer inbox. The outbox
+/// row commits in the SAME transaction as the state change; the relay claims
+/// NEW rows in batches and marks them SENT (at-least-once delivery).
+model ErpOutbox {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @unique @map("event_id") // ULID — also the consumer's dedupe key
+  topic       String // e.g. payments.payment_succeeded
+  schemaVer   Int      @default(1) @map("schema_ver")
+  aggregateId String   @map("aggregate_id") // ordering key (order, invoice, membership)
+  payload     String   @db.Text // JSON envelope payload
+  status      String   @default("NEW") // NEW | SENT
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([status, createdAt])
+  @@map("sys_outbox")
+}
+
+model ErpInbox {
+  consumer  String
+  eventId   String   @map("event_id")
+  handledAt DateTime @default(now()) @map("handled_at")
+
+  @@id([consumer, eventId])
+  @@map("sys_inbox")
+}
+
+/// API idempotency (api_): layer-3 correctness guard. A row is inserted
+/// inside the business transaction; same key + same body replays the stored
+/// response; same key + different body is rejected; same key still running
+/// tells the client to retry later.
+model ErpIdempotencyKey {
+  id           String   @id @default(uuid()) @db.Uuid
+  scope        String // user id + route
+  idemKey      String   @map("idem_key")
+  fingerprint  String   @map("fingerprint") // SHA-256 of method + path + body
+  status       String   @default("IN_PROGRESS") // IN_PROGRESS | COMPLETED
+  responseCode Int?     @map("response_code")
+  responseBody String?  @map("response_body") @db.Text
+  expiresAt    DateTime @map("expires_at") // now + 48h
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([scope, idemKey])
+  @@index([expiresAt])
+  @@map("api_idempotency_keys")
 }

@@ -8,6 +8,7 @@ import {
   Bot,
   Calendar,
   Download,
+  Landmark,
   LayoutDashboard,
   LogOut,
   Mail,
@@ -53,6 +54,7 @@ import { ChatbotSettings } from "@/components/admin/chatbot-settings";
 import { ActivityPanel } from "@/components/admin/activity-panel";
 import { AdminUsersPanel } from "@/components/admin/admin-users-panel";
 import { AnalyticsPanel } from "@/components/admin/analytics-panel";
+import { ErpPanel } from "@/components/admin/erp-panel";
 import { SettingsDialog } from "@/components/admin/settings-dialog";
 
 type AuthState =
@@ -89,6 +91,11 @@ export function AdminPanel() {
   const [checked, setChecked] = React.useState(false);
   const [forbiddenUser, setForbiddenUser] =
     React.useState<AdminUserPublic | null>(null);
+  // The verified session user (real id + role) lives in the store; both the
+  // session probe and LoginForm's success handlers write it, so children see
+  // the true role (super_admin vs admin) instead of a fabricated "admin".
+  const adminUser = usePageStore((s) => s.adminUser);
+  const setAdminUser = usePageStore((s) => s.setAdminUser);
   const [signingOut, setSigningOut] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
 
@@ -107,6 +114,7 @@ export function AdminPanel() {
         } else {
           setIsAdmin(true);
           setAdminEmail(data.user.email);
+          setAdminUser(data.user);
         }
       }
       setChecked(true);
@@ -120,7 +128,7 @@ export function AdminPanel() {
   const auth: AuthState = isAdmin
     ? {
         status: "admin",
-        user: {
+        user: adminUser ?? {
           id: "session",
           email: adminEmail ?? "",
           name: null,
@@ -144,6 +152,7 @@ export function AdminPanel() {
     setIsAdmin(false);
     setAdminEmail(null);
     setForbiddenUser(null);
+    setAdminUser(null);
     toast.success("Signed out");
   }
 
@@ -387,6 +396,10 @@ export function AdminPanel() {
                 <Users className="size-3.5" aria-hidden="true" />
                 Admin Users
               </TabsTrigger>
+              <TabsTrigger value="erp">
+                <Landmark className="size-3.5" aria-hidden="true" />
+                ERP
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -415,6 +428,9 @@ export function AdminPanel() {
           </TabsContent>
           <TabsContent value="users" className="mt-4">
             <AdminUsersPanel />
+          </TabsContent>
+          <TabsContent value="erp" className="mt-4">
+            <ErpPanel />
           </TabsContent>
         </Tabs>
 

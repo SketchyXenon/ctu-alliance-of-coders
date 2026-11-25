@@ -16,6 +16,7 @@ import {
   serializeLinks,
   validateAnnouncementLinks,
   localDateISO,
+  isValidDateISO,
 } from "@/lib/announcements";
 
 /**
@@ -154,8 +155,10 @@ export const POST = withPrismaError(async function POST(request: Request) {
   const linksJson = serializeLinks(linksCheck.normalized);
 
   const pinned = typeof payload.pinned === "boolean" ? payload.pinned : false;
+  // Reject impossible calendar dates ("2024-02-31"): the format regex alone
+  // accepts them, and a stored invalid date breaks sorting + rendering.
   const date =
-    typeof payload.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.date)
+    typeof payload.date === "string" && isValidDateISO(payload.date)
       ? payload.date
       : localDateISO();
 

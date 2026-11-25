@@ -13,8 +13,14 @@ import {
   type UploadBucket,
 } from "@/lib/upload";
 
+// Dev upload root: public/uploads/<bucket>/<file>.webp, served as /uploads/...
+// In prod (Supabase configured) processImageUpload uploads to Storage instead.
 const UPLOAD_ROOT = path.join(process.cwd(), "public", "uploads");
 
+/** POST /api/upload - admin-only image upload with 9-layer defense.
+ *  The auth + rate-limit + size + bucket layers live here; the magic-byte,
+ *  sharp re-encode, dimension-cap, and storage layers live in lib/upload.ts.
+ *  Per 06 section 1: defense in depth, each layer independent. */
 export const POST = withPrismaError(async function POST(request: Request) {
   let user;
   try {
@@ -26,7 +32,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
-  const rl = rateLimit(`upload:${user.id}`, 20, 60_000);
+  // Layer 2: rate-limited (10/min per admin — matches docs/SECURITY.md).
+  const rl = rateLimit(`upload:${user.id}`, 10, 60_000);
   if (!rl.allowed) {
     return withCache(
       NextResponse.json(
@@ -35,6 +42,23 @@ export const POST = withPrismaError(async function POST(request: Request) {
           status: 429,
           headers: { "Retry-After": String(Math.ceil(rl.retryAfterMs / 1000)) },
         },
+      ),
+      CACHE_NO_STORE,
+    );
+  }
+
+  // Layer 4 (pre-check): reject oversized bodies BEFORE formData() buffers
+  // the whole multipart payload in memory. Content-Length is advisory
+  // (chunked requests may omit it), so the post-parse file.size + buffer
+  // re-checks in lib/upload.ts remain the authoritative gates.
+  const contentLength = Number(request.headers.get("content-length") ?? NaN);
+  if (Number.isFinite(contentLength) && contentLength > MAX_FILE_SIZE) {
+    return withCache(
+      NextResponse.json(
+        {
+          error: `File too large. Maximum ${MAX_FILE_SIZE / 1024 / 1024}MB allowed.`,
+        },
+        { status: 413 },
       ),
       CACHE_NO_STORE,
     );
@@ -58,6 +82,9 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  // Validate bucket before processing (path-traversal defense). The lib
+  // re-validates, but checking here keeps the error message consistent and
+  // avoids touching sharp/supabase for obviously bad input.
   const bucketRaw = String(formData.get("bucket") ?? "");
   if (!VALID_BUCKETS.includes(bucketRaw as UploadBucket)) {
     return withCache(
@@ -69,6 +96,8 @@ export const POST = withPrismaError(async function POST(request: Request) {
     );
   }
 
+  // Size check before decoding (DoS defense). file.size is the declared size;
+  // lib/upload re-checks the buffer length after read.
   if (file.size > MAX_FILE_SIZE) {
     return withCache(
       NextResponse.json(

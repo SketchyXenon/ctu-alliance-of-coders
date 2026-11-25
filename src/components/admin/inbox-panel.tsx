@@ -74,7 +74,7 @@ function statusBadge(status: ContactStatus) {
     new: {
       label: "New",
       className:
-        "bg-gold-100 text-gold-800 border-gold-300 dark:bg-gold-500/20 dark:text-gold-300 dark:border-gold-500/40",
+        "bg-teal-100 text-teal-800 border-teal-300 dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/40",
     },
     read: {
       label: "Read",
@@ -110,7 +110,7 @@ function StatCard({
   tone: "new" | "read" | "resolved";
 }) {
   const tones = {
-    new: "text-gold-600 dark:text-gold-300",
+    new: "text-teal-600 dark:text-teal-300",
     read: "text-foreground",
     resolved: "text-emerald-600 dark:text-emerald-300",
   } as const;
@@ -144,7 +144,7 @@ function MessageCard({
     message: ContactMessage,
     replyBody: string,
     subject: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   busyId: string | null;
 }) {
   const [expanded, setExpanded] = React.useState(false);
@@ -176,13 +176,16 @@ function MessageCard({
       return;
     }
     setSendingReply(true);
-    await onReply(
+    const ok = await onReply(
       message,
       replyBody.trim(),
       replySubject.trim() || `Re: ${message.subject}`,
     );
     setSendingReply(false);
-    setReplyOpen(false);
+    // Close (and discard the draft) only on success: on an SMTP failure the
+    // admin keeps the dialog open with the draft intact instead of losing the
+    // composed reply.
+    if (ok) setReplyOpen(false);
   }
 
   return (
@@ -309,6 +312,9 @@ function MessageCard({
         </div>
       </CardContent>
 
+      {/* H15: destructive action confirmation per 05-ui-ux-design.md §6.
+          AlertDialog (not Dialog) so it requires explicit Action — does not
+          close on outside click or Escape, preventing accidental data loss. */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -337,6 +343,10 @@ function MessageCard({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Reply dialog: sends an email to the message submitter via SMTP.
+          Plain text only (no HTML XSS surface). Per 05 §6: the form is
+          non-blocking (Dialog, not AlertDialog) so the admin can reference
+          other tabs while composing. */}
       <Dialog open={replyOpen} onOpenChange={setReplyOpen}>
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
@@ -481,7 +491,7 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
     message: ContactMessage,
     replyBody: string,
     subject: string,
-  ) {
+  ): Promise<boolean> {
     setBusyId(message.id);
     const { data, error } = await api.post<{ ok: boolean; messageId?: string }>(
       `/api/contact/${message.id}/reply`,
@@ -493,12 +503,13 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
         description:
           error?.message ?? "Could not send the email. Please try again.",
       });
-      return;
+      return false;
     }
     onRefresh();
     toast.success("Reply sent", {
       description: `Email delivered to ${message.email}.`,
     });
+    return true;
   }
 
   async function handleRefresh() {
@@ -571,12 +582,12 @@ export function InboxPanel({ messages, onRefresh }: InboxPanelProps) {
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
               <div className="relative">
-                <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-navy-700 to-navy-900 text-gold-400 shadow-sm">
+                <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-ink-700 to-ink-900 text-teal-400 shadow-sm">
                   <InboxIcon className="size-8" aria-hidden="true" />
                 </div>
                 <div
                   aria-hidden="true"
-                  className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-gold-500 text-[10px] font-bold text-navy-950 shadow"
+                  className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full bg-teal-500 text-[10px] font-bold text-ink-950 shadow"
                 >
                   0
                 </div>
